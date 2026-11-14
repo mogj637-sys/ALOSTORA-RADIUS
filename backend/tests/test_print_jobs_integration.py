@@ -107,7 +107,7 @@ def test_print_allocation_is_idempotent_and_reprint_does_not_duplicate_stock(own
     )
     assert inventory.status_code == 200, inventory.text
     assert inventory.json()["allocated_cards"] == 2
-    assert Decimal(inventory.json()["commercial_stock_value"]) == Decimal("50.00")
+    assert Decimal(inventory.json()["commercial_printed_value"]) == Decimal("50.00")
 
 
 def test_free_card_print_is_recorded_but_not_allocated_or_charged(owner_client):
