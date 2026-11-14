@@ -631,6 +631,117 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  function renderPos() {
+    const printableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
+    const selectedPoint = points.find((point) => String(point.id) === selectedPosId);
+    return (
+      <>
+        <div className="section-heading">
+          <div><h2>نقاط البيع والطباعة</h2><p>أنشئ نقاط البيع، راجع قيمة الكروت المطبوعة، وسجل الطباعة أو أعد طباعة دفعة سابقة.</p></div>
+        </div>
+        <form className="panel form-grid" onSubmit={createPointOfSale}>
+          <label>رمز نقطة البيع<input value={posDraft.code} onChange={(e) => setPosDraft({ ...posDraft, code: e.target.value })} required minLength={2} maxLength={50} /></label>
+          <label>اسم نقطة البيع<input value={posDraft.name} onChange={(e) => setPosDraft({ ...posDraft, name: e.target.value })} required minLength={2} maxLength={150} /></label>
+          <label>اسم المسؤول<input value={posDraft.contactName} onChange={(e) => setPosDraft({ ...posDraft, contactName: e.target.value })} /></label>
+          <label>رقم الهاتف<input value={posDraft.phone} onChange={(e) => setPosDraft({ ...posDraft, phone: e.target.value })} /></label>
+          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "إضافة نقطة بيع"}</button></div>
+        </form>
+
+        <div className="pos-toolbar">
+          <label>اختر نقطة البيع
+            <select value={selectedPosId} onChange={(e) => {
+              const id = e.target.value;
+              setSelectedPrintCardIds([]);
+              setPrintPreviewCards([]);
+              setSelectedPosId(id);
+              Promise.all([loadPosInventory(id), loadPrintHistory(id)]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل بيانات نقطة البيع"));
+            }}>
+              <option value="">-- اختر نقطة بيع --</option>
+              {points.map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}</option>)}
+            </select>
+          </label>
+          {selectedPoint && <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOfSale(selectedPoint)}>{selectedPoint.is_active ? "إيقاف النقطة" : "تفعيل النقطة"}</button>}
+        </div>
+
+        {selectedPosId && posInventory && (
+          <div className="pos-stats">
+            <div><span>الكروت المخصصة</span><strong>{posInventory.allocated_cards}</strong></div>
+            <div><span>الكروت المستخدمة</span><strong>{posInventory.used_cards}</strong></div>
+            <div><span>الكروت الموقوفة</span><strong>{posInventory.suspended_cards}</strong></div>
+            <div><span>القيمة التجارية المطبوعة</span><strong>{Number(posInventory.commercial_printed_value).toLocaleString("en-US")}</strong></div>
+            <div><span>الكروت المجانية المطبوعة</span><strong>{posInventory.free_cards_printed}</strong></div>
+          </div>
+        )}
+
+        {selectedPosId && (
+          <>
+            <div className="section-heading compact-heading"><div><h2>الكروت الجاهزة للتخصيص</h2><p>حدد الكروت المنشأة وغير المخصصة. عند التسجيل تُرحّل القيمة التجارية مرة واحدة فقط.</p></div><span className="count-tag">{printableCards.length} كرت</span></div>
+            <div className="card-search">
+              <label htmlFor="pos-card-search">بحث عن كرت</label>
+              <input id="pos-card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); loadCards(e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" />
+              <button type="button" className="table-action" onClick={() => loadCards().catch((err) => setError(err instanceof Error ? err.message : "تعذر التحديث"))}>تحديث</button>
+            </div>
+            <div className="table-wrap">
+              <table><thead><tr><th>اختيار</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>الباقة</th><th>القيمة</th><th>التصنيف</th></tr></thead>
+                <tbody>{printableCards.map((card) => <tr key={card.id}>
+                  <td><input type="checkbox" aria-label={`اختيار الكرت ${card.username}`} checked={selectedPrintCardIds.includes(card.id)} onChange={() => togglePrintCard(card.id)} /></td>
+                  <td>{card.serial_number}</td><td>{card.username}</td>
+                  <td>{plans.find((plan) => plan.id === card.plan_id)?.name ?? card.plan_id}</td>
+                  <td>{card.is_free ? "0" : Number(card.price_snapshot).toLocaleString("en-US")}</td>
+                  <td>{card.is_free ? "مجاني" : "تجاري"}</td>
+                </tr>)}</tbody>
+              </table>
+              {printableCards.length === 0 && <div className="empty-state">لا توجد كروت جاهزة في النتائج الحالية.</div>}
+            </div>
+            <div className="panel pos-print-panel">
+              <label>قالب الطباعة
+                <select value={printTemplate} onChange={(e) => setPrintTemplate(e.target.value)}>
+                  <option value="classic-green">القالب الأخضر</option>
+                  <option value="classic-blue">القالب الأزرق</option>
+                  <option value="compact">القالب المختصر</option>
+                </select>
+              </label>
+              <div className="pos-print-summary">تم اختيار {selectedPrintCardIds.length} كرت. الكروت المجانية تظهر في القسائم ولا تدخل في قيمة نقطة البيع.</div>
+              <button type="button" disabled={busy || selectedPrintCardIds.length === 0 || !selectedPoint?.is_active} onClick={printSelectedCards}>{busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة وتخصيص الكروت"}</button>
+            </div>
+            {printPreviewCards.length > 0 && (
+              <section className="voucher-print-preview">
+                <div className="voucher-toolbar">
+                  <div><strong>معاينة القسائم</strong><span>كلمات المرور تظهر في هذه المعاينة فقط ولا تظهر في سجل الكروت.</span></div>
+                  <div>
+                    <button type="button" onClick={() => window.print()}>طباعة القسائم</button>
+                    <button type="button" className="secondary-button" onClick={() => setPrintPreviewCards([])}>إغلاق المعاينة</button>
+                  </div>
+                </div>
+                <div className="voucher-grid">
+                  {printPreviewCards.map((card) => (
+                    <article className={`voucher-card ${printTemplate}`} key={card.card_id}>
+                      <div className="voucher-head"><strong>الأسطورة نت</strong><span>{card.is_free ? "كرت مجاني" : "بطاقة إنترنت"}</span></div>
+                      <div className="voucher-user"><span>اسم المستخدم</span><strong>{card.username}</strong></div>
+                      <div className="voucher-password"><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>
+                      <div className="voucher-foot"><span>{card.serial_number}</span><strong>{card.is_free ? "مجاني" : `${Number(card.price_snapshot).toLocaleString("en-US")} ريال`}</strong></div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+            <div className="section-heading compact-heading"><div><h2>سجل عمليات الطباعة</h2><p>إعادة الطباعة لا تضيف قيمة تجارية جديدة.</p></div><span className="count-tag">{printHistory.length} عملية</span></div>
+            <div className="table-wrap">
+              <table><thead><tr><th>التاريخ</th><th>القالب</th><th>عدد الكروت</th><th>النوع</th><th>الإجراء</th></tr></thead>
+                <tbody>{printHistory.map((job) => <tr key={job.id}>
+                  <td>{new Date(job.created_at).toLocaleString("ar")}</td><td>{job.template_code || "افتراضي"}</td><td>{job.card_count}</td><td>{job.is_reprint ? "إعادة طباعة" : "طباعة أصلية"}</td>
+                  <td><button type="button" className="table-action" disabled={busy || !selectedPoint?.is_active} onClick={() => reprintJob(job)}>إعادة طباعة</button></td>
+                </tr>)}</tbody>
+              </table>
+              {printHistory.length === 0 && <div className="empty-state">لا توجد عمليات طباعة لهذه النقطة.</div>}
+            </div>
+          </>
+        )}
+        {points.length === 0 && <div className="empty-state">أنشئ أول نقطة بيع للبدء.</div>}
+      </>
+    );
+  }
+
   function renderRouters() {
     return (
       <>
