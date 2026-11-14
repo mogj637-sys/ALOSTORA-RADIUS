@@ -103,13 +103,27 @@ def _event_timestamp(value: Any) -> datetime | None:
     return value
 
 
+def _hex_attribute(payload: dict[str, Any], *names: str) -> str | None:
+    value = _attribute(payload, *names)
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        return value.hex()
+    text = str(value).strip()
+    if text.startswith("0x"):
+        text = text[2:]
+    if len(text) % 2 == 0 and all(char in "0123456789abcdefABCDEF" for char in text):
+        return text.lower()
+    return text.encode("utf-8").hex()
+
+
 def _normalize_authorize(payload: dict[str, Any]) -> RadiusAuthorizeRequest:
     return RadiusAuthorizeRequest(
         nas_identifier=_attribute(payload, "nas_identifier", "NAS-Identifier"),
         username=_attribute(payload, "username", "User-Name"),
         password=_attribute(payload, "password", "User-Password", default=""),
-        chap_password_hex=_attribute(payload, "chap_password_hex", "CHAP-Password-Hex"),
-        chap_challenge_hex=_attribute(payload, "chap_challenge_hex", "CHAP-Challenge-Hex"),
+        chap_password_hex=_hex_attribute(payload, "chap_password_hex", "CHAP-Password-Hex", "CHAP-Password"),
+        chap_challenge_hex=_hex_attribute(payload, "chap_challenge_hex", "CHAP-Challenge-Hex", "CHAP-Challenge"),
         framed_ip_address=_attribute(payload, "framed_ip_address", "Framed-IP-Address"),
         calling_station_id=_attribute(payload, "calling_station_id", "Calling-Station-Id"),
     )
