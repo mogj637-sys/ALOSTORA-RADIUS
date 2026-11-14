@@ -16,6 +16,7 @@ from app.schemas.cards import (
     CardCreateResponse,
     CardListItem,
     CardSingleCreate,
+    CardStatusUpdate,
 )
 from app.services.card_generator import generate_password, generate_username
 from app.services.credentials import CredentialEncryptionNotConfigured, encrypt_credential
