@@ -8,7 +8,14 @@ from fastapi.testclient import TestClient
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.auth import AdminUser, Role
-from app.models.core import (\n    Card, CardEvent, PointOfSale, PosInventoryMovement, PrintJob, PrintJobItem\n)
+from app.models.core import (
+    Card,
+    CardEvent,
+    PointOfSale,
+    PosInventoryMovement,
+    PrintJob,
+    PrintJobItem,
+)
 from app.security import hash_password
 from app.services.credentials import decrypt_credential
 
