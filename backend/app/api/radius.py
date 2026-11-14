@@ -2,6 +2,7 @@ import os
 import secrets
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -44,7 +45,9 @@ def radius_authorize(payload: RadiusAuthorizeRequest, db: Session = Depends(get_
         )
     except CredentialEncryptionNotConfigured as exc:
         raise HTTPException(status_code=503, detail=str(exc))
-    return RadiusAuthorizeResponse(**result)
+    if not result["accepted"]:
+        return JSONResponse(status_code=401, content=result)
+    return result
 
 
 @router.post(
@@ -54,4 +57,6 @@ def radius_authorize(payload: RadiusAuthorizeRequest, db: Session = Depends(get_
 )
 def radius_accounting(payload: RadiusAccountingRequest, db: Session = Depends(get_db)):
     result = process_accounting(db, payload.model_dump())
-    return RadiusAccountingResponse(**result)
+    if not result["processed"]:
+        return JSONResponse(status_code=409, content=result)
+    return result
