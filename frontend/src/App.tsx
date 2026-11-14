@@ -116,6 +116,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [plans, setPlans] = useState<Plan[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
+  const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
+  const [cardSearch, setCardSearch] = useState("");
   const [cardMode, setCardMode] = useState<"batch" | "single">("batch");
   const [singleDraft, setSingleDraft] = useState({ planId: "", username: "", cardType: "username_only", password: "", isFree: false });
   const [notice, setNotice] = useState("");
@@ -130,7 +132,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   });
 
   async function loadPlans() {
-    const result = await apiRequest<Plan[]>(token, "/api/v1/plans");
+    const result = await apiRequest<Plan[]>(token, "/api/v1/plans?include_inactive=true");
     setPlans(result);
     if (result.length) {
       if (!batchDraft.planId) setBatchDraft((current) => ({ ...current, planId: String(result[0].id) }));
@@ -138,8 +140,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
   }
 
-  async function loadCards() {
-    const result = await apiRequest<Card[]>(token, "/api/v1/cards?offset=0&limit=50");
+  async function loadCards(search = cardSearch) {
+    const params = new URLSearchParams({ offset: "0", limit: "50" });
+    if (search.trim()) params.set("search", search.trim());
+    const result = await apiRequest<Card[]>(token, `/api/v1/cards?${params.toString()}`);
     setCards(result);
   }
 
@@ -159,23 +163,75 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     const numberOrNull = (value: string, multiplier: number) =>
       value.trim() === "" ? null : Math.round(Number(value) * multiplier);
     try {
-      await apiRequest<Plan>(token, "/api/v1/plans", {
-        method: "POST",
-        body: JSON.stringify({
-          code: planDraft.code,
-          name: planDraft.name,
-          price: Number(planDraft.price),
-          data_limit_bytes: numberOrNull(planDraft.dataGb, 1024 ** 3),
-          session_time_limit_seconds: numberOrNull(planDraft.timeHours, 3600),
-          validity_period_seconds: numberOrNull(planDraft.validityDays, 86400),
-          speed_profile: planDraft.speedProfile || null,
-        }),
+      const payload = {
+        code: planDraft.code,
+        name: planDraft.name,
+        price: Number(planDraft.price),
+        data_limit_bytes: numberOrNull(planDraft.dataGb, 1024 ** 3),
+        session_time_limit_seconds: numberOrNull(planDraft.timeHours, 3600),
+        validity_period_seconds: numberOrNull(planDraft.validityDays, 86400),
+        speed_profile: planDraft.speedProfile || null,
+      };
+      await apiRequest<Plan>(token, editingPlanId ? `/api/v1/plans/${editingPlanId}` : "/api/v1/plans", {
+        method: editingPlanId ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
       });
       setPlanDraft({ code: "", name: "", price: "", dataGb: "", timeHours: "", validityDays: "", speedProfile: "" });
+      const wasEditing = editingPlanId !== null;
+      setEditingPlanId(null);
       await loadPlans();
-      setNotice("تم إنشاء الباقة بنجاح.");
+      setNotice(wasEditing ? "تم تحديث الباقة بنجاح." : "تم إنشاء الباقة بنجاح.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "تعذر إنشاء الباقة");
+      setError(err instanceof Error ? err.message : "تعذر حفظ الباقة");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function editPlan(plan: Plan) {
+    setEditingPlanId(plan.id);
+    setPlanDraft({
+      code: plan.code,
+      name: plan.name,
+      price: String(plan.price),
+      dataGb: plan.data_limit_bytes === null ? "" : String(plan.data_limit_bytes / 1024 ** 3),
+      timeHours: plan.session_time_limit_seconds === null ? "" : String(plan.session_time_limit_seconds / 3600),
+      validityDays: plan.validity_period_seconds === null ? "" : String(plan.validity_period_seconds / 86400),
+      speedProfile: plan.speed_profile ?? "",
+    });
+    setError("");
+    setNotice("أنت تعدّل بيانات الباقة المحددة.");
+  }
+
+  async function togglePlan(plan: Plan) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<Plan>(token, `/api/v1/plans/${plan.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_active: !plan.is_active }),
+      });
+      await loadPlans();
+      setNotice(plan.is_active ? "تم إيقاف الباقة. لن تظهر عند إنشاء كروت جديدة." : "تم تفعيل الباقة.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تغيير حالة الباقة");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeCardStatus(card: Card, action: "suspend" | "reactivate" | "cancel") {
+    const labels = { suspend: "إيقاف", reactivate: "إعادة تفعيل", cancel: "إلغاء" };
+    if (action === "cancel" && !window.confirm("هل تريد إلغاء هذا الكرت نهائياً؟")) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<Card>(token, `/api/v1/cards/${card.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ action }),
+      });
+      await loadCards();
+      setNotice(`تم ${labels[action]} الكرت ${card.username}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تغيير حالة الكرت");
     } finally {
       setBusy(false);
     }
