@@ -78,6 +78,7 @@ def test_radius_authorize_starts_first_use_and_returns_mikrotik_limits(owner_cli
     )
     assert accepted.status_code == 200, accepted.text
     result = accepted.json()
+    assert result["control:Auth-Type"] == "Accept"
     assert "reply:Port-Limit" in result
     assert result["reply:Port-Limit"] == 1
     assert result["reply:Acct-Interim-Interval"] == 60
