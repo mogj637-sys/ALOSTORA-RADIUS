@@ -535,3 +535,22 @@ def test_radius_authorize_supports_chap_challenge_response(owner_client):
     )
     assert accepted.status_code == 200
     assert accepted.json()["reply:Port-Limit"] == 1
+
+
+def test_authorize_splits_mikrotik_total_limit_into_gigawords(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    allowance = (2**32 * 2) + 123
+    card, password = _card(client, headers, data_limit=allowance)
+    accepted = client.post(
+        "/internal/radius/authorize",
+        headers=_radius_headers(),
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": card["username"],
+            "password": password,
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["reply:Mikrotik-Total-Limit"] == 123
+    assert accepted.json()["reply:Mikrotik-Total-Limit-Gigawords"] == 2
