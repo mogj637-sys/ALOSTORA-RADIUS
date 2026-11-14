@@ -132,8 +132,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   async function loadPlans() {
     const result = await apiRequest<Plan[]>(token, "/api/v1/plans");
     setPlans(result);
-    if (!batchDraft.planId && result.length) {
-      setBatchDraft((current) => ({ ...current, planId: String(result[0].id) }));
+    if (result.length) {
+      if (!batchDraft.planId) setBatchDraft((current) => ({ ...current, planId: String(result[0].id) }));
+      if (!singleDraft.planId) setSingleDraft((current) => ({ ...current, planId: String(result[0].id) }));
     }
   }
 
@@ -187,7 +188,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       const result = await apiRequest<{ serial_number: string; username: string; password: string }> (token, "/api/v1/cards/single", {
         method: "POST",
         body: JSON.stringify({
-          plan_id: Number(singleDraft.planId),
+          plan_id: Number(singleDraft.planId || plans[0]?.id),
           username: singleDraft.username,
           card_type: singleDraft.cardType,
           password: singleDraft.cardType === "separate_credentials" ? singleDraft.password : null,
