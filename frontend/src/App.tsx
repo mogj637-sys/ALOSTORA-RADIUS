@@ -67,6 +67,7 @@ type PrintJobResult = {
   free_card_count: number;
   total_amount: number;
   is_reprint: boolean;
+  items: { card_id: string; serial_number: string; username: string; password: string; is_free: boolean; price_snapshot: number }[];
 };
 
 async function apiRequest<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
@@ -151,6 +152,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [posInventory, setPosInventory] = useState<PosInventory | null>(null);
   const [posDraft, setPosDraft] = useState({ code: "", name: "", contactName: "", phone: "" });
   const [selectedPrintCardIds, setSelectedPrintCardIds] = useState<string[]>([]);
+  const [printPreviewCards, setPrintPreviewCards] = useState<PrintJobResult["items"]>([]);
   const [printTemplate, setPrintTemplate] = useState("classic-green");
   const [cardMode, setCardMode] = useState<"batch" | "single">("batch");
   const [singleDraft, setSingleDraft] = useState({ planId: "", username: "", cardType: "username_only", password: "", isFree: false });
@@ -259,6 +261,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         }),
       });
       setSelectedPrintCardIds([]);
+      setPrintPreviewCards(result.items);
       await Promise.all([loadCards(), loadPosInventory(selectedPosId)]);
       setNotice(`تم تسجيل طباعة ${result.card_count} كرت: ${result.commercial_card_count} تجاري و${result.free_card_count} مجاني. القيمة التجارية: ${Number(result.total_amount).toFixed(2)}.`);
     } catch (err) {
@@ -621,6 +624,27 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <div className="pos-print-summary">تم اختيار {selectedPrintCardIds.length} كرت. سيتم تسجيل الكروت التجارية في مخزون النقطة، واستثناء المجانية من القيمة التجارية.</div>
               <button type="button" disabled={busy || selectedPrintCardIds.length === 0 || !points.find((point) => String(point.id) === selectedPosId)?.is_active} onClick={printSelectedCards}>{busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة وتخصيص الكروت"}</button>
             </div>
+            {printPreviewCards.length > 0 && (
+              <section className="voucher-print-preview">
+                <div className="voucher-toolbar">
+                  <div><strong>معاينة الكروت الجاهزة للطباعة</strong><span>كلمات المرور موجودة في هذه المعاينة فقط ولا تظهر في سجل الكروت.</span></div>
+                  <div>
+                    <button type="button" onClick={() => window.print()}>طباعة الكروت</button>
+                    <button type="button" className="secondary-button" onClick={() => setPrintPreviewCards([])}>إغلاق المعاينة</button>
+                  </div>
+                </div>
+                <div className="voucher-grid">
+                  {printPreviewCards.map((card) => (
+                    <article className={`voucher-card ${printTemplate}`} key={card.card_id}>
+                      <div className="voucher-head"><strong>الأسطورة نت</strong><span>{card.is_free ? "كرت مجاني" : "بطاقة إنترنت"}</span></div>
+                      <div className="voucher-user"><span>اسم المستخدم</span><strong>{card.username}</strong></div>
+                      <div className="voucher-password"><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>
+                      <div className="voucher-foot"><span>{card.serial_number}</span><strong>{card.is_free ? "مجاني" : `${Number(card.price_snapshot).toLocaleString("en-US")} ريال`}</strong></div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
           </>
         )}
         {points.length === 0 && <div className="empty-state">أنشئ أول نقطة بيع من النموذج أعلاه للبدء.</div>}
