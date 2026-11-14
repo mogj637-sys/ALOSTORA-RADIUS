@@ -149,6 +149,17 @@ def test_free_card_print_is_recorded_but_not_allocated_or_charged(owner_client):
     assert result["commercial_card_count"] == 0
     assert Decimal(result["total_amount"]) == Decimal("0.00")
 
+    duplicate_original = client.post(
+        "/api/v1/print-jobs",
+        headers=headers,
+        json={
+            "idempotency_key": "free-duplicate-" + secrets.token_hex(12),
+            "point_of_sale_id": point["id"],
+            "card_ids": [free_card["id"]],
+        },
+    )
+    assert duplicate_original.status_code == 409
+
     db = SessionLocal()
     saved = db.get(Card, UUID(free_card["id"]))
     assert saved is not None
