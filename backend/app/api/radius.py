@@ -46,8 +46,12 @@ def radius_authorize(payload: RadiusAuthorizeRequest, db: Session = Depends(get_
     except CredentialEncryptionNotConfigured as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     if not result["accepted"]:
-        return JSONResponse(status_code=401, content=result)
-    return result
+        return JSONResponse(status_code=401, content={})
+    # rlm_rest maps these prefixed keys directly into the RADIUS reply list.
+    return JSONResponse(
+        status_code=200,
+        content={f"reply:{key}": value for key, value in result["reply"].items()},
+    )
 
 
 @router.post(
