@@ -14,6 +14,8 @@ COPY entrypoint.sh /usr/local/bin/alostora-radius-entrypoint
 
 RUN chmod 0755 /usr/local/bin/alostora-generate-radius-clients /usr/local/bin/alostora-radius-entrypoint \
     && mkdir -p /etc/freeradius/3.0/clients.d \
+    && touch /etc/freeradius/3.0/clients.d/alostora.conf \
+    && chown freerad:freerad /etc/freeradius/3.0/clients.d/alostora.conf \
     && ln -sf ../mods-available/rest /etc/freeradius/3.0/mods-enabled/rest \
     && ln -sf ../mods-available/json /etc/freeradius/3.0/mods-enabled/json \
     && chown -R freerad:freerad /etc/freeradius/3.0/clients.d
