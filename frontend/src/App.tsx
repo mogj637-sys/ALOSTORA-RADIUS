@@ -232,7 +232,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setPosDraft({ code: "", name: "", contactName: "", phone: "" });
       await loadPointsOfSale();
       setSelectedPosId(String(point.id));
-      await loadPosInventory(String(point.id));
+      await Promise.all([loadPosInventory(String(point.id)), loadPrintHistory(String(point.id))]);
       setNotice("تم إنشاء نقطة البيع بنجاح.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر إنشاء نقطة البيع");
