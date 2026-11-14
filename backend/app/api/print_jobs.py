@@ -47,7 +47,11 @@ def _response(job: PrintJob, db: Session) -> PrintJobResponse:
         is_reprint=job.is_reprint,
         commercial_card_count=len(commercial),
         free_card_count=len(free),
-        total_amount=sum((item.price_snapshot for item in commercial), Decimal("0.00")),
+        total_amount=(
+            sum((item.price_snapshot for item in commercial), Decimal("0.00"))
+            if not job.is_reprint
+            else Decimal("0.00")
+        ),
         items=[
             PrintJobItemResponse(
                 card_id=item.card_id,
@@ -115,6 +119,11 @@ def create_print_job(
     )
     if len(cards) != len(payload.card_ids):
         raise HTTPException(status_code=404, detail="بعض الكروت المطلوبة غير موجودة")
+
+    # A concurrent retry may have committed while this request waited for card locks.
+    existing = _existing_job(db, payload)
+    if existing is not None:
+        return existing
 
     if payload.is_reprint:
         original_ids = {
