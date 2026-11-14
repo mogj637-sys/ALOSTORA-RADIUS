@@ -79,6 +79,8 @@ def authorize_card(
     nas_identifier: str,
     username: str,
     password: str,
+    chap_password_hex: str | None = None,
+    chap_challenge_hex: str | None = None,
     framed_ip_address: str | None = None,
     calling_station_id: str | None = None,
 ) -> dict[str, Any]:
@@ -148,7 +150,25 @@ def authorize_card(
             "reply": {},
         }
 
-    if not secrets.compare_digest(expected_password, password):
+    authenticated = False
+    if chap_password_hex:
+        try:
+            chap_packet = bytes.fromhex(chap_password_hex)
+            chap_challenge = bytes.fromhex(chap_challenge_hex or "")
+        except ValueError:
+            chap_packet = b""
+            chap_challenge = b""
+        if len(chap_packet) == 17 and len(chap_challenge) > 0:
+            chap_identifier = chap_packet[:1]
+            chap_response = chap_packet[1:]
+            expected_chap = hashlib.md5(
+                chap_identifier + expected_password.encode("utf-8") + chap_challenge
+            ).digest()
+            authenticated = secrets.compare_digest(expected_chap, chap_response)
+    else:
+        authenticated = secrets.compare_digest(expected_password, password)
+
+    if not authenticated:
         db.add(
             CardEvent(
                 card_id=card.id,
