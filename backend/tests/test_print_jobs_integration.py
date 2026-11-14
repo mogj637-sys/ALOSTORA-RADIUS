@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from app.db.session import SessionLocal
-from app.models.core import Card, PosInventoryMovement
+from app.models.core import Card, PosInventoryMovement, PrintJobItem
 
 def _plan(client, headers):
     response = client.post(
