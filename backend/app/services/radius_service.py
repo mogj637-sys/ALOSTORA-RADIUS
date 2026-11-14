@@ -253,14 +253,11 @@ def _octets(payload: dict[str, Any], octets_key: str, gigawords_key: str) -> int
 def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     router = (
         db.query(Router)
-        .filter(
-            Router.nas_identifier == payload["nas_identifier"],
-            Router.is_active.is_(True),
-        )
+        .filter(Router.nas_identifier == payload["nas_identifier"])
         .first()
     )
     if router is None:
-        return {"processed": False, "reason": "NAS غير مسجل أو متوقف"}
+        return {"processed": False, "reason": "NAS غير مسجل"}
 
     card = (
         db.query(Card)
@@ -287,6 +284,9 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         return {"processed": False, "reason": "معرّف الجلسة مرتبط بكرت آخر"}
 
     status_type = payload["status_type"]
+    if not router.is_active:
+        if status_type == "Start" or session is None:
+            return {"processed": False, "reason": "الراوتر متوقف ولا يسمح ببدء جلسات جديدة"}
     if status_type == "Start":
         if session is not None:
             if session.stopped_at is not None:
@@ -316,6 +316,11 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             _restore_stale_active_status(db, card)
         if card.status not in ALLOWED_PRE_SESSION_STATES:
             return {"processed": False, "reason": "حالة الكرت لا تسمح ببدء الجلسة"}
+        if card.expires_at is not None and _utc(card.expires_at) <= event_time:
+            card.status = "expired"
+            card.radius_auth_reserved_until = None
+            db.commit()
+            return {"processed": False, "reason": "انتهت صلاحية الكرت قبل بدء الجلسة"}
 
         reservation = card.radius_auth_reserved_until
         if reservation is None or _utc(reservation) <= datetime.now(timezone.utc):
@@ -438,8 +443,8 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     session.last_packet_fingerprint = fingerprint
     router.last_seen_at = max(_utc(router.last_seen_at), event_time)
 
-    disconnect_required = False
-    reason = "تم تحديث المحاسبة"
+    disconnect_required = card.status in {"suspended", "exhausted"} or not router.is_active
+    reason = "الكرت أو الراوتر متوقف ويجب فصل الجلسة" if disconnect_required else "تم تحديث المحاسبة"
     remaining_time, remaining_data = _remaining_limits(card, event_time)
     if remaining_time is not None and remaining_time <= 0:
         card.status = "exhausted"
