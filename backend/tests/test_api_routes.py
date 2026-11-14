@@ -18,3 +18,4 @@ def test_initial_api_routes_are_registered():
     assert "/api/v1/routers" in paths
     assert "/internal/radius/authorize" in paths
     assert "/internal/radius/accounting" in paths
+    assert "/internal/radius/clients" in paths
