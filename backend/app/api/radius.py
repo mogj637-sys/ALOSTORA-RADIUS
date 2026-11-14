@@ -152,10 +152,7 @@ def radius_authorize(payload: dict[str, Any] = Body(...), db: Session = Depends(
     # rlm_rest maps these prefixed keys directly into the RADIUS reply list.
     return JSONResponse(
         status_code=200,
-        content={
-            "control:Auth-Type": "Accept",
-            **{f"reply:{key}": value for key, value in result["reply"].items()},
-        },
+        content={f"reply:{key}": value for key, value in result["reply"].items()},
     )
 
 
