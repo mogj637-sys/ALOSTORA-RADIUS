@@ -22,6 +22,7 @@ class PrintJobItemResponse(BaseModel):
     card_id: UUID
     serial_number: str
     username: str
+    password: str
     is_free: bool
     price_snapshot: Decimal
 
