@@ -13,6 +13,7 @@ from app.security import hash_password
 @pytest.fixture
 def owner_client(monkeypatch):
     monkeypatch.setenv("CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setenv("ROUTER_SECRET_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
     username = "ci_owner_" + secrets.token_hex(4)
     password = "a-strong-ci-password-123"
 
