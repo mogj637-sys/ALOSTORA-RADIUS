@@ -14,12 +14,6 @@ class RadiusAuthorizeRequest(BaseModel):
     calling_station_id: str | None = Field(default=None, max_length=100)
 
 
-class RadiusAuthorizeResponse(BaseModel):
-    accepted: bool
-    reason: str
-    reply: dict[str, str | int] = Field(default_factory=dict)
-
-
 class RadiusAccountingRequest(BaseModel):
     nas_identifier: str = Field(min_length=1, max_length=150)
     username: str = Field(min_length=1, max_length=120)
