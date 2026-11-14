@@ -102,6 +102,7 @@ class Card(TimestampMixin, Base):
         CheckConstraint("download_bytes >= 0", name="ck_cards_download_bytes_nonnegative"),
         Index("ix_cards_status_expires_at", "status", "expires_at"),
         Index("ix_cards_pos_status", "assigned_pos_id", "status"),
+        Index("ix_cards_radius_auth_reserved_until", "radius_auth_reserved_until"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
