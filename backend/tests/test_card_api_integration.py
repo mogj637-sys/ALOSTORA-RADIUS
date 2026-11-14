@@ -304,7 +304,7 @@ def test_print_job_allocates_commercial_cards_once_and_reprint_is_free_of_moveme
     assert commercial_card.status == "allocated"
     assert commercial_card.allocated_at is not None
     assert free_card.assigned_pos_id is None
-    assert free_card.status == "generated"
+    assert free_card.status == "printed_free"
 
     movements = db.query(PosInventoryMovement).filter_by(point_of_sale_id=pos_id).all()
     assert len(movements) == 1
