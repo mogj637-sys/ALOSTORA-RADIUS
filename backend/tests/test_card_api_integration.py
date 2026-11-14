@@ -140,3 +140,111 @@ def test_card_management_requires_owner_authentication(owner_client):
     client, _, _ = owner_client
     response = client.get("/api/v1/cards")
     assert response.status_code == 401
+
+
+def test_plan_can_be_updated_and_deactivated(owner_client):
+    client, headers, _ = owner_client
+    code = "EDIT-" + secrets.token_hex(4).upper()
+    created = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={"code": code, "name": "Editable plan", "price": "10.00"},
+    )
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    updated = client.patch(
+        f"/api/v1/plans/{plan_id}",
+        headers=headers,
+        json={"name": "Updated plan", "price": "15.50", "is_active": False},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["name"] == "Updated plan"
+    assert updated.json()["price"] == "15.50"
+    assert updated.json()["is_active"] is False
+
+    active_list = client.get("/api/v1/plans", headers=headers)
+    all_list = client.get("/api/v1/plans?include_inactive=true", headers=headers)
+    assert all(item["id"] != plan_id for item in active_list.json())
+    assert any(item["id"] == plan_id for item in all_list.json())
+
+
+def test_card_search_and_audited_status_lifecycle(owner_client):
+    client, headers, actor = owner_client
+    code = "LIFE-" + secrets.token_hex(4).upper()
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={"code": code, "name": "Lifecycle plan", "price": "20.00"},
+    )
+    assert plan.status_code == 201, plan.text
+
+    username = "LIFE" + secrets.token_hex(4).upper()
+    created = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": username,
+            "card_type": "username_only",
+        },
+    )
+    assert created.status_code == 201, created.text
+    card_id = created.json()["id"]
+    serial = created.json()["serial_number"]
+
+    searched = client.get(f"/api/v1/cards?search={username}", headers=headers)
+    assert searched.status_code == 200
+    assert len(searched.json()) == 1
+    assert searched.json()[0]["username"] == username
+
+    suspended = client.patch(
+        f"/api/v1/cards/{card_id}/status",
+        headers=headers,
+        json={"action": "suspend"},
+    )
+    assert suspended.status_code == 200, suspended.text
+    assert suspended.json()["status"] == "suspended"
+
+    repeated_suspend = client.patch(
+        f"/api/v1/cards/{card_id}/status",
+        headers=headers,
+        json={"action": "suspend"},
+    )
+    assert repeated_suspend.status_code == 409
+
+    restored = client.patch(
+        f"/api/v1/cards/{card_id}/status",
+        headers=headers,
+        json={"action": "reactivate"},
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["status"] == "generated"
+
+    cancelled = client.patch(
+        f"/api/v1/cards/{card_id}/status",
+        headers=headers,
+        json={"action": "cancel"},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "cancelled"
+
+    cannot_reactivate = client.patch(
+        f"/api/v1/cards/{card_id}/status",
+        headers=headers,
+        json={"action": "reactivate"},
+    )
+    assert cannot_reactivate.status_code == 409
+
+    db = SessionLocal()
+    events = (
+        db.query(CardEvent)
+        .filter(CardEvent.card_id == card_id)
+        .order_by(CardEvent.created_at.asc(), CardEvent.id.asc())
+        .all()
+    )
+    assert [event.event_type for event in events] == [
+        "created", "suspended", "reactivated", "cancelled"
+    ]
+    assert all(event.actor == actor for event in events)
+    db.close()
