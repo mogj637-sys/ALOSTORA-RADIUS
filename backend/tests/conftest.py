@@ -10,10 +10,14 @@ from app.models.auth import AdminUser, Role
 from app.security import hash_password
 
 
+TEST_CREDENTIAL_ENCRYPTION_KEY = Fernet.generate_key().decode("ascii")
+TEST_ROUTER_SECRET_ENCRYPTION_KEY = Fernet.generate_key().decode("ascii")
+
+
 @pytest.fixture
 def owner_client(monkeypatch):
-    monkeypatch.setenv("CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
-    monkeypatch.setenv("ROUTER_SECRET_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setenv("CREDENTIAL_ENCRYPTION_KEY", TEST_CREDENTIAL_ENCRYPTION_KEY)
+    monkeypatch.setenv("ROUTER_SECRET_ENCRYPTION_KEY", TEST_ROUTER_SECRET_ENCRYPTION_KEY)
     monkeypatch.setenv("RADIUS_INTERNAL_API_KEY", "ci-radius-internal-key-" + secrets.token_hex(24))
     username = "ci_owner_" + secrets.token_hex(4)
     password = "a-strong-ci-password-123"
