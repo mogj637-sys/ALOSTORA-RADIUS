@@ -39,3 +39,11 @@ def get_current_user(
     if user is None or not user.is_active:
         raise HTTPException(status_code=401, detail="Account is unavailable")
     return user
+
+
+def get_current_owner(
+    user: AdminUser = Depends(get_current_user),
+) -> AdminUser:
+    if not any(role.code == "owner" for role in user.roles):
+        raise HTTPException(status_code=403, detail="هذه العملية تتطلب صلاحية مدير النظام")
+    return user
