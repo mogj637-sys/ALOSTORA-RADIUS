@@ -335,7 +335,7 @@ def test_accounting_supports_gigawords_and_closes_sessions_after_router_deactiva
             "status_type": "Start",
         },
     )
-    assert new_start.status_code == 200
+    assert new_start.status_code == 409
     assert new_start.json()["processed"] is False
 
 
