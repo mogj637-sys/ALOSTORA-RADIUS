@@ -42,7 +42,6 @@ def radius_clients(response: Response, db: Session = Depends(get_db)):
     configured = (
         db.query(Router)
         .filter(
-            Router.is_active.is_(True),
             Router.radius_client_address.is_not(None),
         )
         .order_by(Router.id.asc())
