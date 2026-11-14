@@ -1,0 +1,37 @@
+server alostora {
+    listen {
+        type = auth
+        ipaddr = *
+        port = 1812
+    }
+
+    listen {
+        type = acct
+        ipaddr = *
+        port = 1813
+    }
+
+    authorize {
+        preprocess
+        filter_username
+        update control {
+            Auth-Type := REST
+        }
+    }
+
+    authenticate {
+        Auth-Type REST {
+            update control {
+                REST-HTTP-Header := "X-Radius-Internal-Key: __RADIUS_INTERNAL_API_KEY__"
+            }
+            rest
+        }
+    }
+
+    accounting {
+        update control {
+            REST-HTTP-Header := "X-Radius-Internal-Key: __RADIUS_INTERNAL_API_KEY__"
+        }
+        rest
+    }
+}
