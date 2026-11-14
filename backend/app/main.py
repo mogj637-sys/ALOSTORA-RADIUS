@@ -10,6 +10,7 @@ from app.api.plans import router as plans_router
 from app.api.points_of_sale import router as points_of_sale_router
 from app.api.print_jobs import router as print_jobs_router
 from app.api.routers import router as routers_router
+from app.api.radius import router as radius_router
 from app.db.session import engine
 
 app = FastAPI(
@@ -33,6 +34,7 @@ app.include_router(cards_router)
 app.include_router(points_of_sale_router)
 app.include_router(print_jobs_router)
 app.include_router(routers_router)
+app.include_router(radius_router)
 
 
 @app.get("/health", tags=["system"])
