@@ -662,7 +662,6 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>نظرة عامة</button>
           <button className={page === "plans" ? "nav-item active" : "nav-item"} onClick={() => setPage("plans")}>الباقات</button>
           <button className={page === "cards" ? "nav-item active" : "nav-item"} onClick={() => setPage("cards")}>الكروت</button>
-          <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>نقاط البيع</button>
           <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>نقاط البيع والطباعة</button>
         </nav>
         <div className="sidebar-foot">ALOSTORA-RADIUS · 0.4.0</div>
