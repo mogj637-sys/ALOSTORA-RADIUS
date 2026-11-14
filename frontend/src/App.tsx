@@ -60,6 +60,15 @@ type PosInventory = {
   free_cards_printed: number;
 };
 
+type PrintJobHistory = {
+  id: string;
+  template_code: string | null;
+  card_count: number;
+  is_reprint: boolean;
+  created_at: string;
+  cards: { card_id: string; serial_number: string; username: string; is_free: boolean }[];
+};
+
 type PrintJobResult = {
   id: string;
   card_count: number;
@@ -150,6 +159,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [points, setPoints] = useState<PointOfSale[]>([]);
   const [selectedPosId, setSelectedPosId] = useState("");
   const [posInventory, setPosInventory] = useState<PosInventory | null>(null);
+  const [printHistory, setPrintHistory] = useState<PrintJobHistory[]>([]);
   const [posDraft, setPosDraft] = useState({ code: "", name: "", contactName: "", phone: "" });
   const [selectedPrintCardIds, setSelectedPrintCardIds] = useState<string[]>([]);
   const [printPreviewCards, setPrintPreviewCards] = useState<PrintJobResult["items"]>([]);
@@ -190,6 +200,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setPosInventory(result);
   }
 
+  async function loadPrintHistory(pointId: string) {
+    if (!pointId) { setPrintHistory([]); return; }
+    const result = await apiRequest<PrintJobHistory[]>(token, `/api/v1/print-jobs?point_of_sale_id=${pointId}&limit=30`);
+    setPrintHistory(result);
+  }
+
   async function loadPointsOfSale() {
     const result = await apiRequest<PointOfSale[]>(token, "/api/v1/points-of-sale?include_inactive=true");
     setPoints(result);
@@ -197,7 +213,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       ? selectedPosId
       : (result.find((point) => point.is_active)?.id ?? result[0]?.id)?.toString() ?? "";
     setSelectedPosId(current);
-    await loadPosInventory(current);
+    await Promise.all([loadPosInventory(current), loadPrintHistory(current)]);
   }
 
   async function createPointOfSale(event: FormEvent<HTMLFormElement>) {
@@ -262,7 +278,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       });
       setSelectedPrintCardIds([]);
       setPrintPreviewCards(result.items);
-      await Promise.all([loadCards(), loadPosInventory(selectedPosId)]);
+      await Promise.all([loadCards(), loadPosInventory(selectedPosId), loadPrintHistory(selectedPosId)]);
       setNotice(`تم تسجيل طباعة ${result.card_count} كرت: ${result.commercial_card_count} تجاري و${result.free_card_count} مجاني. القيمة التجارية: ${Number(result.total_amount).toFixed(2)}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تنفيذ الطباعة");
@@ -413,6 +429,28 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
   }
 
+  async function reprintPrintJob(job: PrintJobHistory) {
+    if (!selectedPosId) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await apiRequest<PrintJobResult>(token, "/api/v1/print-jobs", {
+        method: "POST",
+        body: JSON.stringify({
+          idempotency_key: `reprint-${crypto.randomUUID()}`,
+          point_of_sale_id: Number(selectedPosId),
+          card_ids: job.cards.map((card) => card.card_id),
+          template_code: job.template_code || printTemplate,
+          is_reprint: true,
+        }),
+      });
+      setPrintPreviewCards(result.items);
+      await Promise.all([loadPosInventory(selectedPosId), loadPrintHistory(selectedPosId)]);
+      setNotice(`تم تجهيز نسخة إعادة طباعة من ${result.card_count} كرت. لم تتم إضافة قيمة جديدة للمخزون.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذرت إعادة الطباعة");
+    } finally { setBusy(false); }
+  }
+
   function renderOverview() {
     return (
       <>
@@ -525,7 +563,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
         <div className="pos-toolbar">
           <label>اختر نقطة البيع
-            <select value={selectedPosId} onChange={(e) => { setSelectedPrintCardIds([]); setSelectedPosId(e.target.value); loadPosInventory(e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل المخزون")); }}>
+            <select value={selectedPosId} onChange={(e) => { setSelectedPrintCardIds([]); setSelectedPosId(e.target.value); Promise.all([loadPosInventory(e.target.value), loadPrintHistory(e.target.value)]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل بيانات نقطة البيع")); }}>
               <option value="">-- اختر نقطة بيع --</option>
               {points.map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}</option>)}
             </select>
@@ -541,6 +579,19 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <div><span>القيمة التجارية المطبوعة</span><strong>{Number(posInventory.commercial_printed_value).toLocaleString("en-US")}</strong></div>
             <div><span>الكروت المجانية المطبوعة</span><strong>{posInventory.free_cards_printed}</strong></div>
           </div>
+        )}
+
+        {selectedPosId && (
+          <section className="panel pos-history">
+            <div className="section-heading compact-heading"><div><h2>سجل الطباعة</h2><p>يمكنك إعادة طباعة أي دفعة سابقة دون تكرار حركة المخزون.</p></div><span className="count-tag">{printHistory.length} عملية</span></div>
+            {printHistory.map((job) => (
+              <div className="pos-history-row" key={job.id}>
+                <div><strong>{job.card_count} كرت</strong><span>{new Date(job.created_at).toLocaleString("ar")}</span><small>{job.is_reprint ? "إعادة طباعة" : "طباعة أصلية"} · {job.template_code || "بدون قالب"}</small></div>
+                <button type="button" className="table-action" disabled={busy || !points.find((point) => String(point.id) === selectedPosId)?.is_active} onClick={() => reprintPrintJob(job)}>إعادة طباعة</button>
+              </div>
+            ))}
+            {printHistory.length === 0 && <div className="empty-state">لا توجد عمليات طباعة سابقة لهذه النقطة.</div>}
+          </section>
         )}
 
         {selectedPosId && (
