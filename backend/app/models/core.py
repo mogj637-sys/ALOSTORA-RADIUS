@@ -243,3 +243,4 @@ class RadiusSession(Base):
     output_octets: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     session_time_seconds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     last_packet_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    card_status_before_session: Mapped[str | None] = mapped_column(String(30), nullable=True)
