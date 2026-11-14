@@ -569,7 +569,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
         <div className="pos-toolbar">
           <label>اختر نقطة البيع
-            <select value={selectedPosId} onChange={(e) => { setSelectedPosId(e.target.value); loadPosInventory(e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل المخزون")); }}>
+            <select value={selectedPosId} onChange={(e) => { setSelectedPrintCardIds([]); setSelectedPosId(e.target.value); loadPosInventory(e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل المخزون")); }}>
               <option value="">-- اختر نقطة بيع --</option>
               {points.map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}</option>)}
             </select>
