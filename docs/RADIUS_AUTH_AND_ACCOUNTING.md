@@ -42,6 +42,25 @@
 
 أُضيفت خدمة FreeRADIUS إلى Docker Compose مع إعداد `rlm_rest`، وتُحمّل قائمة NAS المسجلة ذات العناوين المحددة عند بدء الحاوية من `/internal/radius/clients`. تبقى الراوترات المعطلة ضمن clients.conf حتى يمكنها إرسال Accounting-Stop للجلسات القائمة، لكن API ترفض مصادقتها وبدء جلسات جديدة. يلزم إعادة تشغيل الحاوية بعد إضافة راوتر أو تغيير عنوانه/مفتاحه حتى يعاد توليد clients.conf. أُضيف فحص بناء للإعداد، لكن لا يزال اختبار حزم RADIUS من راوتر MikroTik حقيقي وCoA/Disconnect فعلياً مطلوباً قبل اعتبار التكامل جاهزاً للإنتاج.
 
+## إعداد MikroTik HotSpot بعد تشغيل FreeRADIUS
+
+هذه أوامر نموذجية؛ استبدل العناوين والأسماء والقيم بما سجلته في لوحة النظام:
+
+```routeros
+/system identity set name="nas-aden-01"
+/radius add service=hotspot address=RADIUS_SERVER_IP authentication-port=1812 accounting-port=1813 secret="SAME_RADIUS_SHARED_SECRET" src-address=ROUTER_RADIUS_SOURCE_IP
+/ip hotspot profile set [find] use-radius=yes radius-accounting=yes radius-interim-update=received
+```
+
+- يجب أن يطابق اسم الهوية قيمة `nas_identifier` المسجلة.
+- يجب أن يطابق `ROUTER_RADIUS_SOURCE_IP` العنوان أو الشبكة المسجلة في `radius_client_address`.
+- استخدم نفس `RADIUS_SHARED_SECRET` الذي أدخلته عند تسجيل الراوتر.
+- HotSpot يستخدم CHAP افتراضياً، ومحولنا يدعم CHAP وPAP؛ لا تغيّر طريقة الدخول إلى PAP لمجرد استخدام RADIUS.
+- `radius-interim-update=received` مهم حتى يحترم HotSpot قيمة `Acct-Interim-Interval` المرسلة من الخادم.
+- لا تفعّل `/radius incoming accept=yes` حالياً؛ استقبال Disconnect/CoA سيضاف ويختبر في مرحلة مستقلة.
+
+مرجع MikroTik الرسمي: https://manual.mikrotik.com/docs/authentication-authorization-accounting/radius/
+
 ## اختبار محلي
 
 يجب إعداد `RADIUS_INTERNAL_API_KEY` في `.env` قبل تشغيل API. استخدم قيمة عشوائية لا تقل عن 32 محرفاً. لا تضع المفتاح أو كلمات مرور الكروت في سجلات أو مستودع Git.
