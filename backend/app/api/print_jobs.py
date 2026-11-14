@@ -16,6 +16,7 @@ from app.models.core import (
     PrintJob,
     PrintJobItem,
 )
+from app.services.credentials import CredentialEncryptionNotConfigured, decrypt_credential
 from app.schemas.print_jobs import (
     PrintJobCreate,
     PrintJobItemResponse,
@@ -36,6 +37,10 @@ def _response(job: PrintJob, db: Session) -> PrintJobResponse:
         .order_by(PrintJobItem.id.asc())
         .all()
     )
+    cards_by_id = {
+        card.id: card
+        for card in db.query(Card).filter(Card.id.in_([item.card_id for item in items])).all()
+    }
     commercial = [item for item in items if not item.is_free]
     free = [item for item in items if item.is_free]
     return PrintJobResponse(
@@ -57,6 +62,7 @@ def _response(job: PrintJob, db: Session) -> PrintJobResponse:
                 card_id=item.card_id,
                 serial_number=item.serial_number_snapshot,
                 username=item.username_snapshot,
+                password=decrypt_credential(cards_by_id[item.card_id].credential_ciphertext),
                 is_free=item.is_free,
                 price_snapshot=item.price_snapshot,
             )
