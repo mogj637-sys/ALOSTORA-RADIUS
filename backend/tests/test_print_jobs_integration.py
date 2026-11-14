@@ -234,3 +234,13 @@ def test_print_response_reveals_credentials_only_in_authorized_print_flow(owner_
     assert printed.status_code == 201, printed.text
     assert "no-store" in printed.headers.get("cache-control", "")
     assert printed.json()["items"][0]["password"] == password
+
+    history = client.get(
+        f"/api/v1/print-jobs?point_of_sale_id={point['id']}",
+        headers=headers,
+    )
+    assert history.status_code == 200, history.text
+    assert len(history.json()) == 1
+    history_card = history.json()[0]["cards"][0]
+    assert history_card["username"] == username
+    assert "password" not in history_card
