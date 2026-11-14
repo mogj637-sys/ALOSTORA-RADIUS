@@ -124,6 +124,7 @@ class Card(TimestampMixin, Base):
     allocated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     first_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    radius_auth_reserved_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     used_seconds: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     upload_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
