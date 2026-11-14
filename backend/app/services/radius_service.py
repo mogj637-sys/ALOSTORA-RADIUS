@@ -14,6 +14,7 @@ from app.services.credentials import (
 from app.services.radius_disconnect import send_disconnect_for_session
 
 AUTH_RESERVATION_SECONDS = 120
+STALE_SESSION_GRACE_SECONDS = 180
 ALLOWED_PRE_SESSION_STATES = {"generated", "allocated", "printed_free"}
 BLOCKED_CARD_STATES = {"suspended", "cancelled", "expired", "exhausted"}
 
@@ -109,27 +110,6 @@ def authorize_card(
     if card.status in BLOCKED_CARD_STATES:
         return {"accepted": False, "reason": "الكرت موقوف أو منتهي", "reply": {}}
 
-    active_session = (
-        db.query(RadiusSession.id)
-        .filter(
-            RadiusSession.card_id == card.id,
-            RadiusSession.stopped_at.is_(None),
-        )
-        .first()
-    )
-    if active_session is not None:
-        return {
-            "accepted": False,
-            "reason": "الكرت لديه جلسة نشطة ويسمح باتصال واحد فقط",
-            "reply": {},
-        }
-
-    if card.status == "active":
-        _restore_stale_active_status(db, card)
-
-    if card.status not in ALLOWED_PRE_SESSION_STATES:
-        return {"accepted": False, "reason": "حالة الكرت لا تسمح بالدخول", "reply": {}}
-
     if card.radius_auth_reserved_until is not None:
         reserved_until = _utc(card.radius_auth_reserved_until)
         if reserved_until > now:
@@ -139,6 +119,55 @@ def authorize_card(
                 "reply": {},
             }
         card.radius_auth_reserved_until = None
+
+    active_sessions = (
+        db.query(RadiusSession)
+        .filter(
+            RadiusSession.card_id == card.id,
+            RadiusSession.stopped_at.is_(None),
+        )
+        .with_for_update()
+        .all()
+    )
+    if active_sessions:
+        stale_sessions = []
+        for active_session in active_sessions:
+            last_activity = _utc(active_session.last_update_at or active_session.started_at)
+            age = (now - last_activity).total_seconds()
+            if active_session.router_id != router.id or age <= STALE_SESSION_GRACE_SECONDS:
+                return {
+                    "accepted": False,
+                    "reason": "الكرت لديه جلسة نشطة ويسمح باتصال واحد فقط",
+                    "reply": {},
+                }
+            stale_sessions.append(active_session)
+
+        for stale_session in stale_sessions:
+            last_activity = _utc(stale_session.last_update_at or stale_session.started_at)
+            stale_session.stopped_at = max(now, last_activity)
+            stale_session.last_update_at = stale_session.stopped_at
+            db.add(CardEvent(
+                card_id=card.id,
+                event_type="radius_session_stale_closed",
+                details={
+                    "acct_session_id": stale_session.acct_session_id,
+                    "reason": "new_start_after_missing_stop",
+                },
+                actor="radius",
+            ))
+
+        latest_stale = max(stale_sessions, key=lambda item: _utc(item.started_at))
+        restored_status = latest_stale.card_status_before_session
+        if restored_status not in ALLOWED_PRE_SESSION_STATES:
+            restored_status = "allocated" if card.assigned_pos_id is not None else (
+                "printed_free" if card.is_free else "generated"
+            )
+        card.status = restored_status
+    elif card.status == "active":
+        _restore_stale_active_status(db, card)
+
+    if card.status not in ALLOWED_PRE_SESSION_STATES:
+        return {"accepted": False, "reason": "حالة الكرت لا تسمح بالدخول", "reply": {}}
 
     try:
         expected_password = decrypt_credential(card.credential_ciphertext)
