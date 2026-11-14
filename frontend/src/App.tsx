@@ -259,6 +259,29 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  async function reprintJob(job: PrintJobHistory) {
+    if (!selectedPosId) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await apiRequest<PrintJobResult>(token, "/api/v1/print-jobs", {
+        method: "POST",
+        body: JSON.stringify({
+          idempotency_key: `reprint-${crypto.randomUUID()}`,
+          point_of_sale_id: Number(selectedPosId),
+          card_ids: job.cards.map((card) => card.card_id),
+          template_code: job.template_code ?? "classic-green",
+          is_reprint: true,
+        }),
+      });
+      setPrintTemplate(job.template_code ?? "classic-green");
+      setPrintPreviewCards(result.items);
+      await loadPrintHistory(selectedPosId);
+      setNotice(`تم تسجيل إعادة طباعة ${result.card_count} كرت دون إضافة قيمة تجارية جديدة.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذرت إعادة الطباعة");
+    } finally { setBusy(false); }
+  }
+
   async function printSelectedCards() {
     if (!selectedPosId || selectedPrintCardIds.length === 0) {
       setError("اختر نقطة البيع وكرتاً واحداً على الأقل.");
@@ -649,6 +672,23 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 </div>
               </section>
             )}
+          </>
+        )}
+        {selectedPosId && (
+          <>
+            <div className="section-heading compact-heading"><div><h2>سجل عمليات الطباعة</h2><p>إعادة الطباعة لا تضيف قيمة مالية جديدة ولا تكرر ترحيل المخزون.</p></div><span className="count-tag">{printHistory.length} عملية</span></div>
+            <div className="table-wrap">
+              <table><thead><tr><th>التاريخ</th><th>القالب</th><th>عدد الكروت</th><th>النوع</th><th>الإجراء</th></tr></thead>
+                <tbody>{printHistory.map((job) => <tr key={job.id}>
+                  <td>{new Date(job.created_at).toLocaleString("ar")}</td>
+                  <td>{job.template_code || "افتراضي"}</td>
+                  <td>{job.card_count}</td>
+                  <td>{job.is_reprint ? "إعادة طباعة" : "طباعة أصلية"}</td>
+                  <td><button type="button" className="table-action" disabled={busy || !points.find((point) => String(point.id) === selectedPosId)?.is_active} onClick={() => reprintJob(job)}>إعادة طباعة</button></td>
+                </tr>)}</tbody>
+              </table>
+              {printHistory.length === 0 && <div className="empty-state">لا توجد عمليات طباعة مسجلة لهذه النقطة.</div>}
+            </div>
           </>
         )}
         {points.length === 0 && <div className="empty-state">أنشئ أول نقطة بيع من النموذج أعلاه للبدء.</div>}
