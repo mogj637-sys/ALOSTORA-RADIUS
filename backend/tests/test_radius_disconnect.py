@@ -7,7 +7,7 @@ from pyrad import packet
 from pyrad.client import Timeout
 
 from app.db.session import SessionLocal
-from app.models.core import Card, RadiusSession, Router
+from app.models.core import Card, CardEvent, RadiusSession, Router
 from app.services.router_secrets import decrypt_router_secret
 from app.services.radius_disconnect import send_disconnect_for_session
 
@@ -151,8 +151,6 @@ def test_disconnect_sender_reports_timeout(monkeypatch, owner_client):
 
 
 def test_admin_suspend_sends_disconnect_for_active_card(monkeypatch, owner_client):
-    import os
-
     monkeypatch.setenv("RADIUS_COA_ENABLED", "true")
     monkeypatch.setattr("app.api.cards.send_disconnect_for_session", lambda db, session: True)
     client, headers, _ = owner_client
@@ -165,7 +163,7 @@ def test_admin_suspend_sends_disconnect_for_active_card(monkeypatch, owner_clien
         )
         assert suspended.status_code == 200, suspended.text
         event = (
-            db.query(__import__("app.models.core", fromlist=["CardEvent"]).CardEvent)
+            db.query(CardEvent)
             .filter_by(card_id=session.card_id, event_type="radius_disconnect_sent")
             .one()
         )
