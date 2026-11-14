@@ -15,3 +15,4 @@ def test_initial_api_routes_are_registered():
     assert "/api/v1/points-of-sale" in paths
     assert "/api/v1/points-of-sale/{point_id}/inventory" in paths
     assert "/api/v1/print-jobs" in paths
+    assert "/api/v1/routers" in paths
