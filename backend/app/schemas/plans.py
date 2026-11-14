@@ -15,9 +15,9 @@ class PlanCreate(BaseModel):
 
 
 class PlanUpdate(BaseModel):
-    code: str | None = Field(default=None, min_length=2, max_length=50, pattern=r"^[A-Za-z0-9_-]+$")
-    name: str | None = Field(default=None, min_length=2, max_length=120)
-    price: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    code: str = Field(default=None, min_length=2, max_length=50, pattern=r"^[A-Za-z0-9_-]+$")
+    name: str = Field(default=None, min_length=2, max_length=120)
+    price: Decimal = Field(default=None, ge=0, max_digits=12, decimal_places=2)
     data_limit_bytes: int | None = Field(default=None, gt=0)
     session_time_limit_seconds: int | None = Field(default=None, gt=0)
     validity_period_seconds: int | None = Field(default=None, gt=0)
