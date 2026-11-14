@@ -33,4 +33,5 @@ class RadiusAccountingResponse(BaseModel):
     processed: bool
     duplicate: bool = False
     disconnect_required: bool = False
+    disconnect_sent: bool = False
     reason: str
