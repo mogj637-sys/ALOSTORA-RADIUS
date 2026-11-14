@@ -2,7 +2,7 @@ from app.main import app
 
 
 def test_initial_api_routes_are_registered():
-    paths = {route.path for route in app.routes}
+    paths = set(app.openapi()["paths"])
     assert "/health" in paths
     assert "/health/ready" in paths
     assert "/api/v1/auth/login" in paths
