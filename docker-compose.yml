@@ -33,6 +33,25 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  freeradius:
+    build:
+      context: ./freeradius
+    restart: unless-stopped
+    environment:
+      RADIUS_INTERNAL_API_KEY: ${RADIUS_INTERNAL_API_KEY:-}
+      RADIUS_API_URL: http://api:8000/internal/radius/clients
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    depends_on:
+      api:
+        condition: service_healthy
 
   web:
     build:
