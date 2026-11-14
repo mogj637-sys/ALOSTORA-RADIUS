@@ -148,3 +148,27 @@ def test_disconnect_sender_reports_timeout(monkeypatch, owner_client):
         assert send_disconnect_for_session(db, session) is False
     finally:
         db.close()
+
+
+def test_admin_suspend_sends_disconnect_for_active_card(monkeypatch, owner_client):
+    import os
+
+    monkeypatch.setenv("RADIUS_COA_ENABLED", "true")
+    monkeypatch.setattr("app.api.cards.send_disconnect_for_session", lambda db, session: True)
+    client, headers, _ = owner_client
+    db, session = _active_session(owner_client)
+    try:
+        suspended = client.patch(
+            f"/api/v1/cards/{session.card_id}/status",
+            headers=headers,
+            json={"action": "suspend"},
+        )
+        assert suspended.status_code == 200, suspended.text
+        event = (
+            db.query(__import__("app.models.core", fromlist=["CardEvent"]).CardEvent)
+            .filter_by(card_id=session.card_id, event_type="radius_disconnect_sent")
+            .one()
+        )
+        assert event.actor
+    finally:
+        db.close()
