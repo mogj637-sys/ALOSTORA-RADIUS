@@ -100,7 +100,7 @@ def test_radius_authorize_starts_first_use_and_returns_mikrotik_limits(owner_cli
             "password": password,
         },
     )
-    assert second.status_code == 200
+    assert second.status_code == 401
     assert second.json()["accepted"] is False
     assert "طلب دخول آخر" in second.json()["reason"]
 
