@@ -66,6 +66,7 @@ def test_print_allocation_is_idempotent_and_reprint_does_not_duplicate_stock(own
     }
     first = client.post("/api/v1/print-jobs", headers=headers, json=payload)
     assert first.status_code == 201, first.text
+    assert "no-store" in first.headers.get("cache-control", "")
     result = first.json()
     assert result["card_count"] == 2
     assert result["commercial_card_count"] == 2
