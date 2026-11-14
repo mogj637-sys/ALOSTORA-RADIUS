@@ -69,4 +69,4 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
       - name: Build and validate FreeRADIUS configuration
-        run: docker build -t alostora-radius ./radius
+        run: docker build -t alostora-radius ./freeradius
