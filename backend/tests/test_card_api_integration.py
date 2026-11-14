@@ -20,46 +20,6 @@ from app.security import hash_password
 from app.services.credentials import decrypt_credential
 
 
-@pytest.fixture
-def owner_client(monkeypatch):
-    monkeypatch.setenv("CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
-    username = "ci_owner_" + secrets.token_hex(4)
-    password = "a-strong-ci-password-123"
-
-    db = SessionLocal()
-    role = db.query(Role).filter_by(code="owner").first()
-    if role is None:
-        role = Role(code="owner", name="System Owner")
-        db.add(role)
-        db.flush()
-
-    user = AdminUser(
-        username=username,
-        display_name="CI Owner",
-        password_hash=hash_password(password),
-        is_active=True,
-        roles=[role],
-    )
-    db.add(user)
-    db.commit()
-    user_id = user.id
-    db.close()
-
-    with TestClient(app) as client:
-        login = client.post("/api/v1/auth/login", json={"username": username, "password": password})
-        assert login.status_code == 200
-        token = login.json()["access_token"]
-        yield client, {"Authorization": f"Bearer {token}"}, username
-
-    cleanup = SessionLocal()
-    account = cleanup.get(AdminUser, user_id)
-    if account is not None:
-        account.roles = []
-        cleanup.delete(account)
-        cleanup.commit()
-    cleanup.close()
-
-
 def test_owner_can_create_plan_and_generate_batch(owner_client):
     client, headers, actor = owner_client
     code = "CI-" + secrets.token_hex(4).upper()
