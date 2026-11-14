@@ -216,3 +216,24 @@ tbody tr:hover { background: #fbfdfc; }
   .card-search { align-items: stretch; flex-direction: column; gap: 7px; }
   .card-search input { width: 100%; }
 }
+
+
+/* Point-of-sale and print allocation */
+.pos-print-panel { display: grid; gap: 18px; }
+.pos-print-panel > label, .print-controls > label { display: grid; gap: 7px; max-width: 420px; color: #354258; font-size: 12px; font-weight: 700; }
+.pos-print-panel select, .print-controls input {
+  width: 100%; height: 39px; border: 1px solid #dfe5ed; border-radius: 8px;
+  padding: 0 11px; background: #fff; color: #253249; font: inherit; font-size: 12px;
+}
+.pos-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 10px; }
+.pos-metrics > div { display: grid; gap: 7px; padding: 13px; border: 1px solid #e8edf1; border-radius: 9px; background: #fbfdfc; }
+.pos-metrics span { color: #69768a; font-size: 11px; }
+.pos-metrics strong { color: #176b51; font-size: 20px; font-weight: 750; }
+.print-controls { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.print-controls button { min-height: 39px; padding: 0 16px; border: 0; border-radius: 8px; background: #176b51; color: #fff; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.print-controls button:disabled { opacity: .5; cursor: not-allowed; }
+.print-controls input[type="checkbox"], .table-wrap input[type="checkbox"] { width: 16px; height: 16px; accent-color: #176b51; }
+@media (max-width: 620px) {
+  .print-controls { align-items: stretch; flex-direction: column; }
+  .print-controls button { width: 100%; }
+}
