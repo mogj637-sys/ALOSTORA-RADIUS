@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import ipaddress
 import json
 import sys
 
@@ -20,10 +21,12 @@ def main() -> None:
 
     for index, client in enumerate(clients, start=1):
         address = str(client["ipaddr"]).strip()
+        network = ipaddress.ip_network(address, strict=False)
+        address_directive = "ipv6addr" if network.version == 6 else "ipaddr"
         secret = str(client["secret"])
         shortname = str(client.get("shortname") or f"router-{index}")
         print(f"client alostora_router_{index} {{")
-        print(f"    ipaddr = {address}")
+        print(f"    {address_directive} = {address}")
         print(f"    secret = {quote(secret)}")
         print(f"    shortname = {quote(shortname)}")
         print("}")
