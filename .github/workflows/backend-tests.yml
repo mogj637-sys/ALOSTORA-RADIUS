@@ -26,6 +26,7 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://alostora:test-password@localhost:5432/alostora_radius_test
       APP_SECRET_KEY: ci-only-secret-key-with-more-than-thirty-two-characters
+      CREDENTIAL_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -38,12 +39,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-      - name: Run unit and schema tests
-        working-directory: backend
-        run: pytest -q
       - name: Apply PostgreSQL migrations
         working-directory: backend
         run: alembic upgrade head
+      - name: Run unit, schema, and API integration tests
+        working-directory: backend
+        run: pytest -q
 
   frontend-build:
     runs-on: ubuntu-latest
