@@ -235,7 +235,8 @@ def test_print_job_allocates_commercial_cards_once_and_reprint_is_free_of_moveme
         json={
             "plan_id": plan.json()["id"],
             "username": commercial_username,
-            "card_type": "username_only",
+            "card_type": "separate_credentials",
+            "password": "SALEpass123",
         },
     )
     assert commercial.status_code == 201, commercial.text
@@ -279,6 +280,8 @@ def test_print_job_allocates_commercial_cards_once_and_reprint_is_free_of_moveme
     assert first_data["free_card_count"] == 1
     assert first_data["total_amount"] == "25.00"
     assert first_data["is_reprint"] is False
+    printed_commercial = next(item for item in first_data["items"] if item["card_id"] == commercial.json()["id"])
+    assert printed_commercial["password"] == "SALEpass123"
 
     repeated = client.post("/api/v1/print-jobs", headers=headers, json=payload)
     assert repeated.status_code == 201, repeated.text
