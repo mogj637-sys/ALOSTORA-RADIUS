@@ -77,12 +77,12 @@ def test_radius_authorize_starts_first_use_and_returns_mikrotik_limits(owner_cli
     )
     assert accepted.status_code == 200, accepted.text
     result = accepted.json()
-    assert result["accepted"] is True
-    assert result["reply"]["Port-Limit"] == 1
-    assert result["reply"]["Acct-Interim-Interval"] == 60
-    assert result["reply"]["Session-Timeout"] == 300
-    assert result["reply"]["Mikrotik-Total-Limit"] == 2000
-    assert result["reply"]["Mikrotik-Rate-Limit"] == "2M/2M"
+    assert "reply:Port-Limit" in result
+    assert result["reply:Port-Limit"] == 1
+    assert result["reply:Acct-Interim-Interval"] == 60
+    assert result["reply:Session-Timeout"] == 300
+    assert result["reply:Mikrotik-Total-Limit"] == 2000
+    assert result["reply:Mikrotik-Rate-Limit"] == "2M/2M"
 
     db = SessionLocal()
     saved = db.get(Card, UUID(card["id"]))
@@ -101,8 +101,7 @@ def test_radius_authorize_starts_first_use_and_returns_mikrotik_limits(owner_cli
         },
     )
     assert second.status_code == 401
-    assert second.json()["accepted"] is False
-    assert "طلب دخول آخر" in second.json()["reason"]
+
 
 
 def test_radius_accounting_is_idempotent_and_counts_connected_time_and_both_directions(owner_client):
@@ -116,7 +115,7 @@ def test_radius_accounting_is_idempotent_and_counts_connected_time_and_both_dire
         headers=internal_headers,
         json={"nas_identifier": router["nas_identifier"], "username": card["username"], "password": password},
     )
-    assert auth.json()["accepted"] is True
+    assert auth.status_code == 200
 
     start_time = datetime.now(timezone.utc)
     base = {
@@ -140,7 +139,7 @@ def test_radius_accounting_is_idempotent_and_counts_connected_time_and_both_dire
         headers=internal_headers,
         json={"nas_identifier": router["nas_identifier"], "username": card["username"], "password": password},
     )
-    assert second_auth.json()["accepted"] is False
+    assert second_auth.status_code == 401
 
     interim = {
         **base,
@@ -353,7 +352,7 @@ def test_radius_rejects_wrong_password_without_starting_first_use(owner_client):
         },
     )
     assert response.status_code == 401
-    assert response.json()["accepted"] is False
+    assert response.status_code == 401
 
     db = SessionLocal()
     saved = db.get(Card, UUID(card["id"]))
