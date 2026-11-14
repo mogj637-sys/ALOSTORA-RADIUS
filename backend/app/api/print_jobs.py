@@ -43,6 +43,23 @@ def _response(job: PrintJob, db: Session) -> PrintJobResponse:
     }
     commercial = [item for item in items if not item.is_free]
     free = [item for item in items if item.is_free]
+    try:
+        response_items = [
+            PrintJobItemResponse(
+                card_id=item.card_id,
+                serial_number=item.serial_number_snapshot,
+                username=item.username_snapshot,
+                password=decrypt_credential(cards_by_id[item.card_id].credential_ciphertext),
+                is_free=item.is_free,
+                price_snapshot=item.price_snapshot,
+            )
+            for item in items
+        ]
+    except CredentialEncryptionNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=500, detail="تعذر تجهيز بيانات اعتماد الطباعة") from exc
+
     return PrintJobResponse(
         id=job.id,
         idempotency_key=job.idempotency_key,
@@ -57,19 +74,8 @@ def _response(job: PrintJob, db: Session) -> PrintJobResponse:
             if not job.is_reprint
             else Decimal("0.00")
         ),
-        items=[
-            PrintJobItemResponse(
-                card_id=item.card_id,
-                serial_number=item.serial_number_snapshot,
-                username=item.username_snapshot,
-                password=decrypt_credential(cards_by_id[item.card_id].credential_ciphertext),
-                is_free=item.is_free,
-                price_snapshot=item.price_snapshot,
-            )
-            for item in items
-        ],
+        items=response_items,
     )
-
 
 def _existing_job(
     db: Session,
