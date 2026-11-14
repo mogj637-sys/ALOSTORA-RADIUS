@@ -461,3 +461,40 @@ def test_validity_expiry_continues_after_disconnect(owner_client):
     assert saved.status == "expired"
     assert saved.used_seconds == 1
     db.close()
+
+
+def test_freeradius_attribute_json_envelope_is_normalized(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    card, password = _card(client, headers)
+    auth = client.post(
+        "/internal/radius/authorize",
+        headers=_radius_headers(),
+        json={
+            "NAS-Identifier": {"type": "string", "value": [router["nas_identifier"]]},
+            "User-Name": {"type": "string", "value": [card["username"]]},
+            "User-Password": {"type": "octets", "value": [password]},
+            "Framed-IP-Address": {"type": "ipaddr", "value": ["10.20.30.40"]},
+            "Calling-Station-Id": {"type": "string", "value": ["AA-BB-CC-DD-EE-FF"]},
+        },
+    )
+    assert auth.status_code == 200
+    assert auth.json()["reply:Port-Limit"] == 1
+
+    started_at = datetime.now(timezone.utc)
+    accounting = client.post(
+        "/internal/radius/accounting",
+        headers=_radius_headers(),
+        json={
+            "NAS-Identifier": {"type": "string", "value": [router["nas_identifier"]]},
+            "User-Name": {"type": "string", "value": [card["username"]]},
+            "Acct-Session-Id": {"type": "string", "value": ["freeradius-json-session"]},
+            "Acct-Status-Type": {"type": "integer", "value": [1]},
+            "Event-Timestamp": {"type": "date", "value": [started_at.timestamp()]},
+            "Acct-Session-Time": {"type": "integer", "value": [0]},
+            "Acct-Input-Octets": {"type": "integer", "value": [0]},
+            "Acct-Output-Octets": {"type": "integer", "value": [0]},
+        },
+    )
+    assert accounting.status_code == 200
+    assert accounting.json()["processed"] is True
