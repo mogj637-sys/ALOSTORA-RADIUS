@@ -1,0 +1,37 @@
+rest {
+    tls {
+    }
+
+    connect_uri = "http://api:8000"
+    connect_timeout = 4.0
+
+    authorize {
+        uri = "${..connect_uri}/internal/radius/authorize"
+        method = 'post'
+        body = 'json'
+        timeout = 5.0
+        data = '{"nas_identifier": %{jsonquote:NAS-Identifier}, "username": %{jsonquote:User-Name}, "password": %{jsonquote:User-Password}, "framed_ip_address": %{jsonquote:Framed-IP-Address}, "calling_station_id": %{jsonquote:Calling-Station-Id}}'
+        tls = ${..tls}
+    }
+
+    accounting {
+        uri = "${..connect_uri}/internal/radius/accounting"
+        method = 'post'
+        body = 'json'
+        force_to = 'plain'
+        timeout = 5.0
+        data = '{"nas_identifier": %{jsonquote:NAS-Identifier}, "username": %{jsonquote:User-Name}, "acct_session_id": %{jsonquote:Acct-Session-Id}, "status_type": %{jsonquote:Acct-Status-Type}, "session_time_seconds": %{%{Acct-Session-Time}:-0}, "input_octets": %{%{Acct-Input-Octets}:-0}, "output_octets": %{%{Acct-Output-Octets}:-0}, "input_gigawords": %{%{Acct-Input-Gigawords}:-0}, "output_gigawords": %{%{Acct-Output-Gigawords}:-0}, "framed_ip_address": %{jsonquote:Framed-IP-Address}, "calling_station_id": %{jsonquote:Calling-Station-Id}}'
+        tls = ${..tls}
+    }
+
+    pool {
+        start = 0
+        min = 1
+        max = 10
+        spare = 2
+        uses = 0
+        retry_delay = 5
+        lifetime = 0
+        idle_timeout = 60
+    }
+}
