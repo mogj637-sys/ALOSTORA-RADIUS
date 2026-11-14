@@ -60,10 +60,24 @@ def authorize_card(
     card = db.query(Card).filter(Card.username == username).with_for_update().first()
     if card is None:
         return {"accepted": False, "reason": "الكرت غير موجود", "reply": {}}
+    now = datetime.now(timezone.utc)
+    if card.radius_auth_reserved_until is not None:
+        if card.radius_auth_reserved_until > now:
+            return {"accepted": False, "reason": "يوجد طلب دخول آخر قيد المعالجة", "reply": {}}
+        card.radius_auth_reserved_until = None
+
     if card.status in {"suspended", "cancelled", "expired", "exhausted"}:
         return {"accepted": False, "reason": "الكرت موقوف أو منتهي", "reply": {}}
+
+    active_session = db.query(RadiusSession.id).filter(
+        RadiusSession.card_id == card.id,
+        RadiusSession.stopped_at.is_(None),
+    ).first()
+    if active_session is not None:
+        return {"accepted": False, "reason": "الكرت متصل بالفعل ويسمح باتصال واحد فقط", "reply": {}}
     if card.status == "active":
-        return {"accepted": False, "reason": "الكرت لديه جلسة نشطة أو طلب دخول قيد المعالجة", "reply": {}}
+        # Recover a stale active state only when no accounting session exists.
+        card.status = "allocated" if card.assigned_pos_id is not None else "generated"
 
     try:
         expected_password = decrypt_credential(card.credential_ciphertext)
@@ -82,7 +96,6 @@ def authorize_card(
         db.commit()
         return {"accepted": False, "reason": "بيانات الدخول غير صحيحة", "reply": {}}
 
-    now = datetime.now(timezone.utc)
     if card.first_used_at is None:
         card.first_used_at = now
         validity = _snapshot_limit(card, "validity_period_seconds")
@@ -115,14 +128,6 @@ def authorize_card(
         db.commit()
         return {"accepted": False, "reason": "انتهى رصيد البيانات", "reply": {}}
 
-    active_session = db.query(RadiusSession.id).filter(
-        RadiusSession.card_id == card.id,
-        RadiusSession.stopped_at.is_(None),
-    ).first()
-    if active_session is not None:
-        db.rollback()
-        return {"accepted": False, "reason": "الكرت متصل بالفعل ويسمح باتصال واحد فقط", "reply": {}}
-
     reply: dict[str, str | int] = {
         "Port-Limit": 1,
         "Acct-Interim-Interval": 60,
@@ -135,6 +140,8 @@ def authorize_card(
     if remaining_data is not None:
         reply["Mikrotik-Total-Limit"] = remaining_data
 
+    card.radius_auth_reserved_until = now + timedelta(minutes=2)
+    router.last_seen_at = now
     db.add(CardEvent(
         card_id=card.id,
         event_type="radius_auth_accepted",
@@ -157,10 +164,12 @@ def _packet_fingerprint(payload: dict[str, Any]) -> str:
 def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     router = db.query(Router).filter(
         Router.nas_identifier == payload["nas_identifier"],
-        Router.is_active.is_(True),
     ).first()
     if router is None:
-        return {"processed": False, "reason": "NAS غير مسجل أو متوقف"}
+        return {"processed": False, "reason": "NAS غير مسجل"}
+    if payload["status_type"] == "Start" and not router.is_active:
+        return {"processed": False, "reason": "الراوتر متوقف ولا يسمح ببدء جلسات جديدة"}
+    router.last_seen_at = _utc(payload.get("event_timestamp"))
 
     card = db.query(Card).filter(Card.username == payload["username"]).with_for_update().first()
     if card is None:
@@ -182,6 +191,10 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     if status_type == "Start":
         if session is not None and session.stopped_at is not None:
             return {"processed": False, "reason": "معرّف الجلسة سبق إغلاقه"}
+        if session is not None:
+            return {"processed": True, "duplicate": True, "disconnect_required": False, "reason": "تم تسجيل بداية الجلسة مسبقاً"}
+        if card.status in {"suspended", "cancelled", "expired", "exhausted"}:
+            return {"processed": False, "reason": "حالة الكرت لا تسمح ببدء الجلسة"}
         if session is None:
             session = RadiusSession(
                 card_id=card.id,
@@ -199,6 +212,7 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             )
             db.add(session)
         card.status = "active"
+        card.radius_auth_reserved_until = None
         db.add(CardEvent(
             card_id=card.id,
             event_type="radius_session_started",
@@ -243,6 +257,7 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
 
     if status_type == "Stop":
         session.stopped_at = event_time
+        card.radius_auth_reserved_until = None
         if card.status == "active":
             card.status = "allocated" if card.assigned_pos_id is not None else "generated"
         db.add(CardEvent(
