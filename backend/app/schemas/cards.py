@@ -25,7 +25,7 @@ class CardBatchCreate(BaseModel):
     generation_mode: GenerationMode = "digits"
     username_length: int = Field(default=8, ge=3, le=32)
     password_length: int = Field(default=8, ge=4, le=32)
-    prefix: str = Field(default="", max_length=20)
+    prefix: str = Field(default="", max_length=20, pattern=r"^[A-Za-z0-9]*$")
 
 
 class CardCreatedSecret(BaseModel):
