@@ -89,7 +89,6 @@ def authorize_card(
             Router.nas_identifier == nas_identifier,
             Router.is_active.is_(True),
         )
-        .with_for_update()
         .first()
     )
     if router is None:
@@ -258,7 +257,6 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             Router.nas_identifier == payload["nas_identifier"],
             Router.is_active.is_(True),
         )
-        .with_for_update()
         .first()
     )
     if router is None:
@@ -314,8 +312,13 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         if other_active_session is not None:
             return {"processed": False, "reason": "للكرت جلسة نشطة أخرى"}
 
+        if card.status == "active":
+            _restore_stale_active_status(db, card)
+        if card.status not in ALLOWED_PRE_SESSION_STATES:
+            return {"processed": False, "reason": "حالة الكرت لا تسمح ببدء الجلسة"}
+
         reservation = card.radius_auth_reserved_until
-        if reservation is None or _utc(reservation) <= event_time:
+        if reservation is None or _utc(reservation) <= datetime.now(timezone.utc):
             return {
                 "processed": False,
                 "reason": "لا يوجد حجز مصادقة صالح لهذه الجلسة",
@@ -361,9 +364,14 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         card.upload_bytes += input_total
         card.download_bytes += output_total
         card.used_seconds += session_time
-        card.status = "active"
+        remaining_time, remaining_data = _remaining_limits(card, event_time)
+        disconnect_required = (
+            (remaining_time is not None and remaining_time <= 0)
+            or (remaining_data is not None and remaining_data <= 0)
+        )
+        card.status = "exhausted" if disconnect_required else "active"
         card.radius_auth_reserved_until = None
-        router.last_seen_at = event_time
+        router.last_seen_at = max(_utc(router.last_seen_at), event_time)
         db.add(
             CardEvent(
                 card_id=card.id,
@@ -379,8 +387,8 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         return {
             "processed": True,
             "duplicate": False,
-            "disconnect_required": False,
-            "reason": "بدأت الجلسة",
+            "disconnect_required": disconnect_required,
+            "reason": "بدأت الجلسة؛ يجب الفصل فوراً لتجاوز أحد الحدود" if disconnect_required else "بدأت الجلسة",
         }
 
     if session is None:
@@ -453,6 +461,8 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
                     "printed_free" if card.is_free else "generated"
                 )
             card.status = previous_status
+        if card.status != "exhausted" and card.expires_at is not None and _utc(card.expires_at) <= stop_time:
+            card.status = "expired"
         db.add(
             CardEvent(
                 card_id=card.id,
