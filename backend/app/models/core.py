@@ -107,7 +107,7 @@ class Card(TimestampMixin, Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     serial_number: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
     username: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
-    # Password encryption/hash policy will be implemented with the RADIUS credential adapter.
+    # Card passwords are encrypted at rest and decrypted only during protected RADIUS authorization.
     credential_ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
     credential_scheme: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")
     card_type: Mapped[str] = mapped_column(String(30), nullable=False, default="standard")
