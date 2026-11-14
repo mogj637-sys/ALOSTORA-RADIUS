@@ -1,7 +1,7 @@
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -83,12 +83,82 @@ def list_cards(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     status_filter: str | None = Query(default=None, alias="status"),
+    search: str | None = Query(default=None, min_length=1, max_length=120),
+    plan_id: int | None = Query(default=None, gt=0),
+    is_free: bool | None = None,
     db: Session = Depends(get_db),
 ):
     query = db.query(Card)
     if status_filter:
         query = query.filter(Card.status == status_filter)
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(Card.username.ilike(term), Card.serial_number.ilike(term))
+        )
+    if plan_id is not None:
+        query = query.filter(Card.plan_id == plan_id)
+    if is_free is not None:
+        query = query.filter(Card.is_free.is_(is_free))
     return query.order_by(Card.created_at.desc()).offset(offset).limit(limit).all()
+
+
+@router.patch("/{card_id}/status", response_model=CardListItem)
+def update_card_status(
+    card_id: str,
+    payload: CardStatusUpdate,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(get_current_owner),
+):
+    from uuid import UUID
+
+    try:
+        card_uuid = UUID(card_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="معرّف الكرت غير صالح")
+
+    card = db.query(Card).filter(Card.id == card_uuid).with_for_update().first()
+    if card is None:
+        raise HTTPException(status_code=404, detail="الكرت غير موجود")
+
+    previous_status = card.status
+    if payload.action == "suspend":
+        if previous_status not in {"generated", "allocated", "active"}:
+            raise HTTPException(status_code=409, detail="لا يمكن إيقاف الكرت في حالته الحالية")
+        card.status = "suspended"
+        event_type = "suspended"
+        details = {"previous_status": previous_status}
+    elif payload.action == "reactivate":
+        if previous_status != "suspended":
+            raise HTTPException(status_code=409, detail="الكرت ليس موقوفاً")
+        prior_event = (
+            db.query(CardEvent)
+            .filter(CardEvent.card_id == card.id, CardEvent.event_type == "suspended")
+            .order_by(CardEvent.created_at.desc(), CardEvent.id.desc())
+            .first()
+        )
+        restored_status = (prior_event.details or {}).get("previous_status") if prior_event else None
+        if restored_status not in {"generated", "allocated", "active"}:
+            restored_status = "active" if card.first_used_at else ("allocated" if card.assigned_pos_id else "generated")
+        card.status = restored_status
+        event_type = "reactivated"
+        details = {"restored_status": restored_status}
+    else:  # cancel
+        if previous_status not in {"generated", "allocated"} or card.first_used_at is not None:
+            raise HTTPException(status_code=409, detail="لا يمكن إلغاء كرت بدأ استخدامه أو لا يقبل الإلغاء")
+        card.status = "cancelled"
+        event_type = "cancelled"
+        details = {"previous_status": previous_status}
+
+    db.add(CardEvent(
+        card_id=card.id,
+        event_type=event_type,
+        details=details,
+        actor=user.username,
+    ))
+    db.commit()
+    db.refresh(card)
+    return card
 
 
 @router.post("/single", response_model=CardCreateResponse, status_code=status.HTTP_201_CREATED)
