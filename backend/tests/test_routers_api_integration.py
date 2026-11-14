@@ -147,3 +147,26 @@ def test_internal_radius_clients_endpoint_returns_only_active_configured_nas(own
     assert active_entry["ipaddr"] == "192.0.2.30/32"
     assert active_entry["secret"] == active_secret
     assert all(item["nas_identifier"] != inactive.json()["nas_identifier"] for item in entries)
+
+
+def test_router_rejects_invalid_radius_client_network_and_control_characters(owner_client):
+    client, headers, _ = owner_client
+    base = {
+        "name": "Invalid NAS",
+        "nas_identifier": "nas-invalid-" + secrets.token_hex(4),
+        "management_host": "192.0.2.40",
+        "radius_secret": "radius-secret-" + secrets.token_hex(8),
+    }
+    bad_network = client.post(
+        "/api/v1/routers",
+        headers=headers,
+        json={**base, "radius_client_address": "192.0.2.40\nclient injected"},
+    )
+    assert bad_network.status_code == 422
+
+    bad_secret = client.post(
+        "/api/v1/routers",
+        headers=headers,
+        json={**base, "nas_identifier": "nas-control-" + secrets.token_hex(4), "radius_secret": "line1\nline2-secret"},
+    )
+    assert bad_secret.status_code == 422
