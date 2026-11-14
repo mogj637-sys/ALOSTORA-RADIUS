@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 077
 
 : "${RADIUS_INTERNAL_API_KEY:?RADIUS_INTERNAL_API_KEY is required}"
 RADIUS_API_URL="${RADIUS_API_URL:-http://api:8000/internal/radius/clients}"
