@@ -499,3 +499,38 @@ def test_freeradius_attribute_json_envelope_is_normalized(owner_client):
     )
     assert accounting.status_code == 200
     assert accounting.json()["processed"] is True
+
+
+def test_radius_authorize_supports_chap_challenge_response(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    card, password = _card(client, headers)
+    challenge = b"challenge-123456"
+    chap_identifier = b"\x05"
+    expected_response = hashlib.md5(chap_identifier + password.encode("utf-8") + challenge).digest()
+    chap_packet = chap_identifier + expected_response
+
+    rejected = client.post(
+        "/internal/radius/authorize",
+        headers=_radius_headers(),
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": card["username"],
+            "chap_password_hex": (chap_identifier + b"\x00" * 16).hex(),
+            "chap_challenge_hex": challenge.hex(),
+        },
+    )
+    assert rejected.status_code == 401
+
+    accepted = client.post(
+        "/internal/radius/authorize",
+        headers=_radius_headers(),
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": card["username"],
+            "chap_password_hex": chap_packet.hex(),
+            "chap_challenge_hex": challenge.hex(),
+        },
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["reply:Port-Limit"] == 1
