@@ -41,6 +41,18 @@ type GeneratedCard = {
   password: string;
 };
 
+type RouterItem = {
+  id: number;
+  name: string;
+  nas_identifier: string;
+  management_host: string;
+  api_port: number;
+  api_username: string | null;
+  routeros_version: string | null;
+  is_active: boolean;
+  last_seen_at: string | null;
+};
+
 type PointOfSale = {
   id: number;
   code: string;
@@ -151,13 +163,18 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
 }
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
-  const [page, setPage] = useState<"overview" | "plans" | "cards" | "pos">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "cards" | "pos" | "routers">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [cardSearch, setCardSearch] = useState("");
   const [points, setPoints] = useState<PointOfSale[]>([]);
+  const [routers, setRouters] = useState<RouterItem[]>([]);
+  const [routerDraft, setRouterDraft] = useState({
+    name: "", nasIdentifier: "", managementHost: "", apiPort: "8728",
+    apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "",
+  });
   const [selectedPosId, setSelectedPosId] = useState("");
   const [posInventory, setPosInventory] = useState<PosInventory | null>(null);
   const [printHistory, setPrintHistory] = useState<PrintJobHistory[]>([]);
@@ -193,6 +210,53 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     if (search.trim()) params.set("search", search.trim());
     const result = await apiRequest<Card[]>(token, `/api/v1/cards?${params.toString()}`);
     setCards(result);
+  }
+
+  async function loadRouters() {
+    const result = await apiRequest<RouterItem[]>(token, "/api/v1/routers?include_inactive=true");
+    setRouters(result);
+  }
+
+  async function createRouter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<RouterItem>(token, "/api/v1/routers", {
+        method: "POST",
+        body: JSON.stringify({
+          name: routerDraft.name,
+          nas_identifier: routerDraft.nasIdentifier,
+          management_host: routerDraft.managementHost,
+          api_port: Number(routerDraft.apiPort),
+          api_username: routerDraft.apiUsername || null,
+          api_secret: routerDraft.apiSecret || null,
+          radius_secret: routerDraft.radiusSecret,
+          routeros_version: routerDraft.routerosVersion || null,
+        }),
+      });
+      setRouterDraft({
+        name: "", nasIdentifier: "", managementHost: "", apiPort: "8728",
+        apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "",
+      });
+      await loadRouters();
+      setNotice("تم تسجيل الراوتر وحفظ أسراره مشفرة. لم يتم الاتصال به أو اختباره بعد.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تسجيل الراوتر");
+    } finally { setBusy(false); }
+  }
+
+  async function toggleRouter(router: RouterItem) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<RouterItem>(token, `/api/v1/routers/${router.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_active: !router.is_active }),
+      });
+      await loadRouters();
+      setNotice(router.is_active ? "تم تعطيل الراوتر في السجل." : "تم تفعيل الراوتر في السجل.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تغيير حالة الراوتر");
+    } finally { setBusy(false); }
   }
 
   async function loadPosInventory(pointId: string) {
@@ -312,12 +376,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   useEffect(() => {
     if (page !== "pos") setPrintPreviewCards([]);
-    if (page === "plans" || page === "cards" || page === "pos") {
+    if (page !== "pos") setPrintPreviewCards([]);
+    if (page === "plans" || page === "cards" || page === "pos" || page === "routers") {
       setError("");
       Promise.all([
         loadPlans(),
         page === "cards" || page === "pos" ? loadCards() : Promise.resolve(),
         page === "pos" ? loadPointsOfSale() : Promise.resolve(),
+        page === "routers" ? loadRouters() : Promise.resolve(),
       ]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل البيانات"));
     }
     // Data is refreshed when the selected section changes.
