@@ -237,3 +237,31 @@ tbody tr:hover { background: #fbfdfc; }
   .print-controls { align-items: stretch; flex-direction: column; }
   .print-controls button { width: 100%; }
 }
+
+
+/* Point-of-sale inventory and print allocation */
+.pos-toolbar { display: flex; align-items: end; gap: 12px; margin: 22px 0 14px; }
+.pos-toolbar label, .pos-print-panel label { display: flex; flex-direction: column; gap: 7px; color: #354258; font-size: 12px; font-weight: 700; }
+.pos-toolbar select, .pos-print-panel select {
+  min-width: 240px; height: 40px; border: 1px solid #dfe5ed; border-radius: 8px;
+  padding: 0 11px; background: #fff; color: #253249; font: inherit; font-size: 12px;
+}
+.pos-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.pos-stats > div { display: flex; flex-direction: column; gap: 8px; background: #fff; border: 1px solid #e7ebf1; border-radius: 11px; padding: 14px; }
+.pos-stats span { color: #788397; font-size: 10px; }
+.pos-stats strong { color: #176b51; font-size: 19px; }
+.pos-print-panel { display: flex; align-items: end; gap: 15px; margin-top: 15px; flex-wrap: wrap; }
+.pos-print-panel select { min-width: 180px; }
+.pos-print-panel button { border: 0; border-radius: 8px; background: #168767; color: #fff; padding: 12px 18px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.pos-print-panel button:disabled { opacity: .55; cursor: wait; }
+.pos-print-summary { flex: 1 1 240px; color: #6f7c8f; font-size: 11px; line-height: 1.8; }
+@media (max-width: 900px) {
+  .pos-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .pos-toolbar { align-items: stretch; flex-direction: column; }
+  .pos-toolbar select, .pos-print-panel select { width: 100%; min-width: 0; }
+  .pos-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pos-print-panel { align-items: stretch; flex-direction: column; }
+  .pos-print-panel button { width: 100%; }
+}
