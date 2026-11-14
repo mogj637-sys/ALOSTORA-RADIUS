@@ -145,6 +145,32 @@ class PrintJob(TimestampMixin, Base):
     card_count: Mapped[int] = mapped_column(Integer, nullable=False)
     is_reprint: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     requested_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    items: Mapped[list["PrintJobItem"]] = relationship(back_populates="print_job")
+
+
+class PrintJobItem(Base):
+    __tablename__ = "print_job_items"
+    __table_args__ = (
+        UniqueConstraint("print_job_id", "card_id", name="uq_print_job_item_card"),
+        Index("ix_print_job_items_card", "card_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    print_job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("print_jobs.id", ondelete="RESTRICT"), nullable=False
+    )
+    card_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cards.id", ondelete="RESTRICT"), nullable=False
+    )
+    serial_number_snapshot: Mapped[str] = mapped_column(String(80), nullable=False)
+    username_snapshot: Mapped[str] = mapped_column(String(120), nullable=False)
+    is_free: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    price_snapshot: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    print_job: Mapped[PrintJob] = relationship(back_populates="items")
 
 
 class PosInventoryMovement(Base):
