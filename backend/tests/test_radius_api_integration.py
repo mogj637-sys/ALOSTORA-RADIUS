@@ -253,7 +253,7 @@ def test_radius_internal_endpoints_reject_missing_or_invalid_shared_key(owner_cl
 def test_accounting_supports_gigawords_and_closes_sessions_after_router_deactivation(owner_client):
     client, headers, _ = owner_client
     router = _router(client, headers)
-    card, password = _card(client, headers)
+    card, password = _card(client, headers, data_limit=10**12)
     internal_headers = _radius_headers()
     auth = client.post(
         "/internal/radius/authorize",
