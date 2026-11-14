@@ -36,5 +36,5 @@ class PointOfSaleInventoryResponse(BaseModel):
     allocated_cards: int
     used_cards: int
     suspended_cards: int
-    commercial_stock_value: Decimal
+    commercial_printed_value: Decimal
     free_cards_printed: int
