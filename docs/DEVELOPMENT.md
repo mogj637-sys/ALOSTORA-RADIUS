@@ -11,7 +11,7 @@
 1. استنسخ المستودع:
    `git clone https://github.com/mogj637-sys/ALOSTORA-RADIUS.git`
 2. ادخل مجلد المشروع.
-3. انسخ `.env.example` إلى `.env` وعدّل كلمات المرور والمفتاح السري محلياً. أنشئ مفتاحاً عشوائياً عبر `python -c "import secrets; print(secrets.token_urlsafe(48))"` وضع الناتج في `APP_SECRET_KEY`. وأنشئ مفتاح تشفير الكروت عبر `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` وضعه في `CREDENTIAL_ENCRYPTION_KEY`.
+3. انسخ `.env.example` إلى `.env` وعدّل كلمات المرور والمفتاح السري محلياً. أنشئ مفتاحاً عشوائياً عبر `python -c "import secrets; print(secrets.token_urlsafe(48))"` وضع الناتج في `APP_SECRET_KEY`. وأنشئ مفتاح تشفير الكروت عبر `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` وضعه في `CREDENTIAL_ENCRYPTION_KEY`. وأنشئ مفتاحاً مستقلاً آخر بالطريقة نفسها وضعه في `ROUTER_SECRET_ENCRYPTION_KEY` لحماية أسرار الراوترات. لا تستخدم المفتاح نفسه للغرضين.
 4. شغّل الخدمات:
    `docker compose up --build -d`
 5. انتظر اكتمال بناء الحاويات وترحيلات قاعدة البيانات التي تعمل قبل تشغيل API.
@@ -36,6 +36,7 @@
 
 ## تنبيهات
 - لا ترفع ملف `.env` إلى GitHub.
+- احتفظ بنسخة احتياطية آمنة من `CREDENTIAL_ENCRYPTION_KEY` و`ROUTER_SECRET_ENCRYPTION_KEY`؛ فقدانهما يمنع فك تشفير بيانات الكروت وأسرار الراوترات المخزنة.
 - كلمة المرور الافتراضية في Compose مخصصة للتطوير المحلي فقط؛ غيّرها قبل الاستخدام.
 - لا توصل راوتر إنتاج أو RADIUS حقيقي قبل إضافة المصادقة وإدارة الأسرار وقواعد الشبكة والاختبارات.
 - مخطط قاعدة البيانات الأولي يطبق تلقائياً عبر Alembic عند بدء API.
