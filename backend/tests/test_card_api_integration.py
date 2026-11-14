@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.auth import AdminUser, Role
-from app.models.core import Card, CardEvent
+from app.models.core import (\n    Card, CardEvent, PointOfSale, PosInventoryMovement, PrintJob, PrintJobItem\n)
 from app.security import hash_password
 from app.services.credentials import decrypt_credential
 
@@ -249,3 +249,162 @@ def test_card_search_and_audited_status_lifecycle(owner_client):
     ]
     assert all(event.actor == actor for event in events)
     db.close()
+
+
+def test_print_job_allocates_commercial_cards_once_and_reprint_is_free_of_movements(owner_client):
+    client, headers, actor = owner_client
+    code = "PRINT-" + secrets.token_hex(4).upper()
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={"code": code, "name": "Print test plan", "price": "25.00"},
+    )
+    assert plan.status_code == 201, plan.text
+
+    commercial_username = "SALE" + secrets.token_hex(4).upper()
+    commercial = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": commercial_username,
+            "card_type": "username_only",
+        },
+    )
+    assert commercial.status_code == 201, commercial.text
+
+    free_username = "GIFT" + secrets.token_hex(4).upper()
+    free = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": free_username,
+            "card_type": "username_only",
+            "is_free": True,
+        },
+    )
+    assert free.status_code == 201, free.text
+
+    db = SessionLocal()
+    pos = PointOfSale(
+        code="POS-" + secrets.token_hex(4).upper(),
+        name="CI print point",
+        is_active=True,
+    )
+    db.add(pos)
+    db.commit()
+    pos_id = pos.id
+    db.close()
+
+    card_ids = [commercial.json()["id"], free.json()["id"]]
+    payload = {
+        "idempotency_key": "print-" + secrets.token_hex(12),
+        "point_of_sale_id": pos_id,
+        "card_ids": card_ids,
+        "template_code": "green-voucher",
+    }
+    first = client.post("/api/v1/print-jobs", headers=headers, json=payload)
+    assert first.status_code == 201, first.text
+    first_data = first.json()
+    assert first_data["card_count"] == 2
+    assert first_data["commercial_card_count"] == 1
+    assert first_data["free_card_count"] == 1
+    assert first_data["total_amount"] == "25.00"
+    assert first_data["is_reprint"] is False
+
+    repeated = client.post("/api/v1/print-jobs", headers=headers, json=payload)
+    assert repeated.status_code == 201, repeated.text
+    assert repeated.json()["id"] == first_data["id"]
+
+    reprint_payload = {
+        **payload,
+        "idempotency_key": "reprint-" + secrets.token_hex(12),
+        "is_reprint": True,
+    }
+    reprinted = client.post("/api/v1/print-jobs", headers=headers, json=reprint_payload)
+    assert reprinted.status_code == 201, reprinted.text
+    assert reprinted.json()["is_reprint"] is True
+    assert reprinted.json()["total_amount"] == "25.00"
+
+    db = SessionLocal()
+    commercial_card = db.query(Card).filter_by(username=commercial_username).one()
+    free_card = db.query(Card).filter_by(username=free_username).one()
+    assert commercial_card.assigned_pos_id == pos_id
+    assert commercial_card.status == "allocated"
+    assert commercial_card.allocated_at is not None
+    assert free_card.assigned_pos_id is None
+    assert free_card.status == "generated"
+
+    movements = db.query(PosInventoryMovement).filter_by(point_of_sale_id=pos_id).all()
+    assert len(movements) == 1
+    assert movements[0].card_id == UUID(commercial.json()["id"])
+    assert movements[0].amount == 25
+
+    jobs = db.query(PrintJob).filter(PrintJob.point_of_sale_id == pos_id).all()
+    assert len(jobs) == 2
+    items = db.query(PrintJobItem).filter(
+        PrintJobItem.print_job_id.in_([job.id for job in jobs])
+    ).all()
+    assert len(items) == 4
+
+    events = db.query(CardEvent).filter(
+        CardEvent.card_id.in_([commercial_card.id, free_card.id])
+    ).all()
+    assert sum(event.event_type == "printed_to_pos" for event in events) == 1
+    assert sum(event.event_type == "printed_free" for event in events) == 1
+    assert sum(event.event_type == "reprinted" for event in events) == 2
+    assert all(event.actor == actor for event in events)
+    db.close()
+
+
+def test_print_idempotency_key_cannot_be_reused_for_different_payload(owner_client):
+    client, headers, _ = owner_client
+    code = "IDEMP-" + secrets.token_hex(4).upper()
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={"code": code, "name": "Idempotency plan", "price": "5.00"},
+    )
+    assert plan.status_code == 201, plan.text
+
+    usernames = ["IDEM" + secrets.token_hex(4).upper() for _ in range(2)]
+    card_ids = []
+    for username in usernames:
+        created = client.post(
+            "/api/v1/cards/single",
+            headers=headers,
+            json={
+                "plan_id": plan.json()["id"],
+                "username": username,
+                "card_type": "username_only",
+            },
+        )
+        assert created.status_code == 201, created.text
+        card_ids.append(created.json()["id"])
+
+    db = SessionLocal()
+    pos = PointOfSale(
+        code="POS-" + secrets.token_hex(4).upper(),
+        name="CI idempotency point",
+        is_active=True,
+    )
+    db.add(pos)
+    db.commit()
+    pos_id = pos.id
+    db.close()
+
+    key = "same-key-" + secrets.token_hex(8)
+    first = client.post(
+        "/api/v1/print-jobs",
+        headers=headers,
+        json={"idempotency_key": key, "point_of_sale_id": pos_id, "card_ids": [card_ids[0]]},
+    )
+    assert first.status_code == 201, first.text
+
+    conflict = client.post(
+        "/api/v1/print-jobs",
+        headers=headers,
+        json={"idempotency_key": key, "point_of_sale_id": pos_id, "card_ids": [card_ids[1]]},
+    )
+    assert conflict.status_code == 409
