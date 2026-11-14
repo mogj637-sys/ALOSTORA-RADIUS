@@ -1,0 +1,41 @@
+server default {
+    listen {
+        type = auth
+        ipaddr = *
+        port = 1812
+    }
+
+    listen {
+        type = acct
+        ipaddr = *
+        port = 1813
+    }
+
+    api_key_header = "X-Radius-Internal-Key: $ENV{RADIUS_INTERNAL_API_KEY}"
+
+    authorize {
+        if (!&NAS-Identifier || !&User-Name || !&User-Password) {
+            reject
+        }
+        update control {
+            REST-HTTP-Header += "${...api_key_header}"
+        }
+        rest
+    }
+
+    authenticate {
+    }
+
+    preacct {
+    }
+
+    accounting {
+        if (!&NAS-Identifier || !&User-Name || !&Acct-Session-Id || !&Acct-Status-Type) {
+            reject
+        }
+        update control {
+            REST-HTTP-Header += "${...api_key_header}"
+        }
+        rest
+    }
+}
