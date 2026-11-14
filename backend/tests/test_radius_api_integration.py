@@ -610,3 +610,66 @@ def test_accounting_sends_disconnect_when_coa_is_enabled(monkeypatch, owner_clie
     )
     assert event.details["reason"] == "انتهى رصيد وقت الاستخدام ويجب فصل الجلسة"
     db.close()
+
+
+def test_authorize_recovers_same_router_session_when_accounting_stop_was_lost(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    card, password = _card(client, headers)
+    internal_headers = _radius_headers()
+    auth = client.post(
+        "/internal/radius/authorize",
+        headers=internal_headers,
+        json={"nas_identifier": router["nas_identifier"], "username": card["username"], "password": password},
+    )
+    assert auth.status_code == 200
+
+    old_session_id = "lost-stop-" + secrets.token_hex(6)
+    started = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": card["username"],
+            "acct_session_id": old_session_id,
+            "status_type": "Start",
+        },
+    )
+    assert started.status_code == 200
+
+    db = SessionLocal()
+    old_session = db.query(RadiusSession).filter_by(acct_session_id=old_session_id).one()
+    old_session.last_update_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+    db.commit()
+    db.close()
+
+    recovered_auth = client.post(
+        "/internal/radius/authorize",
+        headers=internal_headers,
+        json={"nas_identifier": router["nas_identifier"], "username": card["username"], "password": password},
+    )
+    assert recovered_auth.status_code == 200, recovered_auth.text
+    assert recovered_auth.json()["control:Auth-Type"] == "Accept"
+
+    db = SessionLocal()
+    recovered_old = db.query(RadiusSession).filter_by(acct_session_id=old_session_id).one()
+    assert recovered_old.stopped_at is not None
+    stale_event = (
+        db.query(CardEvent)
+        .filter(CardEvent.card_id == UUID(card["id"]), CardEvent.event_type == "radius_session_stale_closed")
+        .one()
+    )
+    assert stale_event.details["reason"] == "new_start_after_missing_stop"
+    db.close()
+
+    new_session = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": card["username"],
+            "acct_session_id": "recovered-" + secrets.token_hex(6),
+            "status_type": "Start",
+        },
+    )
+    assert new_session.status_code == 200, new_session.text
