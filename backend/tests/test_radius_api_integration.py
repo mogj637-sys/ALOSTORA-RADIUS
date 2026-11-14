@@ -6,7 +6,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from app.db.session import SessionLocal
-from app.models.core import Card, RadiusSession, Router
+from app.models.core import Card, CardEvent, RadiusSession, Router
 
 
 def _router(client, headers):
@@ -554,3 +554,59 @@ def test_authorize_splits_mikrotik_total_limit_into_gigawords(owner_client):
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["reply:Mikrotik-Total-Limit"] == 123
     assert accepted.json()["reply:Mikrotik-Total-Limit-Gigawords"] == 2
+
+
+def test_accounting_sends_disconnect_when_coa_is_enabled(monkeypatch, owner_client):
+    import os
+
+    monkeypatch.setenv("RADIUS_COA_ENABLED", "true")
+    monkeypatch.setattr("app.services.radius_service.send_disconnect_for_session", lambda db, session: True)
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    card, password = _card(client, headers, time_limit=60, data_limit=10000, validity=3600)
+    internal_headers = _radius_headers()
+    auth = client.post(
+        "/internal/radius/authorize",
+        headers=internal_headers,
+        json={"nas_identifier": router["nas_identifier"], "username": card["username"], "password": password},
+    )
+    assert auth.status_code == 200
+
+    now = datetime.now(timezone.utc)
+    base = {
+        "nas_identifier": router["nas_identifier"],
+        "username": card["username"],
+        "acct_session_id": "coa-limit-" + secrets.token_hex(6),
+        "event_timestamp": now.isoformat(),
+    }
+    start = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={**base, "status_type": "Start"},
+    )
+    assert start.status_code == 200
+
+    interim = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={
+            **base,
+            "status_type": "Interim-Update",
+            "event_timestamp": (now + timedelta(seconds=60)).isoformat(),
+            "session_time_seconds": 60,
+            "input_octets": 100,
+            "output_octets": 100,
+        },
+    )
+    assert interim.status_code == 200
+    assert interim.json()["disconnect_sent"] is True
+    assert interim.json()["disconnect_required"] is False
+
+    db = SessionLocal()
+    event = (
+        db.query(CardEvent)
+        .filter(CardEvent.card_id == UUID(card["id"]), CardEvent.event_type == "radius_disconnect_sent")
+        .one()
+    )
+    assert event.details["reason"] == "انتهى رصيد وقت الاستخدام ويجب فصل الجلسة"
+    db.close()
