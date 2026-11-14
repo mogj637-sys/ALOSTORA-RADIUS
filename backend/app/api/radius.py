@@ -108,6 +108,8 @@ def _normalize_authorize(payload: dict[str, Any]) -> RadiusAuthorizeRequest:
         nas_identifier=_attribute(payload, "nas_identifier", "NAS-Identifier"),
         username=_attribute(payload, "username", "User-Name"),
         password=_attribute(payload, "password", "User-Password", default=""),
+        chap_password_hex=_attribute(payload, "chap_password_hex", "CHAP-Password-Hex"),
+        chap_challenge_hex=_attribute(payload, "chap_challenge_hex", "CHAP-Challenge-Hex"),
         framed_ip_address=_attribute(payload, "framed_ip_address", "Framed-IP-Address"),
         calling_station_id=_attribute(payload, "calling_station_id", "Calling-Station-Id"),
     )
@@ -142,6 +144,8 @@ def radius_authorize(payload: dict[str, Any] = Body(...), db: Session = Depends(
             nas_identifier=request.nas_identifier,
             username=request.username,
             password=request.password,
+            chap_password_hex=request.chap_password_hex,
+            chap_challenge_hex=request.chap_challenge_hex,
             framed_ip_address=request.framed_ip_address,
             calling_station_id=request.calling_station_id,
         )
