@@ -11,7 +11,7 @@
 1. استنسخ المستودع:
    `git clone https://github.com/mogj637-sys/ALOSTORA-RADIUS.git`
 2. ادخل مجلد المشروع.
-3. انسخ `.env.example` إلى `.env` وعدّل كلمات المرور والمفتاح السري محلياً. أنشئ مفتاحاً عشوائياً عبر `python -c "import secrets; print(secrets.token_urlsafe(48))"` وضع الناتج في `APP_SECRET_KEY`.
+3. انسخ `.env.example` إلى `.env` وعدّل كلمات المرور والمفتاح السري محلياً. أنشئ مفتاحاً عشوائياً عبر `python -c "import secrets; print(secrets.token_urlsafe(48))"` وضع الناتج في `APP_SECRET_KEY`. وأنشئ مفتاح تشفير الكروت عبر `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` وضعه في `CREDENTIAL_ENCRYPTION_KEY`.
 4. شغّل الخدمات:
    `docker compose up --build -d`
 5. انتظر اكتمال بناء الحاويات وترحيلات قاعدة البيانات التي تعمل قبل تشغيل API.
