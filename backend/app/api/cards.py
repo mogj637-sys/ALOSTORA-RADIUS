@@ -145,8 +145,8 @@ def update_card_status(
         event_type = "reactivated"
         details = {"restored_status": restored_status}
     else:  # cancel
-        if previous_status not in {"generated", "allocated"} or card.first_used_at is not None:
-            raise HTTPException(status_code=409, detail="لا يمكن إلغاء كرت بدأ استخدامه أو لا يقبل الإلغاء")
+        if previous_status not in {"generated", "allocated"} or card.first_used_at is not None or card.assigned_pos_id is not None:
+            raise HTTPException(status_code=409, detail="لا يمكن إلغاء كرت بدأ استخدامه أو تم تخصيصه لنقطة بيع")
         card.status = "cancelled"
         event_type = "cancelled"
         details = {"previous_status": previous_status}
