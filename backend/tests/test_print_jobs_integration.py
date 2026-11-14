@@ -187,3 +187,41 @@ def test_card_cannot_be_allocated_to_two_points_of_sale(owner_client):
         },
     )
     assert second.status_code == 409
+
+
+def test_print_response_reveals_credentials_only_in_authorized_print_flow(owner_client):
+    client, headers, _ = owner_client
+    plan_id = _plan(client, headers)
+    point = _point(client, headers)
+    username = "SECRET" + secrets.token_hex(4).upper()
+    password = "private-print-password"
+    created = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan_id,
+            "username": username,
+            "card_type": "separate_credentials",
+            "password": password,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    card_list = client.get("/api/v1/cards?search=" + username, headers=headers)
+    assert card_list.status_code == 200
+    assert len(card_list.json()) == 1
+    assert "password" not in card_list.json()[0]
+    assert "credential_ciphertext" not in card_list.json()[0]
+
+    printed = client.post(
+        "/api/v1/print-jobs",
+        headers=headers,
+        json={
+            "idempotency_key": "secret-print-" + secrets.token_hex(10),
+            "point_of_sale_id": point["id"],
+            "card_ids": [created.json()["id"]],
+        },
+    )
+    assert printed.status_code == 201, printed.text
+    assert "no-store" in printed.headers.get("cache-control", "")
+    assert printed.json()["items"][0]["password"] == password
