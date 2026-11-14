@@ -237,7 +237,10 @@ def authorize_card(
     if remaining_time is not None:
         reply["Session-Timeout"] = remaining_time
     if remaining_data is not None:
-        reply["Mikrotik-Total-Limit"] = remaining_data
+        reply["Mikrotik-Total-Limit"] = remaining_data % (2**32)
+        total_limit_gigawords = remaining_data // (2**32)
+        if total_limit_gigawords:
+            reply["Mikrotik-Total-Limit-Gigawords"] = total_limit_gigawords
 
     db.add(
         CardEvent(
