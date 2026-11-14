@@ -18,7 +18,7 @@ server default {
             reject
         }
         update control {
-            REST-HTTP-Header += "${...api_key_header}"
+            REST-HTTP-Header += "${..api_key_header}"
         }
         rest
     }
@@ -34,7 +34,7 @@ server default {
             reject
         }
         update control {
-            REST-HTTP-Header += "${...api_key_header}"
+            REST-HTTP-Header += "${..api_key_header}"
         }
         rest
     }
