@@ -104,7 +104,7 @@ def test_router_can_be_deactivated_and_api_credentials_cleared(owner_client):
     assert any(row["id"] == router_id for row in all_routers.json())
 
 
-def test_internal_radius_clients_endpoint_returns_only_active_configured_nas(owner_client):
+def test_internal_radius_clients_endpoint_returns_configured_nas_including_disabled_for_stop_packets(owner_client):
     import os
 
     client, headers, _ = owner_client
@@ -146,7 +146,9 @@ def test_internal_radius_clients_endpoint_returns_only_active_configured_nas(own
     active_entry = next(item for item in entries if item["nas_identifier"] == active.json()["nas_identifier"])
     assert active_entry["ipaddr"] == "192.0.2.30/32"
     assert active_entry["secret"] == active_secret
-    assert all(item["nas_identifier"] != inactive.json()["nas_identifier"] for item in entries)
+    inactive_entry = next(item for item in entries if item["nas_identifier"] == inactive.json()["nas_identifier"])
+    assert inactive_entry["ipaddr"] == "192.0.2.31"
+    assert inactive_entry["secret"] == inactive.json().get("radius_secret", inactive_entry["secret"])
 
 
 def test_router_rejects_invalid_radius_client_network_and_control_characters(owner_client):
