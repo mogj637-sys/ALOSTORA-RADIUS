@@ -57,7 +57,12 @@
 - استخدم نفس `RADIUS_SHARED_SECRET` الذي أدخلته عند تسجيل الراوتر.
 - HotSpot يستخدم CHAP افتراضياً، ومحولنا يدعم CHAP وPAP؛ لا تغيّر طريقة الدخول إلى PAP لمجرد استخدام RADIUS.
 - `radius-interim-update=received` مهم حتى يحترم HotSpot قيمة `Acct-Interim-Interval` المرسلة من الخادم.
-- لا تفعّل `/radius incoming accept=yes` حالياً؛ استقبال Disconnect/CoA سيضاف ويختبر في مرحلة مستقلة.
+- بعد التأكد من وصول خادم RADIUS إلى الراوتر، فعّل استقبال Disconnect-Message على MikroTik:
+  `/radius incoming set accept=yes port=1700`
+- ثم غيّر `RADIUS_COA_ENABLED=true` في `.env` وأعد تشغيل خدمة API.
+- يرسل النظام Disconnect-Request عند تجاوز حدود الوقت/الحجم أو عند إيقاف كرت متصل. المنفذ الافتراضي في RouterOS هو 1700، ويُستخدم نفس RADIUS shared secret.
+- إذا كان `radius_client_address` عنواناً مفرداً، يستخدمه النظام كوجهة Disconnect؛ وإذا كان CIDR يستخدم `management_host`. في حال وجود NAT أو جدار ناري، يجب السماح بوصول UDP إلى المنفذ 1700.
+- إذا بقي `RADIUS_COA_ENABLED=false` فلن يرسل النظام Disconnect تلقائياً، لكنه سيبقي نتيجة المحاسبة معلّمة بأن الفصل مطلوب.
 
 مرجع MikroTik الرسمي: https://manual.mikrotik.com/docs/authentication-authorization-accounting/radius/
 
