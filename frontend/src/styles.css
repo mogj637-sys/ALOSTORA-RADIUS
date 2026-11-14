@@ -124,3 +124,59 @@ footer { text-align: center; color: #9aa3b2; font-size: 10px; margin: 35px 0 10p
   .user-chip { display: none; }
   .logout-button { font-size: 10px; }
 }
+
+
+/* Plan and voucher management */
+.module-card-button {
+  width: 100%; text-align: right; color: inherit; font: inherit; cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+.module-card-button:hover { border-color: #9dd8c4; transform: translateY(-2px); box-shadow: 0 9px 25px #1720330d; }
+.module-state.active-state { color: #168767; font-weight: 700; }
+.panel { background: #fff; border: 1px solid #e7ebf1; border-radius: 14px; padding: 22px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.form-grid label { display: flex; flex-direction: column; gap: 7px; color: #354258; font-size: 12px; font-weight: 700; }
+.form-grid input, .form-grid select {
+  min-width: 0; height: 42px; border: 1px solid #dfe5ed; border-radius: 8px;
+  padding: 0 11px; background: #fbfcfe; color: #253249; font: inherit; font-size: 12px;
+}
+.form-grid input:focus, .form-grid select:focus { outline: none; border-color: #15916d; box-shadow: 0 0 0 3px #15916d18; }
+.field-hint { color: #8994a5; font-size: 10px; font-weight: 400; }
+.form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-start; }
+.form-actions button, .secondary-button {
+  border: 0; border-radius: 8px; background: #168767; color: #fff; padding: 11px 20px;
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.form-actions button:disabled { opacity: .6; cursor: wait; }
+.compact-heading { margin-top: 28px; }
+.count-tag { color: #64748b; background: #fff; border: 1px solid #e5eaf0; padding: 7px 11px; border-radius: 20px; font-size: 10px; }
+.table-wrap { overflow-x: auto; background: #fff; border: 1px solid #e7ebf1; border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; min-width: 680px; text-align: right; font-size: 11px; }
+th { background: #f7f9fb; color: #64748b; font-weight: 700; white-space: nowrap; }
+th, td { padding: 12px 14px; border-bottom: 1px solid #edf0f4; }
+td { color: #344258; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: #fbfdfc; }
+.empty-state { padding: 22px; color: #8490a2; text-align: center; font-size: 12px; }
+.notice { border-radius: 9px; padding: 12px 15px; margin-bottom: 16px; font-size: 12px; }
+.error-notice { color: #a52d36; background: #fff0f0; border: 1px solid #f6d4d6; }
+.success-notice { color: #176b51; background: #ecf8f2; border: 1px solid #ccebdc; }
+.generated-panel { margin-top: 25px; padding: 17px; border: 1px solid #cfe9dc; background: #f9fdfb; border-radius: 13px; }
+.generated-panel .section-heading { margin-top: 0; }
+.generated-panel .section-heading p { color: #638170; }
+.secondary-button { background: #e8f4ee; color: #176b51; white-space: nowrap; }
+@media (max-width: 700px) {
+  .form-grid { grid-template-columns: 1fr; padding: 17px; }
+  .form-actions { grid-column: auto; }
+  .generated-panel { padding: 12px; }
+  .generated-panel .section-heading { flex-direction: column; align-items: stretch; }
+}
+@media print {
+  .sidebar, .topbar, .section-heading, .form-grid, footer, .notice, .module-grid { display: none !important; }
+  .workspace { padding: 0; max-width: none; }
+  .generated-panel { border: 0; background: #fff; padding: 0; }
+  .generated-panel .section-heading { display: block !important; }
+  .table-wrap { border: 0; overflow: visible; }
+  table { min-width: 0; font-size: 10px; }
+  th, td { padding: 7px; border: 1px solid #ddd; }
+}
