@@ -20,7 +20,7 @@
 - `Port-Limit = 1`: اتصال واحد.
 - `Acct-Interim-Interval = 60`: تحديث محاسبة كل 60 ثانية.
 - `Session-Timeout`: المتبقي من وقت الاستخدام أو الصلاحية، أيهما أقرب.
-- `Mikrotik-Total-Limit`: المتبقي من مجموع التحميل والرفع.
+- `Mikrotik-Total-Limit` مع `Mikrotik-Total-Limit-Gigawords` عند الحاجة: المتبقي من مجموع التحميل والرفع، بما يدعم الحدود الأكبر من 4 GiB.
 - `Mikrotik-Rate-Limit`: ملف السرعة المسجل في الباقة عند وجوده.
 
 يبدأ عداد الصلاحية عند أول مصادقة ناجحة. وتُنشأ فترة حجز مؤقتة قصيرة لمنع قبول طلب دخول ثانٍ قبل وصول Accounting-Start.
@@ -60,3 +60,8 @@
 ## HotSpot وطرق الدخول
 
 يدعم محول المصادقة PAP وCHAP. في CHAP يرسل FreeRADIUS قيم CHAP-Password وCHAP-Challenge بصيغة hex إلى API ليتم التحقق منها مقابل كلمة مرور الكرت المشفرة. لا يحتاج المستخدم إلى تغيير HotSpot من CHAP الافتراضي. لا يدعم هذا الإصدار MS-CHAP.
+
+
+## ملاحظة إعداد HotSpot
+
+حتى يرسل الراوتر تحديثات Interim وفق الفترة التي يطلبها RADIUS، يجب ضبط `radius-interim-update=received` في HotSpot Server Profile. إذا لم يُضبط ذلك، قد لا يحترم HotSpot قيمة `Acct-Interim-Interval` القادمة من Access-Accept.
