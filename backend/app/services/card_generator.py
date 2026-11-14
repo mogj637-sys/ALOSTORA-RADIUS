@@ -16,7 +16,7 @@ def generate_username(length: int, mode: str, prefix: str = "") -> str:
         raise ValueError("Username length must be between 3 and 32")
     if len(prefix) >= length:
         raise ValueError("Prefix must be shorter than the requested username")
-    if prefix and not prefix.isalnum():
+    if prefix and not (prefix.isascii() and prefix.isalnum()):
         raise ValueError("Prefix must contain only letters and numbers")
     charset = CHARSETS[mode]
     suffix_length = length - len(prefix)
