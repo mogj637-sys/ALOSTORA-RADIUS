@@ -300,3 +300,14 @@ tbody tr:hover { background: #fbfdfc; }
   .voucher-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7mm; }
   .voucher-card { min-height: 42mm; border-radius: 2mm; box-shadow: none; }
 }
+
+
+.pos-history { margin: 18px 0; }
+.pos-history .section-heading { margin-top: 0; }
+.pos-history-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 2px; border-top: 1px solid #edf0f4; }
+.pos-history-row > div { display: flex; flex-direction: column; gap: 4px; }
+.pos-history-row strong { color: #344258; font-size: 12px; }
+.pos-history-row span, .pos-history-row small { color: #8490a2; font-size: 10px; }
+@media print {
+  .pos-history { display: none !important; }
+}
