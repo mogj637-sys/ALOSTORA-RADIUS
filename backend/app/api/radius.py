@@ -183,4 +183,6 @@ def radius_authorize(payload: dict[str, Any] = Body(...), db: Session = Depends(
 def radius_accounting(payload: dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     request = _normalize_accounting(payload)
     result = process_accounting(db, request.model_dump())
+    if not result.get("processed", False):
+        return JSONResponse(status_code=409, content=result)
     return result
