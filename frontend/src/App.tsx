@@ -41,18 +41,6 @@ type GeneratedCard = {
   password: string;
 };
 
-type RouterItem = {
-  id: number;
-  name: string;
-  nas_identifier: string;
-  management_host: string;
-  api_port: number;
-  api_username: string | null;
-  routeros_version: string | null;
-  is_active: boolean;
-  last_seen_at: string | null;
-};
-
 type RouterRecord = {
   id: number;
   name: string;
@@ -700,156 +688,6 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   function renderRouters() {
     return (
       <>
-        <div className="section-heading"><div><h2>إدارة أجهزة MikroTik</h2><p>سجّل NAS Identifier وعنوان الإدارة والمفاتيح المشتركة. الأسرار تُحفظ مشفرة ولا تظهر مرة أخرى في القوائم.</p></div></div>
-        <form className="panel form-grid" onSubmit={createRouter}>
-          <label>اسم الراوتر<input value={routerDraft.name} onChange={(e) => setRouterDraft({ ...routerDraft, name: e.target.value })} required minLength={2} /></label>
-          <label>NAS Identifier<input value={routerDraft.nasIdentifier} onChange={(e) => setRouterDraft({ ...routerDraft, nasIdentifier: e.target.value })} required placeholder="مثال: router-main-01" /></label>
-          <label>عنوان الإدارة أو IP<input value={routerDraft.managementHost} onChange={(e) => setRouterDraft({ ...routerDraft, managementHost: e.target.value })} required placeholder="192.168.88.1" /></label>
-          <label>منفذ MikroTik API<input type="number" min="1" max="65535" value={routerDraft.apiPort} onChange={(e) => setRouterDraft({ ...routerDraft, apiPort: e.target.value })} required /></label>
-          <label>اسم مستخدم API <span className="field-hint">اختياري، لكن يجب إدخال كلمة المرور معه</span><input value={routerDraft.apiUsername} onChange={(e) => setRouterDraft({ ...routerDraft, apiUsername: e.target.value })} /></label>
-          <label>كلمة مرور API <span className="field-hint">اترك الحقلين فارغين إذا لم تفعّل API</span><input type="password" autoComplete="new-password" value={routerDraft.apiSecret} onChange={(e) => setRouterDraft({ ...routerDraft, apiSecret: e.target.value })} minLength={8} /></label>
-          <label>RADIUS Shared Secret<input type="password" autoComplete="new-password" value={routerDraft.radiusSecret} onChange={(e) => setRouterDraft({ ...routerDraft, radiusSecret: e.target.value })} required minLength={8} /></label>
-          <label>إصدار RouterOS<input value={routerDraft.routerosVersion} onChange={(e) => setRouterDraft({ ...routerDraft, routerosVersion: e.target.value })} placeholder="مثال: 7.x" /></label>
-          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "تسجيل الراوتر"}</button></div>
-        </form>
-        <div className="section-heading compact-heading"><div><h2>الراوترات المسجلة</h2><p>حالة التسجيل لا تعني أن الاتصال الفعلي بالراوتر قد اختُبر بعد.</p></div><span className="count-tag">{routers.length} راوتر</span></div>
-        <div className="table-wrap"><table><thead><tr><th>الاسم</th><th>NAS Identifier</th><th>عنوان الإدارة</th><th>المنفذ</th><th>الإصدار</th><th>آخر ظهور</th><th>الحالة</th><th>الإجراء</th></tr></thead>
-          <tbody>{routers.map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.nas_identifier}</td><td>{item.management_host}</td><td>{item.api_port}</td><td>{item.routeros_version || "—"}</td><td>{item.last_seen_at ? new Date(item.last_seen_at).toLocaleString("ar") : "لم يتصل بعد"}</td><td>{item.is_active ? "مفعّل" : "متوقف"}</td><td><button type="button" className="table-action" disabled={busy} onClick={() => toggleRouter(item)}>{item.is_active ? "إيقاف" : "تفعيل"}</button></td></tr>)}</tbody>
-        </table>{routers.length === 0 && <div className="empty-state">لم يتم تسجيل راوترات بعد.</div>}</div>
-      </>
-    );
-  }
-
-  function renderPos() {
-    const printableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
-    return (
-      <>
-        <div className="section-heading">
-          <div><h2>نقاط البيع والطباعة</h2><p>أنشئ نقطة البيع، ثم اختر الكروت لتسجيل تخصيصها. لا تدخل الكروت المجانية في قيمة المخزون التجاري.</p></div>
-        </div>
-        <form className="panel form-grid" onSubmit={createPointOfSale}>
-          <label>رمز نقطة البيع<input value={posDraft.code} onChange={(e) => setPosDraft({ ...posDraft, code: e.target.value })} required /></label>
-          <label>اسم نقطة البيع<input value={posDraft.name} onChange={(e) => setPosDraft({ ...posDraft, name: e.target.value })} required /></label>
-          <label>اسم المسؤول<input value={posDraft.contactName} onChange={(e) => setPosDraft({ ...posDraft, contactName: e.target.value })} /></label>
-          <label>رقم الهاتف<input value={posDraft.phone} onChange={(e) => setPosDraft({ ...posDraft, phone: e.target.value })} /></label>
-          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "إضافة نقطة بيع"}</button></div>
-        </form>
-
-        <div className="pos-toolbar">
-          <label>اختر نقطة البيع
-            <select value={selectedPosId} onChange={(e) => { setSelectedPrintCardIds([]); setPrintPreviewCards([]); setSelectedPosId(e.target.value); Promise.all([loadPosInventory(e.target.value), loadPrintHistory(e.target.value)]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل بيانات نقطة البيع")); }}>
-              <option value="">-- اختر نقطة بيع --</option>
-              {points.map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}</option>)}
-            </select>
-          </label>
-          {selectedPosId && <button type="button" className="table-action" disabled={busy} onClick={() => { const point = points.find((item) => String(item.id) === selectedPosId); if (point) togglePointOfSale(point); }}>{points.find((item) => String(item.id) === selectedPosId)?.is_active ? "إيقاف النقطة" : "تفعيل النقطة"}</button>}
-        </div>
-
-        {selectedPosId && posInventory && (
-          <div className="pos-stats">
-            <div><span>الكروت المخصصة</span><strong>{posInventory.allocated_cards}</strong></div>
-            <div><span>الكروت المستخدمة</span><strong>{posInventory.used_cards}</strong></div>
-            <div><span>الكروت الموقوفة</span><strong>{posInventory.suspended_cards}</strong></div>
-            <div><span>القيمة التجارية المطبوعة</span><strong>{Number(posInventory.commercial_printed_value).toLocaleString("en-US")}</strong></div>
-            <div><span>الكروت المجانية المطبوعة</span><strong>{posInventory.free_cards_printed}</strong></div>
-          </div>
-        )}
-
-        {selectedPosId && (
-          <section className="panel pos-history">
-            <div className="section-heading compact-heading"><div><h2>سجل الطباعة</h2><p>يمكنك إعادة طباعة أي دفعة سابقة دون تكرار حركة المخزون.</p></div><span className="count-tag">{printHistory.length} عملية</span></div>
-            {printHistory.map((job) => (
-              <div className="pos-history-row" key={job.id}>
-                <div><strong>{job.card_count} كرت</strong><span>{new Date(job.created_at).toLocaleString("ar")}</span><small>{job.is_reprint ? "إعادة طباعة" : "طباعة أصلية"} · {job.template_code || "بدون قالب"}</small></div>
-                <button type="button" className="table-action" disabled={busy || !points.find((point) => String(point.id) === selectedPosId)?.is_active} onClick={() => reprintPrintJob(job)}>إعادة طباعة</button>
-              </div>
-            ))}
-            {printHistory.length === 0 && <div className="empty-state">لا توجد عمليات طباعة سابقة لهذه النقطة.</div>}
-          </section>
-        )}
-
-        {selectedPosId && (
-          <>
-            <div className="section-heading compact-heading">
-              <div><h2>الكروت الجاهزة للتخصيص</h2><p>اختر الكروت المنشأة غير المخصصة بعد. إعادة الطلب لا تضاعف المخزون.</p></div>
-              <span className="count-tag">{printableCards.length} كرت متاح في النتائج</span>
-            </div>
-            <div className="card-search">
-              <label htmlFor="pos-card-search">بحث عن كرت</label>
-              <input id="pos-card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); loadCards(e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" />
-              <button type="button" className="table-action" onClick={() => loadCards().catch((err) => setError(err instanceof Error ? err.message : "تعذر التحديث"))}>تحديث</button>
-            </div>
-            <div className="table-wrap">
-              <table><thead><tr><th>اختيار</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>الباقة</th><th>القيمة</th><th>التصنيف</th></tr></thead>
-                <tbody>{printableCards.map((card) => <tr key={card.id}>
-                  <td><input type="checkbox" aria-label={`اختيار الكرت ${card.username}`} checked={selectedPrintCardIds.includes(card.id)} onChange={() => togglePrintCard(card.id)} /></td>
-                  <td>{card.serial_number}</td><td>{card.username}</td>
-                  <td>{plans.find((plan) => plan.id === card.plan_id)?.name ?? card.plan_id}</td>
-                  <td>{card.is_free ? "0" : Number(card.price_snapshot).toLocaleString("en-US")}</td>
-                  <td>{card.is_free ? "مجاني" : "تجاري"}</td>
-                </tr>)}</tbody>
-              </table>
-              {printableCards.length === 0 && <div className="empty-state">لا توجد كروت جاهزة في النتائج الحالية.</div>}
-            </div>
-            <div className="panel pos-print-panel">
-              <label>قالب الطباعة
-                <select value={printTemplate} onChange={(e) => setPrintTemplate(e.target.value)}>
-                  <option value="classic-green">القالب الأخضر</option>
-                  <option value="classic-blue">القالب الأزرق</option>
-                  <option value="compact">القالب المختصر</option>
-                </select>
-              </label>
-              <div className="pos-print-summary">تم اختيار {selectedPrintCardIds.length} كرت. سيتم تسجيل الكروت التجارية في مخزون النقطة، واستثناء المجانية من القيمة التجارية.</div>
-              <button type="button" disabled={busy || selectedPrintCardIds.length === 0 || !points.find((point) => String(point.id) === selectedPosId)?.is_active} onClick={printSelectedCards}>{busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة وتخصيص الكروت"}</button>
-            </div>
-            {printPreviewCards.length > 0 && (
-              <section className="voucher-print-preview">
-                <div className="voucher-toolbar">
-                  <div><strong>معاينة الكروت الجاهزة للطباعة</strong><span>كلمات المرور موجودة في هذه المعاينة فقط ولا تظهر في سجل الكروت.</span></div>
-                  <div>
-                    <button type="button" onClick={() => window.print()}>طباعة الكروت</button>
-                    <button type="button" className="secondary-button" onClick={() => setPrintPreviewCards([])}>إغلاق المعاينة</button>
-                  </div>
-                </div>
-                <div className="voucher-grid">
-                  {printPreviewCards.map((card) => (
-                    <article className={`voucher-card ${printTemplate}`} key={card.card_id}>
-                      <div className="voucher-head"><strong>الأسطورة نت</strong><span>{card.is_free ? "كرت مجاني" : "بطاقة إنترنت"}</span></div>
-                      <div className="voucher-user"><span>اسم المستخدم</span><strong>{card.username}</strong></div>
-                      <div className="voucher-password"><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>
-                      <div className="voucher-foot"><span>{card.serial_number}</span><strong>{card.is_free ? "مجاني" : `${Number(card.price_snapshot).toLocaleString("en-US")} ريال`}</strong></div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            )}
-          </>
-        )}
-        {selectedPosId && (
-          <>
-            <div className="section-heading compact-heading"><div><h2>سجل عمليات الطباعة</h2><p>إعادة الطباعة لا تضيف قيمة مالية جديدة ولا تكرر ترحيل المخزون.</p></div><span className="count-tag">{printHistory.length} عملية</span></div>
-            <div className="table-wrap">
-              <table><thead><tr><th>التاريخ</th><th>القالب</th><th>عدد الكروت</th><th>النوع</th><th>الإجراء</th></tr></thead>
-                <tbody>{printHistory.map((job) => <tr key={job.id}>
-                  <td>{new Date(job.created_at).toLocaleString("ar")}</td>
-                  <td>{job.template_code || "افتراضي"}</td>
-                  <td>{job.card_count}</td>
-                  <td>{job.is_reprint ? "إعادة طباعة" : "طباعة أصلية"}</td>
-                  <td><button type="button" className="table-action" disabled={busy || !points.find((point) => String(point.id) === selectedPosId)?.is_active} onClick={() => reprintJob(job)}>إعادة طباعة</button></td>
-                </tr>)}</tbody>
-              </table>
-              {printHistory.length === 0 && <div className="empty-state">لا توجد عمليات طباعة مسجلة لهذه النقطة.</div>}
-            </div>
-          </>
-        )}
-        {points.length === 0 && <div className="empty-state">أنشئ أول نقطة بيع من النموذج أعلاه للبدء.</div>}
-      </>
-    );
-  }
-
-  function renderRouters() {
-    return (
-      <>
         <div className="section-heading">
           <div><h2>إدارة أجهزة MikroTik</h2><p>سجل الراوترات ومعرّفات NAS. تُحفظ كلمات المرور والأسرار مشفرة ولا تظهر في قائمة الراوترات.</p></div>
         </div>
@@ -893,7 +731,6 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "plans" ? "nav-item active" : "nav-item"} onClick={() => setPage("plans")}>الباقات</button>
           <button className={page === "cards" ? "nav-item active" : "nav-item"} onClick={() => setPage("cards")}>الكروت</button>
           <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>نقاط البيع والطباعة</button>
-          <button className={page === "routers" ? "nav-item active" : "nav-item"} onClick={() => setPage("routers")}>أجهزة MikroTik</button>
           <button className={page === "routers" ? "nav-item active" : "nav-item"} onClick={() => setPage("routers")}>أجهزة MikroTik</button>
         </nav>
         <div className="sidebar-foot">ALOSTORA-RADIUS · 0.4.0</div>
