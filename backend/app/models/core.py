@@ -85,7 +85,7 @@ class Router(TimestampMixin, Base):
     management_host: Mapped[str] = mapped_column(String(255), nullable=False)
     api_port: Mapped[int] = mapped_column(Integer, nullable=False, default=8728)
     api_username: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    # Secrets are ciphertext only; encryption/decryption service is added before router integration.
+    # Router API and RADIUS shared secrets are stored only as ciphertext.
     api_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     radius_secret_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     routeros_version: Mapped[str | None] = mapped_column(String(30), nullable=True)
