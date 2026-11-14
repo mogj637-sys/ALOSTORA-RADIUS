@@ -11,14 +11,12 @@ server default {
         port = 1813
     }
 
-    api_key_header = "X-Radius-Internal-Key: $ENV{RADIUS_INTERNAL_API_KEY}"
-
     authorize {
         if (!&NAS-Identifier || !&User-Name || (!&User-Password && !&CHAP-Password)) {
             reject
         }
         update control {
-            REST-HTTP-Header += "${..api_key_header}"
+            REST-HTTP-Header += "X-Radius-Internal-Key: $ENV{RADIUS_INTERNAL_API_KEY}"
         }
         rest
     }
@@ -34,7 +32,7 @@ server default {
             reject
         }
         update control {
-            REST-HTTP-Header += "${..api_key_header}"
+            REST-HTTP-Header += "X-Radius-Internal-Key: $ENV{RADIUS_INTERNAL_API_KEY}"
         }
         rest
     }
