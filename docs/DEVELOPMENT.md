@@ -11,7 +11,7 @@
 1. استنسخ المستودع:
    `git clone https://github.com/mogj637-sys/ALOSTORA-RADIUS.git`
 2. ادخل مجلد المشروع.
-3. انسخ `.env.example` إلى `.env` وعدّل كلمات المرور والمفتاح السري محلياً.
+3. انسخ `.env.example` إلى `.env` وعدّل كلمات المرور والمفتاح السري محلياً. أنشئ مفتاحاً عشوائياً عبر `python -c "import secrets; print(secrets.token_urlsafe(48))"` وضع الناتج في `APP_SECRET_KEY`.
 4. شغّل الخدمات:
    `docker compose up --build -d`
 5. انتظر اكتمال بناء الحاويات وترحيلات قاعدة البيانات التي تعمل قبل تشغيل API.
@@ -23,6 +23,8 @@
    `http://localhost:8000/health/ready`
 9. توثيق API:
    `http://localhost:8000/docs`
+10. أنشئ حساب المدير الأول كما هو موضح في [دليل المصادقة](AUTHENTICATION.md).
+11. افتح الواجهة وسجّل الدخول ببيانات المدير الذي أنشأته.
 
 ## أوامر مفيدة
 - عرض الخدمات: `docker compose ps`
