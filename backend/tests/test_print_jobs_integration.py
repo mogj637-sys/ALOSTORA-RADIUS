@@ -255,3 +255,51 @@ def test_print_response_reveals_credentials_only_in_authorized_print_flow(owner_
     history_card = history.json()[0]["cards"][0]
     assert history_card["username"] == username
     assert "password" not in history_card
+
+
+def test_free_card_lifecycle_and_protect_pos_allocated_card_from_cancellation(owner_client):
+    client, headers, _ = owner_client
+    plan_id = _plan(client, headers)
+    point = _point(client, headers)
+    free_card = _card(client, headers, plan_id, free=True)
+    sale_card = _card(client, headers, plan_id, free=False)
+
+    printed = client.post(
+        "/api/v1/print-jobs",
+        headers=headers,
+        json={
+            "idempotency_key": "mixed-" + secrets.token_hex(10),
+            "point_of_sale_id": point["id"],
+            "card_ids": [free_card["id"], sale_card["id"]],
+            "template_code": "classic-green",
+        },
+    )
+    assert printed.status_code == 201, printed.text
+
+    free_suspended = client.patch(
+        f"/api/v1/cards/{free_card['id']}/status",
+        headers=headers,
+        json={"action": "suspend"},
+    )
+    assert free_suspended.status_code == 200, free_suspended.text
+    free_restored = client.patch(
+        f"/api/v1/cards/{free_card['id']}/status",
+        headers=headers,
+        json={"action": "reactivate"},
+    )
+    assert free_restored.status_code == 200, free_restored.text
+    assert free_restored.json()["status"] == "printed_free"
+
+    free_cancelled = client.patch(
+        f"/api/v1/cards/{free_card['id']}/status",
+        headers=headers,
+        json={"action": "cancel"},
+    )
+    assert free_cancelled.status_code == 200, free_cancelled.text
+
+    allocated_cancel = client.patch(
+        f"/api/v1/cards/{sale_card['id']}/status",
+        headers=headers,
+        json={"action": "cancel"},
+    )
+    assert allocated_cancel.status_code == 409
