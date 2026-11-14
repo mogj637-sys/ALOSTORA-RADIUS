@@ -14,7 +14,7 @@ server default {
     api_key_header = "X-Radius-Internal-Key: $ENV{RADIUS_INTERNAL_API_KEY}"
 
     authorize {
-        if (!&NAS-Identifier || !&User-Name || !&User-Password) {
+        if (!&NAS-Identifier || !&User-Name || (!&User-Password && !&CHAP-Password)) {
             reject
         }
         update control {
