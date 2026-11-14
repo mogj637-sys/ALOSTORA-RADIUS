@@ -370,11 +370,12 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         card.download_bytes += output_total
         card.used_seconds += session_time
         remaining_time, remaining_data = _remaining_limits(card, event_time)
-        disconnect_required = (
+        expired_now = card.expires_at is not None and _utc(card.expires_at) <= event_time
+        disconnect_required = expired_now or (
             (remaining_time is not None and remaining_time <= 0)
             or (remaining_data is not None and remaining_data <= 0)
         )
-        card.status = "exhausted" if disconnect_required else "active"
+        card.status = "expired" if expired_now else ("exhausted" if disconnect_required else "active")
         card.radius_auth_reserved_until = None
         router.last_seen_at = max(_utc(router.last_seen_at), event_time)
         db.add(
@@ -459,15 +460,15 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         stop_time = max(event_time, _utc(session.last_update_at))
         session.stopped_at = stop_time
         card.radius_auth_reserved_until = None
-        if card.status == "active":
+        if card.expires_at is not None and _utc(card.expires_at) <= stop_time:
+            card.status = "expired"
+        elif card.status == "active":
             previous_status = session.card_status_before_session
             if previous_status not in ALLOWED_PRE_SESSION_STATES:
                 previous_status = "allocated" if card.assigned_pos_id is not None else (
                     "printed_free" if card.is_free else "generated"
                 )
             card.status = previous_status
-        if card.status != "exhausted" and card.expires_at is not None and _utc(card.expires_at) <= stop_time:
-            card.status = "expired"
         db.add(
             CardEvent(
                 card_id=card.id,
