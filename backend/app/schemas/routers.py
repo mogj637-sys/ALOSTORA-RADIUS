@@ -1,19 +1,32 @@
 from datetime import datetime
+import ipaddress
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class RouterCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     nas_identifier: str = Field(min_length=1, max_length=150, pattern=r"^[A-Za-z0-9_.:-]+$")
     management_host: str = Field(min_length=1, max_length=255)
+    radius_client_address: str | None = Field(default=None, max_length=255)
     api_port: int = Field(default=8728, ge=1, le=65535)
     api_username: str | None = Field(default=None, max_length=120)
     api_secret: str | None = Field(default=None, min_length=8, max_length=500)
     radius_secret: str = Field(min_length=8, max_length=500)
     routeros_version: str | None = Field(default=None, max_length=30)
     is_active: bool = True
+
+    @field_validator("radius_client_address")
+    @classmethod
+    def validate_radius_client_address(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        try:
+            ipaddress.ip_network(value, strict=False)
+        except ValueError as exc:
+            raise ValueError("عنوان RADIUS يجب أن يكون IP أو شبكة CIDR صحيحة") from exc
+        return value
 
     @model_validator(mode="after")
     def api_credentials_must_be_paired(self) -> Self:
@@ -25,12 +38,24 @@ class RouterCreate(BaseModel):
 class RouterUpdate(BaseModel):
     name: str = Field(default=None, min_length=2, max_length=120)
     management_host: str = Field(default=None, min_length=1, max_length=255)
+    radius_client_address: str | None = Field(default=None, max_length=255)
     api_port: int = Field(default=None, ge=1, le=65535)
     api_username: str | None = Field(default=None, max_length=120)
     api_secret: str | None = Field(default=None, min_length=8, max_length=500)
     radius_secret: str = Field(default=None, min_length=8, max_length=500)
     routeros_version: str | None = Field(default=None, max_length=30)
     is_active: bool = Field(default=None)
+
+    @field_validator("radius_client_address")
+    @classmethod
+    def validate_radius_client_address(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        try:
+            ipaddress.ip_network(value, strict=False)
+        except ValueError as exc:
+            raise ValueError("عنوان RADIUS يجب أن يكون IP أو شبكة CIDR صحيحة") from exc
+        return value
 
     @model_validator(mode="after")
     def reject_empty_update(self) -> Self:
@@ -52,6 +77,7 @@ class RouterResponse(BaseModel):
     name: str
     nas_identifier: str
     management_host: str
+    radius_client_address: str | None
     api_port: int
     api_username: str | None
     routeros_version: str | None
