@@ -1,0 +1,71 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_owner
+from app.db.session import get_db
+from app.models.core import Router
+from app.schemas.routers import RouterCreate, RouterResponse, RouterUpdate
+from app.services.router_secrets import (
+    RouterSecretEncryptionNotConfigured,
+    encrypt_router_secret,
+)
+
+router = APIRouter(
+    prefix="/api/v1/routers",
+    tags=["routers"],
+    dependencies=[Depends(get_current_owner)],
+)
+
+
+def _encrypt(value: str) -> str:
+    try:
+        return encrypt_router_secret(value)
+    except RouterSecretEncryptionNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@router.get("", response_model=list[RouterResponse])
+def list_routers(include_inactive: bool = False, db: Session = Depends(get_db)):
+    query = db.query(Router)
+    if not include_inactive:
+        query = query.filter(Router.is_active.is_(True))
+    return query.order_by(Router.id.desc()).all()
+
+
+@router.post("", response_model=RouterResponse, status_code=status.HTTP_201_CREATED)
+def create_router(payload: RouterCreate, db: Session = Depends(get_db)):
+    values = payload.model_dump(exclude={"api_secret", "radius_secret"})
+    values["radius_secret_encrypted"] = _encrypt(payload.radius_secret)
+    values["api_secret_encrypted"] = _encrypt(payload.api_secret) if payload.api_secret else None
+    item = Router(**values)
+    db.add(item)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="معرّف NAS مستخدم في راوتر آخر")
+    db.refresh(item)
+    return item
+
+
+@router.patch("/{router_id}", response_model=RouterResponse)
+def update_router(router_id: int, payload: RouterUpdate, db: Session = Depends(get_db)):
+    item = db.get(Router, router_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="الراوتر غير موجود")
+
+    changes = payload.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(status_code=422, detail="يجب إرسال حقل واحد على الأقل")
+    if "radius_secret" in changes:
+        changes["radius_secret_encrypted"] = _encrypt(changes.pop("radius_secret"))
+    if "api_secret" in changes:
+        value = changes.pop("api_secret")
+        if value is not None:
+            changes["api_secret_encrypted"] = _encrypt(value)
+    for field, value in changes.items():
+        setattr(item, field, value)
+    db.commit()
+    db.refresh(item)
+    return item
