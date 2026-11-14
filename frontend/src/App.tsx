@@ -46,6 +46,7 @@ type RouterRecord = {
   name: string;
   nas_identifier: string;
   management_host: string;
+  radius_client_address: string | null;
   api_port: number;
   api_username: string | null;
   routeros_version: string | null;
@@ -166,7 +167,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [page, setPage] = useState<"overview" | "plans" | "cards" | "pos" | "routers">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [routers, setRouters] = useState<RouterRecord[]>([]);
-  const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
+  const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
   const [cards, setCards] = useState<Card[]>([]);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
@@ -217,6 +218,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           name: routerDraft.name,
           nas_identifier: routerDraft.nasIdentifier,
           management_host: routerDraft.managementHost,
+          radius_client_address: routerDraft.radiusClientAddress || null,
           api_port: Number(routerDraft.apiPort),
           api_username: routerDraft.apiUsername || null,
           api_secret: routerDraft.apiSecret || null,
@@ -224,7 +226,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           routeros_version: routerDraft.routerosVersion || null,
         }),
       });
-      setRouterDraft({ name: "", nasIdentifier: "", managementHost: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
+      setRouterDraft({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
       await loadRouters();
       setNotice("تم تسجيل الراوتر وحفظ أسراره مشفرة.");
     } catch (err) {
@@ -725,11 +727,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <div className="section-heading">
           <div><h2>إدارة أجهزة MikroTik</h2><p>سجل الراوترات ومعرّفات NAS. تُحفظ كلمات المرور والأسرار مشفرة ولا تظهر في قائمة الراوترات.</p></div>
         </div>
-        <div className="notice">تنبيه: هذه المرحلة تسجل إعدادات الراوتر وأسراره فقط. الاتصال الفعلي بـ RouterOS وإعداد FreeRADIUS لم يُفعّلا بعد.</div>
+        <div className="notice">أدخل عنوان مصدر RADIUS الذي سيظهر به الراوتر أمام خادم RADIUS. بيانات العملاء النشطة متاحة داخلياً لخدمة FreeRADIUS؛ لم يتم بعد تشغيل خادم FreeRADIUS أو الاتصال بإدارة RouterOS.</div>
         <form className="panel form-grid" onSubmit={createRouter}>
           <label>اسم الراوتر<input value={routerDraft.name} onChange={(e) => setRouterDraft({ ...routerDraft, name: e.target.value })} required minLength={2} maxLength={120} /></label>
           <label>NAS Identifier<input value={routerDraft.nasIdentifier} onChange={(e) => setRouterDraft({ ...routerDraft, nasIdentifier: e.target.value })} required maxLength={150} placeholder="مثال: router-aden-01" /></label>
           <label>عنوان الإدارة / IP<input value={routerDraft.managementHost} onChange={(e) => setRouterDraft({ ...routerDraft, managementHost: e.target.value })} required maxLength={255} placeholder="مثال: 192.168.88.1" /></label>
+          <label>عنوان RADIUS للراوتر أو CIDR<input value={routerDraft.radiusClientAddress} onChange={(e) => setRouterDraft({ ...routerDraft, radiusClientAddress: e.target.value })} maxLength={255} placeholder="مثال: 192.168.88.1 أو 192.168.88.0/24" /></label>
           <label>منفذ MikroTik API<input type="number" min="1" max="65535" value={routerDraft.apiPort} onChange={(e) => setRouterDraft({ ...routerDraft, apiPort: e.target.value })} required /></label>
           <label>اسم مستخدم API (اختياري)<input value={routerDraft.apiUsername} onChange={(e) => setRouterDraft({ ...routerDraft, apiUsername: e.target.value })} maxLength={120} /></label>
           <label>كلمة مرور API (اختياري)<input type="password" autoComplete="new-password" value={routerDraft.apiSecret} onChange={(e) => setRouterDraft({ ...routerDraft, apiSecret: e.target.value })} minLength={8} maxLength={500} /></label>
@@ -740,9 +743,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </form>
         <div className="section-heading compact-heading"><div><h2>الراوترات المسجلة</h2><p>لا تعرض هذه القائمة أي كلمة مرور أو RADIUS secret.</p></div><span className="count-tag">{routers.length} راوتر</span></div>
         <div className="table-wrap">
-          <table><thead><tr><th>الاسم</th><th>NAS Identifier</th><th>عنوان الإدارة</th><th>API Port</th><th>الإصدار</th><th>آخر ظهور</th><th>الحالة</th><th>الإجراء</th></tr></thead>
+          <table><thead><tr><th>الاسم</th><th>NAS Identifier</th><th>عنوان الإدارة</th><th>عنوان RADIUS</th><th>API Port</th><th>الإصدار</th><th>آخر ظهور</th><th>الحالة</th><th>الإجراء</th></tr></thead>
             <tbody>{routers.map((router) => <tr key={router.id}>
-              <td>{router.name}</td><td>{router.nas_identifier}</td><td>{router.management_host}</td><td>{router.api_port}</td>
+              <td>{router.name}</td><td>{router.nas_identifier}</td><td>{router.management_host}</td><td>{router.radius_client_address || "غير محدد"}</td><td>{router.api_port}</td>
               <td>{router.routeros_version || "غير محدد"}</td><td>{router.last_seen_at ? new Date(router.last_seen_at).toLocaleString("ar") : "لم يتصل بعد"}</td>
               <td>{router.is_active ? "مفعل" : "متوقف"}</td>
               <td><button type="button" className="table-action" disabled={busy} onClick={() => toggleRouter(router)}>{router.is_active ? "تعطيل" : "تفعيل"}</button></td>
