@@ -153,7 +153,7 @@ def test_free_card_print_is_recorded_but_not_allocated_or_charged(owner_client):
     saved = db.get(Card, UUID(free_card["id"]))
     assert saved is not None
     assert saved.assigned_pos_id is None
-    assert saved.status == "generated"
+    assert saved.status == "printed_free"
     assert db.query(PosInventoryMovement).filter(
         PosInventoryMovement.card_id == UUID(free_card["id"])
     ).count() == 0
