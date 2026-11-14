@@ -29,6 +29,8 @@ class RadiusAccountingRequest(BaseModel):
     session_time_seconds: int = Field(default=0, ge=0)
     input_octets: int = Field(default=0, ge=0)
     output_octets: int = Field(default=0, ge=0)
+    input_gigawords: int = Field(default=0, ge=0)
+    output_gigawords: int = Field(default=0, ge=0)
 
 
 class RadiusAccountingResponse(BaseModel):
