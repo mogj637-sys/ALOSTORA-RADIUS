@@ -11,6 +11,7 @@ from app.services.credentials import (
     CredentialEncryptionNotConfigured,
     decrypt_credential,
 )
+from app.services.radius_disconnect import send_disconnect_for_session
 
 AUTH_RESERVATION_SECONDS = 120
 ALLOWED_PRE_SESSION_STATES = {"generated", "allocated", "printed_free"}
@@ -273,6 +274,27 @@ def _octets(payload: dict[str, Any], octets_key: str, gigawords_key: str) -> int
     return int(payload.get(octets_key, 0)) + int(payload.get(gigawords_key, 0)) * (2**32)
 
 
+def _attempt_disconnect(
+    db: Session,
+    session: RadiusSession,
+    card: Card,
+    reason: str,
+) -> bool | None:
+    sent = send_disconnect_for_session(db, session)
+    if sent is None:
+        return None
+    db.add(
+        CardEvent(
+            card_id=card.id,
+            event_type="radius_disconnect_sent" if sent else "radius_disconnect_failed",
+            details={"acct_session_id": session.acct_session_id, "reason": reason},
+            actor="radius",
+        )
+    )
+    db.commit()
+    return sent
+
+
 def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     router = (
         db.query(Router)
@@ -413,11 +435,18 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             )
         )
         db.commit()
+        reason = "بدأت الجلسة؛ يجب الفصل فوراً لتجاوز أحد الحدود" if disconnect_required else "بدأت الجلسة"
+        disconnect_sent = (
+            _attempt_disconnect(db, session, card, reason)
+            if disconnect_required
+            else None
+        )
         return {
             "processed": True,
             "duplicate": False,
-            "disconnect_required": disconnect_required,
-            "reason": "بدأت الجلسة؛ يجب الفصل فوراً لتجاوز أحد الحدود" if disconnect_required else "بدأت الجلسة",
+            "disconnect_required": disconnect_required and disconnect_sent is not True,
+            "disconnect_sent": disconnect_sent is True,
+            "reason": reason,
         }
 
     if session is None:
@@ -515,9 +544,15 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         reason = "انتهت الجلسة"
 
     db.commit()
+    disconnect_sent = (
+        _attempt_disconnect(db, session, card, reason)
+        if disconnect_required and session.stopped_at is None
+        else None
+    )
     return {
         "processed": True,
         "duplicate": False,
-        "disconnect_required": disconnect_required,
+        "disconnect_required": disconnect_required and disconnect_sent is not True,
+        "disconnect_sent": disconnect_sent is True,
         "reason": reason,
     }
