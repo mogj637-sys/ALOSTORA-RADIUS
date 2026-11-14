@@ -17,6 +17,7 @@ def test_router_secrets_are_encrypted_and_never_returned_by_api(owner_client):
             "name": "Router integration test",
             "nas_identifier": nas_id,
             "management_host": "192.0.2.10",
+            "radius_client_address": "192.0.2.10",
             "api_port": 8729,
             "api_username": "radius-manager",
             "api_secret": api_secret,
@@ -101,3 +102,48 @@ def test_router_can_be_deactivated_and_api_credentials_cleared(owner_client):
     all_routers = client.get("/api/v1/routers?include_inactive=true", headers=headers)
     assert all(row["id"] != router_id for row in active.json())
     assert any(row["id"] == router_id for row in all_routers.json())
+
+
+def test_internal_radius_clients_endpoint_returns_only_active_configured_nas(owner_client):
+    import os
+
+    client, headers, _ = owner_client
+    active_secret = "active-radius-secret-" + secrets.token_hex(8)
+    active = client.post(
+        "/api/v1/routers",
+        headers=headers,
+        json={
+            "name": "Active NAS",
+            "nas_identifier": "nas-active-" + secrets.token_hex(4),
+            "management_host": "192.0.2.30",
+            "radius_client_address": "192.0.2.30/32",
+            "radius_secret": active_secret,
+        },
+    )
+    assert active.status_code == 201, active.text
+
+    inactive = client.post(
+        "/api/v1/routers",
+        headers=headers,
+        json={
+            "name": "Inactive NAS",
+            "nas_identifier": "nas-inactive-" + secrets.token_hex(4),
+            "management_host": "192.0.2.31",
+            "radius_client_address": "192.0.2.31",
+            "radius_secret": "inactive-radius-secret-" + secrets.token_hex(8),
+            "is_active": False,
+        },
+    )
+    assert inactive.status_code == 201, inactive.text
+
+    clients = client.get(
+        "/internal/radius/clients",
+        headers={"X-Radius-Internal-Key": os.environ["RADIUS_INTERNAL_API_KEY"]},
+    )
+    assert clients.status_code == 200, clients.text
+    assert "no-store" in clients.headers.get("cache-control", "")
+    entries = clients.json()["clients"]
+    active_entry = next(item for item in entries if item["nas_identifier"] == active.json()["nas_identifier"])
+    assert active_entry["ipaddr"] == "192.0.2.30/32"
+    assert active_entry["secret"] == active_secret
+    assert all(item["nas_identifier"] != inactive.json()["nas_identifier"] for item in entries)
