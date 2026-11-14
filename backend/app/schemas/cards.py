@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 CardType = Literal["username_only", "same_credentials", "separate_credentials"]
 GenerationMode = Literal["digits", "letters", "alphanumeric"]
+CardAction = Literal["suspend", "reactivate", "cancel"]
 
 
 class CardSingleCreate(BaseModel):
@@ -47,6 +48,10 @@ class CardCreateResponse(BaseModel):
 class CardBatchResponse(BaseModel):
     created_count: int
     cards: list[CardCreatedSecret]
+
+
+class CardStatusUpdate(BaseModel):
+    action: CardAction
 
 
 class CardListItem(BaseModel):
