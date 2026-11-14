@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PlanCreate(BaseModel):
@@ -12,6 +12,24 @@ class PlanCreate(BaseModel):
     validity_period_seconds: int | None = Field(default=None, gt=0)
     speed_profile: str | None = Field(default=None, max_length=100)
     description: str | None = None
+
+
+class PlanUpdate(BaseModel):
+    code: str | None = Field(default=None, min_length=2, max_length=50, pattern=r"^[A-Za-z0-9_-]+$")
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    price: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    data_limit_bytes: int | None = Field(default=None, gt=0)
+    session_time_limit_seconds: int | None = Field(default=None, gt=0)
+    validity_period_seconds: int | None = Field(default=None, gt=0)
+    speed_profile: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def reject_empty_update(self):
+        if not self.model_fields_set:
+            raise ValueError("يجب إرسال حقل واحد على الأقل للتعديل")
+        return self
 
 
 class PlanResponse(BaseModel):
