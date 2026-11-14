@@ -1,11 +1,12 @@
 import os
 import secrets
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.core import Router
 from app.schemas.radius import (
     RadiusAccountingRequest,
     RadiusAccountingResponse,
@@ -13,6 +14,7 @@ from app.schemas.radius import (
     RadiusAuthorizeResponse,
 )
 from app.services.credentials import CredentialEncryptionNotConfigured
+from app.services.router_secrets import RouterSecretEncryptionNotConfigured, decrypt_router_secret
 from app.services.radius_service import authorize_card, process_accounting
 
 router = APIRouter(prefix="/internal/radius", tags=["radius-internal"])
@@ -26,6 +28,37 @@ def require_radius_internal_key(
         raise HTTPException(status_code=503, detail="RADIUS_INTERNAL_API_KEY is not configured securely")
     if not x_radius_internal_key or not secrets.compare_digest(expected, x_radius_internal_key):
         raise HTTPException(status_code=401, detail="Unauthorized RADIUS internal request")
+
+
+@router.get(
+    "/clients",
+    dependencies=[Depends(require_radius_internal_key)],
+)
+def radius_clients(response: Response, db: Session = Depends(get_db)):
+    # This endpoint is consumed only by the private FreeRADIUS container.
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    response.headers["Pragma"] = "no-cache"
+    configured = (
+        db.query(Router)
+        .filter(
+            Router.is_active.is_(True),
+            Router.radius_client_address.is_not(None),
+        )
+        .order_by(Router.id.asc())
+        .all()
+    )
+    clients = []
+    try:
+        for item in configured:
+            clients.append({
+                "nas_identifier": item.nas_identifier,
+                "ipaddr": item.radius_client_address,
+                "shortname": item.nas_identifier,
+                "secret": decrypt_router_secret(item.radius_secret_encrypted),
+            })
+    except (RouterSecretEncryptionNotConfigured, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="تعذر فك تشفير أحد أسرار RADIUS") from exc
+    return {"clients": clients}
 
 
 @router.post(
