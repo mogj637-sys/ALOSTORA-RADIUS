@@ -53,6 +53,18 @@ type RouterItem = {
   last_seen_at: string | null;
 };
 
+type RouterRecord = {
+  id: number;
+  name: string;
+  nas_identifier: string;
+  management_host: string;
+  api_port: number;
+  api_username: string | null;
+  routeros_version: string | null;
+  is_active: boolean;
+  last_seen_at: string | null;
+};
+
 type PointOfSale = {
   id: number;
   code: string;
@@ -113,7 +125,7 @@ async function apiRequest<T>(token: string, path: string, init: RequestInit = {}
 const modules = [
   { title: "الكروت", detail: "إنشاء وإدارة كروت الإنترنت", icon: "▤", page: "cards" as const },
   { title: "الباقات والسرعات", detail: "إعداد حدود الوقت والحجم والسرعة", icon: "◷", page: "plans" as const },
-  { title: "أجهزة MikroTik", detail: "إدارة الراوترات والاتصال", icon: "⌁", page: "overview" as const },
+  { title: "أجهزة MikroTik", detail: "تسجيل الراوترات وإعداد بيانات الاتصال", icon: "⌁", page: "routers" as const },
   { title: "نقاط البيع", detail: "المخزون وتخصيص الكروت بالطباعة", icon: "▣", page: "pos" as const },
   { title: "جلسات RADIUS", detail: "المصادقة والاستهلاك والجلسات", icon: "◉", page: "overview" as const },
   { title: "التقارير", detail: "المبيعات والاستخدام والأرشفة", icon: "▥", page: "overview" as const },
@@ -165,6 +177,8 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
   const [page, setPage] = useState<"overview" | "plans" | "cards" | "pos" | "routers">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [routers, setRouters] = useState<RouterRecord[]>([]);
+  const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
   const [cards, setCards] = useState<Card[]>([]);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
@@ -203,6 +217,50 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       if (!batchDraft.planId) setBatchDraft((current) => ({ ...current, planId: String(firstActive.id) }));
       if (!singleDraft.planId) setSingleDraft((current) => ({ ...current, planId: String(firstActive.id) }));
     }
+  }
+
+  async function loadRouters() {
+    const result = await apiRequest<RouterRecord[]>(token, "/api/v1/routers?include_inactive=true");
+    setRouters(result);
+  }
+
+  async function createRouter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<RouterRecord>(token, "/api/v1/routers", {
+        method: "POST",
+        body: JSON.stringify({
+          name: routerDraft.name,
+          nas_identifier: routerDraft.nasIdentifier,
+          management_host: routerDraft.managementHost,
+          api_port: Number(routerDraft.apiPort),
+          api_username: routerDraft.apiUsername || null,
+          api_secret: routerDraft.apiSecret || null,
+          radius_secret: routerDraft.radiusSecret,
+          routeros_version: routerDraft.routerosVersion || null,
+        }),
+      });
+      setRouterDraft({ name: "", nasIdentifier: "", managementHost: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
+      await loadRouters();
+      setNotice("تم تسجيل الراوتر وحفظ أسراره مشفرة.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تسجيل الراوتر");
+    } finally { setBusy(false); }
+  }
+
+  async function toggleRouter(item: RouterRecord) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<RouterRecord>(token, `/api/v1/routers/${item.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_active: !item.is_active }),
+      });
+      await loadRouters();
+      setNotice(item.is_active ? "تم إيقاف الراوتر في سجل الإدارة." : "تم تفعيل الراوتر في سجل الإدارة.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تغيير حالة الراوتر");
+    } finally { setBusy(false); }
   }
 
   async function loadCards(search = cardSearch) {
@@ -383,6 +441,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         loadPlans(),
         page === "cards" || page === "pos" ? loadCards() : Promise.resolve(),
         page === "pos" ? loadPointsOfSale() : Promise.resolve(),
+        page === "routers" ? loadRouters() : Promise.resolve(),
         page === "routers" ? loadRouters() : Promise.resolve(),
       ]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل البيانات"));
     }
@@ -638,6 +697,29 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  function renderRouters() {
+    return (
+      <>
+        <div className="section-heading"><div><h2>إدارة أجهزة MikroTik</h2><p>سجّل NAS Identifier وعنوان الإدارة والمفاتيح المشتركة. الأسرار تُحفظ مشفرة ولا تظهر مرة أخرى في القوائم.</p></div></div>
+        <form className="panel form-grid" onSubmit={createRouter}>
+          <label>اسم الراوتر<input value={routerDraft.name} onChange={(e) => setRouterDraft({ ...routerDraft, name: e.target.value })} required minLength={2} /></label>
+          <label>NAS Identifier<input value={routerDraft.nasIdentifier} onChange={(e) => setRouterDraft({ ...routerDraft, nasIdentifier: e.target.value })} required placeholder="مثال: router-main-01" /></label>
+          <label>عنوان الإدارة أو IP<input value={routerDraft.managementHost} onChange={(e) => setRouterDraft({ ...routerDraft, managementHost: e.target.value })} required placeholder="192.168.88.1" /></label>
+          <label>منفذ MikroTik API<input type="number" min="1" max="65535" value={routerDraft.apiPort} onChange={(e) => setRouterDraft({ ...routerDraft, apiPort: e.target.value })} required /></label>
+          <label>اسم مستخدم API <span className="field-hint">اختياري، لكن يجب إدخال كلمة المرور معه</span><input value={routerDraft.apiUsername} onChange={(e) => setRouterDraft({ ...routerDraft, apiUsername: e.target.value })} /></label>
+          <label>كلمة مرور API <span className="field-hint">اترك الحقلين فارغين إذا لم تفعّل API</span><input type="password" autoComplete="new-password" value={routerDraft.apiSecret} onChange={(e) => setRouterDraft({ ...routerDraft, apiSecret: e.target.value })} minLength={8} /></label>
+          <label>RADIUS Shared Secret<input type="password" autoComplete="new-password" value={routerDraft.radiusSecret} onChange={(e) => setRouterDraft({ ...routerDraft, radiusSecret: e.target.value })} required minLength={8} /></label>
+          <label>إصدار RouterOS<input value={routerDraft.routerosVersion} onChange={(e) => setRouterDraft({ ...routerDraft, routerosVersion: e.target.value })} placeholder="مثال: 7.x" /></label>
+          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "تسجيل الراوتر"}</button></div>
+        </form>
+        <div className="section-heading compact-heading"><div><h2>الراوترات المسجلة</h2><p>حالة التسجيل لا تعني أن الاتصال الفعلي بالراوتر قد اختُبر بعد.</p></div><span className="count-tag">{routers.length} راوتر</span></div>
+        <div className="table-wrap"><table><thead><tr><th>الاسم</th><th>NAS Identifier</th><th>عنوان الإدارة</th><th>المنفذ</th><th>الإصدار</th><th>آخر ظهور</th><th>الحالة</th><th>الإجراء</th></tr></thead>
+          <tbody>{routers.map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.nas_identifier}</td><td>{item.management_host}</td><td>{item.api_port}</td><td>{item.routeros_version || "—"}</td><td>{item.last_seen_at ? new Date(item.last_seen_at).toLocaleString("ar") : "لم يتصل بعد"}</td><td>{item.is_active ? "مفعّل" : "متوقف"}</td><td><button type="button" className="table-action" disabled={busy} onClick={() => toggleRouter(item)}>{item.is_active ? "إيقاف" : "تفعيل"}</button></td></tr>)}</tbody>
+        </table>{routers.length === 0 && <div className="empty-state">لم يتم تسجيل راوترات بعد.</div>}</div>
+      </>
+    );
+  }
+
   function renderPos() {
     const printableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
     return (
@@ -811,6 +893,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "plans" ? "nav-item active" : "nav-item"} onClick={() => setPage("plans")}>الباقات</button>
           <button className={page === "cards" ? "nav-item active" : "nav-item"} onClick={() => setPage("cards")}>الكروت</button>
           <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>نقاط البيع والطباعة</button>
+          <button className={page === "routers" ? "nav-item active" : "nav-item"} onClick={() => setPage("routers")}>أجهزة MikroTik</button>
           <button className={page === "routers" ? "nav-item active" : "nav-item"} onClick={() => setPage("routers")}>أجهزة MikroTik</button>
         </nav>
         <div className="sidebar-foot">ALOSTORA-RADIUS · 0.4.0</div>
