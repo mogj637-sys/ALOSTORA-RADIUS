@@ -124,7 +124,7 @@ def update_card_status(
 
     previous_status = card.status
     if payload.action == "suspend":
-        if previous_status not in {"generated", "allocated", "active"}:
+        if previous_status not in {"generated", "allocated", "active", "printed_free"}:
             raise HTTPException(status_code=409, detail="لا يمكن إيقاف الكرت في حالته الحالية")
         card.status = "suspended"
         event_type = "suspended"
@@ -139,7 +139,7 @@ def update_card_status(
             .first()
         )
         restored_status = (prior_event.details or {}).get("previous_status") if prior_event else None
-        if restored_status not in {"generated", "allocated", "active"}:
+        if restored_status not in {"generated", "allocated", "active", "printed_free"}:
             restored_status = "active" if card.first_used_at else ("allocated" if card.assigned_pos_id else "generated")
         card.status = restored_status
         event_type = "reactivated"
