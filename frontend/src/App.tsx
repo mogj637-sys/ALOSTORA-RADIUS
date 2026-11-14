@@ -91,7 +91,7 @@ const modules = [
   { title: "الكروت", detail: "إنشاء وإدارة كروت الإنترنت", icon: "▤", page: "cards" as const },
   { title: "الباقات والسرعات", detail: "إعداد حدود الوقت والحجم والسرعة", icon: "◷", page: "plans" as const },
   { title: "أجهزة MikroTik", detail: "إدارة الراوترات والاتصال", icon: "⌁", page: "overview" as const },
-  { title: "نقاط البيع", detail: "المخزون والطباعة والعمولات", icon: "▣", page: "overview" as const },
+  { title: "نقاط البيع", detail: "المخزون وتخصيص الكروت بالطباعة", icon: "▣", page: "pos" as const },
   { title: "جلسات RADIUS", detail: "المصادقة والاستهلاك والجلسات", icon: "◉", page: "overview" as const },
   { title: "التقارير", detail: "المبيعات والاستخدام والأرشفة", icon: "▥", page: "overview" as const },
 ];
@@ -552,6 +552,82 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  function renderPos() {
+    const printableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
+    return (
+      <>
+        <div className="section-heading">
+          <div><h2>نقاط البيع والطباعة</h2><p>أنشئ نقطة البيع، ثم اختر الكروت لتسجيل تخصيصها. لا تدخل الكروت المجانية في قيمة المخزون التجاري.</p></div>
+        </div>
+        <form className="panel form-grid" onSubmit={createPointOfSale}>
+          <label>رمز نقطة البيع<input value={posDraft.code} onChange={(e) => setPosDraft({ ...posDraft, code: e.target.value })} required /></label>
+          <label>اسم نقطة البيع<input value={posDraft.name} onChange={(e) => setPosDraft({ ...posDraft, name: e.target.value })} required /></label>
+          <label>اسم المسؤول<input value={posDraft.contactName} onChange={(e) => setPosDraft({ ...posDraft, contactName: e.target.value })} /></label>
+          <label>رقم الهاتف<input value={posDraft.phone} onChange={(e) => setPosDraft({ ...posDraft, phone: e.target.value })} /></label>
+          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "إضافة نقطة بيع"}</button></div>
+        </form>
+
+        <div className="pos-toolbar">
+          <label>اختر نقطة البيع
+            <select value={selectedPosId} onChange={(e) => { setSelectedPosId(e.target.value); loadPosInventory(e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل المخزون")); }}>
+              <option value="">-- اختر نقطة بيع --</option>
+              {points.map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}</option>)}
+            </select>
+          </label>
+          {selectedPosId && <button type="button" className="table-action" disabled={busy} onClick={() => { const point = points.find((item) => String(item.id) === selectedPosId); if (point) togglePointOfSale(point); }}>{points.find((item) => String(item.id) === selectedPosId)?.is_active ? "إيقاف النقطة" : "تفعيل النقطة"}</button>}
+        </div>
+
+        {selectedPosId && posInventory && (
+          <div className="pos-stats">
+            <div><span>الكروت المخصصة</span><strong>{posInventory.allocated_cards}</strong></div>
+            <div><span>الكروت المستخدمة</span><strong>{posInventory.used_cards}</strong></div>
+            <div><span>الكروت الموقوفة</span><strong>{posInventory.suspended_cards}</strong></div>
+            <div><span>القيمة التجارية المطبوعة</span><strong>{Number(posInventory.commercial_printed_value).toLocaleString("en-US")}</strong></div>
+            <div><span>الكروت المجانية المطبوعة</span><strong>{posInventory.free_cards_printed}</strong></div>
+          </div>
+        )}
+
+        {selectedPosId && (
+          <>
+            <div className="section-heading compact-heading">
+              <div><h2>الكروت الجاهزة للتخصيص</h2><p>اختر الكروت المنشأة غير المخصصة بعد. إعادة الطلب لا تضاعف المخزون.</p></div>
+              <span className="count-tag">{printableCards.length} كرت متاح في النتائج</span>
+            </div>
+            <div className="card-search">
+              <label htmlFor="pos-card-search">بحث عن كرت</label>
+              <input id="pos-card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); loadCards(e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" />
+              <button type="button" className="table-action" onClick={() => loadCards().catch((err) => setError(err instanceof Error ? err.message : "تعذر التحديث"))}>تحديث</button>
+            </div>
+            <div className="table-wrap">
+              <table><thead><tr><th>اختيار</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>الباقة</th><th>القيمة</th><th>التصنيف</th></tr></thead>
+                <tbody>{printableCards.map((card) => <tr key={card.id}>
+                  <td><input type="checkbox" aria-label={`اختيار الكرت ${card.username}`} checked={selectedPrintCardIds.includes(card.id)} onChange={() => togglePrintCard(card.id)} /></td>
+                  <td>{card.serial_number}</td><td>{card.username}</td>
+                  <td>{plans.find((plan) => plan.id === card.plan_id)?.name ?? card.plan_id}</td>
+                  <td>{card.is_free ? "0" : Number(card.price_snapshot).toLocaleString("en-US")}</td>
+                  <td>{card.is_free ? "مجاني" : "تجاري"}</td>
+                </tr>)}</tbody>
+              </table>
+              {printableCards.length === 0 && <div className="empty-state">لا توجد كروت جاهزة في النتائج الحالية.</div>}
+            </div>
+            <div className="panel pos-print-panel">
+              <label>قالب الطباعة
+                <select value={printTemplate} onChange={(e) => setPrintTemplate(e.target.value)}>
+                  <option value="classic-green">القالب الأخضر</option>
+                  <option value="classic-blue">القالب الأزرق</option>
+                  <option value="compact">القالب المختصر</option>
+                </select>
+              </label>
+              <div className="pos-print-summary">تم اختيار {selectedPrintCardIds.length} كرت. سيتم تسجيل الكروت التجارية في مخزون النقطة، واستثناء المجانية من القيمة التجارية.</div>
+              <button type="button" disabled={busy || selectedPrintCardIds.length === 0 || !points.find((point) => String(point.id) === selectedPosId)?.is_active} onClick={printSelectedCards}>{busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة وتخصيص الكروت"}</button>
+            </div>
+          </>
+        )}
+        {points.length === 0 && <div className="empty-state">أنشئ أول نقطة بيع من النموذج أعلاه للبدء.</div>}
+      </>
+    );
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -562,6 +638,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>نظرة عامة</button>
           <button className={page === "plans" ? "nav-item active" : "nav-item"} onClick={() => setPage("plans")}>الباقات</button>
           <button className={page === "cards" ? "nav-item active" : "nav-item"} onClick={() => setPage("cards")}>الكروت</button>
+          <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>نقاط البيع</button>
           <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>نقاط البيع والطباعة</button>
         </nav>
         <div className="sidebar-foot">ALOSTORA-RADIUS · 0.4.0</div>
