@@ -239,7 +239,7 @@ def test_card_search_and_audited_status_lifecycle(owner_client):
     db = SessionLocal()
     events = (
         db.query(CardEvent)
-        .filter(CardEvent.card_id == card_id)
+        .filter(CardEvent.card_id == UUID(card_id))
         .order_by(CardEvent.created_at.asc(), CardEvent.id.asc())
         .all()
     )
