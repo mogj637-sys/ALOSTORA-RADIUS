@@ -10,7 +10,7 @@ rest {
         method = 'post'
         body = 'json'
         timeout = 5.0
-        data = '{"nas_identifier": %{jsonquote:NAS-Identifier}, "username": %{jsonquote:User-Name}, "password": %{jsonquote:User-Password}, "framed_ip_address": %{jsonquote:Framed-IP-Address}, "calling_station_id": %{jsonquote:Calling-Station-Id}}'
+        data = '{"nas_identifier": %{jsonquote:NAS-Identifier}, "username": %{jsonquote:User-Name}, "password": %{jsonquote:User-Password}, "chap_password_hex": "%{hex:CHAP-Password}", "chap_challenge_hex": "%{hex:CHAP-Challenge}", "framed_ip_address": %{jsonquote:Framed-IP-Address}, "calling_station_id": %{jsonquote:Calling-Station-Id}}'
         tls = ${..tls}
     }
 
