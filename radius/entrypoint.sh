@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 077
 
 : "${RADIUS_INTERNAL_API_KEY:?RADIUS_INTERNAL_API_KEY is required}"
 
@@ -19,6 +20,8 @@ until curl --fail --silent --show-error \
 done
 
 /usr/local/bin/render-radius-clients "${CLIENTS_JSON}" > /etc/freeradius/3.0/clients.conf
+chmod 0600 /etc/freeradius/3.0/clients.conf
+rm -f "${CLIENTS_JSON}"
 sed "s|__RADIUS_INTERNAL_API_KEY__|${RADIUS_INTERNAL_API_KEY}|g" \
     /opt/alostora.template > /etc/freeradius/3.0/sites-enabled/alostora
 
