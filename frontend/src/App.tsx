@@ -513,29 +513,6 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
   }
 
-  async function reprintPrintJob(job: PrintJobHistory) {
-    if (!selectedPosId) return;
-    setBusy(true); setError(""); setNotice("");
-    try {
-      const result = await apiRequest<PrintJobResult>(token, "/api/v1/print-jobs", {
-        method: "POST",
-        body: JSON.stringify({
-          idempotency_key: `reprint-${crypto.randomUUID()}`,
-          point_of_sale_id: Number(selectedPosId),
-          card_ids: job.cards.map((card) => card.card_id),
-          template_code: job.template_code || printTemplate,
-          is_reprint: true,
-        }),
-      });
-      setPrintTemplate(result.template_code || printTemplate);
-      setPrintPreviewCards(result.items);
-      await Promise.all([loadPosInventory(selectedPosId), loadPrintHistory(selectedPosId)]);
-      setNotice(`تم تجهيز نسخة إعادة طباعة من ${result.card_count} كرت. لم تتم إضافة قيمة جديدة للمخزون.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "تعذرت إعادة الطباعة");
-    } finally { setBusy(false); }
-  }
-
   function renderOverview() {
     return (
       <>
