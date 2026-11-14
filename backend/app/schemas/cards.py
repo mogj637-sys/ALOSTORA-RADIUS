@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -60,5 +61,5 @@ class CardListItem(BaseModel):
     plan_id: int
     price_snapshot: Decimal
     assigned_pos_id: int | None
-    first_used_at: str | None
-    expires_at: str | None
+    first_used_at: datetime | None
+    expires_at: datetime | None
