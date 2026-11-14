@@ -292,7 +292,7 @@ def test_print_job_allocates_commercial_cards_once_and_reprint_is_free_of_moveme
     reprinted = client.post("/api/v1/print-jobs", headers=headers, json=reprint_payload)
     assert reprinted.status_code == 201, reprinted.text
     assert reprinted.json()["is_reprint"] is True
-    assert reprinted.json()["total_amount"] == "25.00"
+    assert reprinted.json()["total_amount"] == "0.00"
 
     db = SessionLocal()
     commercial_card = db.query(Card).filter_by(username=commercial_username).one()
