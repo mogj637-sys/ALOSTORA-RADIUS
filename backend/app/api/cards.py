@@ -1,5 +1,4 @@
 import secrets
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -8,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_owner
 from app.db.session import get_db
+from app.models.auth import AdminUser
 from app.models.core import Card, CardEvent, Plan
 from app.schemas.cards import (
     CardBatchCreate,
@@ -92,7 +92,7 @@ def list_cards(
 
 
 @router.post("/single", response_model=CardCreateResponse, status_code=status.HTTP_201_CREATED)
-def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db)):
+def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db), user: AdminUser = Depends(get_current_owner)):
     plan = db.get(Plan, payload.plan_id)
     if plan is None or not plan.is_active:
         raise HTTPException(status_code=404, detail="الباقة غير موجودة أو غير مفعلة")
@@ -109,7 +109,7 @@ def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db))
             card_id=card.id,
             event_type="created",
             details={"plan_id": plan.id, "is_free": payload.is_free, "card_type": payload.card_type},
-            actor="admin",
+            actor=user.username,
         ))
         db.commit()
         db.refresh(card)
@@ -129,11 +129,11 @@ def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db))
 
 
 @router.post("/batch", response_model=CardBatchResponse, status_code=status.HTTP_201_CREATED)
-def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db)):
+def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), user: AdminUser = Depends(get_current_owner)):
     plan = db.get(Plan, payload.plan_id)
     if plan is None or not plan.is_active:
         raise HTTPException(status_code=404, detail="الباقة غير موجودة أو غير مفعلة")
-    if payload.prefix and not payload.prefix.isalnum():
+    if payload.prefix and not (payload.prefix.isascii() and payload.prefix.isalnum()):
         raise HTTPException(status_code=422, detail="البادئة يجب أن تحتوي على حروف وأرقام فقط")
     if len(payload.prefix) >= payload.username_length:
         raise HTTPException(status_code=422, detail="طول البادئة يجب أن يكون أقل من طول اسم المستخدم")
