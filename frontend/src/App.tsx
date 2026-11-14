@@ -116,6 +116,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [plans, setPlans] = useState<Plan[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
+  const [cardMode, setCardMode] = useState<"batch" | "single">("batch");
+  const [singleDraft, setSingleDraft] = useState({ planId: "", username: "", cardType: "username_only", password: "", isFree: false });
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -173,6 +175,30 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setNotice("تم إنشاء الباقة بنجاح.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر إنشاء الباقة");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createSingle(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true); setError(""); setNotice(""); setGeneratedCards([]);
+    try {
+      const result = await apiRequest<{ serial_number: string; username: string; password: string }> (token, "/api/v1/cards/single", {
+        method: "POST",
+        body: JSON.stringify({
+          plan_id: Number(singleDraft.planId),
+          username: singleDraft.username,
+          card_type: singleDraft.cardType,
+          password: singleDraft.cardType === "separate_credentials" ? singleDraft.password : null,
+          is_free: singleDraft.isFree,
+        }),
+      });
+      setGeneratedCards([{ serial_number: result.serial_number, username: result.username, password: result.password }]);
+      await loadCards();
+      setNotice("تم إنشاء الكرت. احفظ بيانات الدخول الآن؛ لن تظهر كلمة المرور مرة أخرى.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر إنشاء الكرت");
     } finally {
       setBusy(false);
     }
@@ -260,8 +286,21 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   function renderCards() {
     return (
       <>
-        <div className="section-heading"><div><h2>إنشاء دفعة كروت</h2><p>أنشئ كروتاً بأسماء مولدة وكلمات مرور وفق نوع الدخول.</p></div></div>
-        {plans.length === 0 ? <div className="empty-state">يجب إنشاء باقة أولاً من قسم الباقات.</div> : (
+        <div className="section-heading"><div><h2>إدارة الكروت</h2><p>أنشئ كرتاً منفرداً أو دفعة كروت وفق نوع بيانات الدخول.</p></div></div>
+        <div className="mode-tabs">
+          <button type="button" className={cardMode === "single" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("single"); setGeneratedCards([]); }}>كرت منفرد</button>
+          <button type="button" className={cardMode === "batch" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("batch"); setGeneratedCards([]); }}>دفعة كروت</button>
+        </div>
+        {plans.length === 0 ? <div className="empty-state">يجب إنشاء باقة أولاً من قسم الباقات.</div> : cardMode === "single" ? (
+          <form className="panel form-grid" onSubmit={createSingle}>
+            <label>الباقة<select value={singleDraft.planId || (plans[0] ? String(plans[0].id) : "")} onChange={(e) => setSingleDraft({ ...singleDraft, planId: e.target.value })}>{plans.map((plan) => <option value={plan.id} key={plan.id}>{plan.name} — {plan.code}</option>)}</select></label>
+            <label>اسم المستخدم<input value={singleDraft.username} onChange={(e) => setSingleDraft({ ...singleDraft, username: e.target.value })} minLength={3} maxLength={32} required /></label>
+            <label>نوع بيانات الدخول<select value={singleDraft.cardType} onChange={(e) => setSingleDraft({ ...singleDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
+            {singleDraft.cardType === "separate_credentials" && <label>كلمة المرور<input type="text" value={singleDraft.password} onChange={(e) => setSingleDraft({ ...singleDraft, password: e.target.value })} minLength={4} maxLength={32} required /></label>}
+            <label className="checkbox-label"><input type="checkbox" checked={singleDraft.isFree} onChange={(e) => setSingleDraft({ ...singleDraft, isFree: e.target.checked })} /> كرت مجاني / خاص بمالك الشبكة</label>
+            <div className="form-actions"><button type="submit" disabled={busy || !singleDraft.planId}>{busy ? "جارٍ الإنشاء..." : "إنشاء الكرت"}</button></div>
+          </form>
+        ) : (
           <form className="panel form-grid" onSubmit={createBatch}>
             <label>الباقة<select value={batchDraft.planId} onChange={(e) => setBatchDraft({ ...batchDraft, planId: e.target.value })}>{plans.map((plan) => <option value={plan.id} key={plan.id}>{plan.name} — {plan.code}</option>)}</select></label>
             <label>عدد الكروت<input type="number" min="1" max="5000" value={batchDraft.quantity} onChange={(e) => setBatchDraft({ ...batchDraft, quantity: e.target.value })} required /></label>
