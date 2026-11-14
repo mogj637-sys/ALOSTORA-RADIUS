@@ -12,7 +12,7 @@ def _secret_key() -> str:
     secret = os.getenv("APP_SECRET_KEY", "development-only-change-me")
     if len(secret) < 32:
         raise RuntimeError("APP_SECRET_KEY must contain at least 32 characters")
-    if secret == "development-only-change-me":
+    if secret in {"development-only-change-me", "replace-with-a-long-random-secret-before-use"}:
         raise RuntimeError("Set a private APP_SECRET_KEY before using authentication")
     return secret
 
