@@ -240,7 +240,8 @@ def create_print_job(
                 event_type = "reprinted"
                 details = {"print_job_id": str(job.id), "point_of_sale_id": point_of_sale.id}
             elif card.is_free:
-                # Free cards remain in the technical print history but never enter POS stock.
+                # Free cards are marked as printed to prevent a second original allocation.
+                card.status = "printed_free"
                 event_type = "printed_free"
                 details = {"print_job_id": str(job.id), "commercial": False}
             else:
