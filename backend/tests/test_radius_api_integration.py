@@ -248,3 +248,92 @@ def test_radius_internal_endpoints_reject_missing_or_invalid_shared_key(owner_cl
         json=payload,
     )
     assert invalid.status_code == 401
+
+
+def test_accounting_supports_gigawords_and_closes_sessions_after_router_deactivation(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    card, password = _card(client, headers)
+    internal_headers = _radius_headers()
+    auth = client.post(
+        "/internal/radius/authorize",
+        headers=internal_headers,
+        json={"nas_identifier": router["nas_identifier"], "username": card["username"], "password": password},
+    )
+    assert auth.json()["accepted"] is True
+
+    now = datetime.now(timezone.utc)
+    base = {
+        "nas_identifier": router["nas_identifier"],
+        "username": card["username"],
+        "acct_session_id": "gigawords-" + secrets.token_hex(6),
+        "event_timestamp": now.isoformat(),
+    }
+    started = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={**base, "status_type": "Start"},
+    )
+    assert started.json()["processed"] is True
+
+    deactivated = client.patch(
+        f"/api/v1/routers/{router['id']}",
+        headers=headers,
+        json={"is_active": False},
+    )
+    assert deactivated.status_code == 200
+
+    interim = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={
+            **base,
+            "status_type": "Interim-Update",
+            "event_timestamp": (now + timedelta(seconds=30)).isoformat(),
+            "session_time_seconds": 30,
+            "input_octets": 10,
+            "input_gigawords": 1,
+            "output_octets": 20,
+        },
+    )
+    assert interim.status_code == 200
+    assert interim.json()["processed"] is True
+    assert interim.json()["disconnect_required"] is True
+
+    stopped = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={
+            **base,
+            "status_type": "Stop",
+            "event_timestamp": (now + timedelta(seconds=40)).isoformat(),
+            "session_time_seconds": 40,
+            "input_octets": 15,
+            "input_gigawords": 1,
+            "output_octets": 30,
+        },
+    )
+    assert stopped.status_code == 200
+    assert stopped.json()["processed"] is True
+
+    db = SessionLocal()
+    saved = db.get(Card, UUID(card["id"]))
+    assert saved.upload_bytes == (2**32) + 15
+    assert saved.download_bytes == 30
+    assert saved.used_seconds == 40
+    assert saved.status == "generated"
+    session = db.query(RadiusSession).filter_by(acct_session_id=base["acct_session_id"]).one()
+    assert session.stopped_at is not None
+    db.close()
+
+    new_start = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={
+            **base,
+            "acct_session_id": "disabled-" + secrets.token_hex(5),
+            "status_type": "Start",
+        },
+    )
+    assert new_start.status_code == 200
+    assert new_start.json()["processed"] is False
