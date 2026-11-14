@@ -122,6 +122,7 @@ def test_internal_radius_clients_endpoint_returns_configured_nas_including_disab
     )
     assert active.status_code == 201, active.text
 
+    inactive_secret = "inactive-radius-secret-" + secrets.token_hex(8)
     inactive = client.post(
         "/api/v1/routers",
         headers=headers,
@@ -130,7 +131,7 @@ def test_internal_radius_clients_endpoint_returns_configured_nas_including_disab
             "nas_identifier": "nas-inactive-" + secrets.token_hex(4),
             "management_host": "192.0.2.31",
             "radius_client_address": "192.0.2.31",
-            "radius_secret": "inactive-radius-secret-" + secrets.token_hex(8),
+            "radius_secret": inactive_secret,
             "is_active": False,
         },
     )
@@ -148,7 +149,7 @@ def test_internal_radius_clients_endpoint_returns_configured_nas_including_disab
     assert active_entry["secret"] == active_secret
     inactive_entry = next(item for item in entries if item["nas_identifier"] == inactive.json()["nas_identifier"])
     assert inactive_entry["ipaddr"] == "192.0.2.31"
-    assert inactive_entry["secret"] == inactive.json().get("radius_secret", inactive_entry["secret"])
+    assert inactive_entry["secret"] == inactive_secret
 
 
 def test_router_rejects_invalid_radius_client_network_and_control_characters(owner_client):
