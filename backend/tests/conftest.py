@@ -19,6 +19,7 @@ def owner_client(monkeypatch):
     monkeypatch.setenv("CREDENTIAL_ENCRYPTION_KEY", TEST_CREDENTIAL_ENCRYPTION_KEY)
     monkeypatch.setenv("ROUTER_SECRET_ENCRYPTION_KEY", TEST_ROUTER_SECRET_ENCRYPTION_KEY)
     monkeypatch.setenv("RADIUS_INTERNAL_API_KEY", "ci-radius-internal-key-" + secrets.token_hex(24))
+    monkeypatch.setenv("RADIUS_COA_ENABLED", "false")
     username = "ci_owner_" + secrets.token_hex(4)
     password = "a-strong-ci-password-123"
 
