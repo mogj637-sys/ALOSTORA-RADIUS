@@ -62,8 +62,7 @@ def update_router(router_id: int, payload: RouterUpdate, db: Session = Depends(g
         changes["radius_secret_encrypted"] = _encrypt(changes.pop("radius_secret"))
     if "api_secret" in changes:
         value = changes.pop("api_secret")
-        if value is not None:
-            changes["api_secret_encrypted"] = _encrypt(value)
+        changes["api_secret_encrypted"] = _encrypt(value) if value is not None else None
     for field, value in changes.items():
         setattr(item, field, value)
     db.commit()
