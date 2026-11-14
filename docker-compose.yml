@@ -45,3 +45,16 @@ services:
 
 volumes:
   postgres_data:
+
+  radius:
+    build:
+      context: ./radius
+    environment:
+      RADIUS_INTERNAL_API_KEY: ${RADIUS_INTERNAL_API_KEY:-}
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    restart: unless-stopped
