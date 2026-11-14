@@ -1,7 +1,9 @@
 import os
 import secrets
+from datetime import datetime, timezone
+from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -61,20 +63,87 @@ def radius_clients(response: Response, db: Session = Depends(get_db)):
     return {"clients": clients}
 
 
+
+
+def _attribute(payload: dict[str, Any], *names: str, default: Any = None) -> Any:
+    for name in names:
+        if name not in payload:
+            continue
+        value = payload[name]
+        if isinstance(value, dict) and "value" in value:
+            value = value["value"]
+        if isinstance(value, list):
+            value = value[0] if value else default
+        return default if value is None else value
+    return default
+
+
+def _accounting_status(value: Any) -> str:
+    numeric = {1: "Start", 2: "Stop", 3: "Interim-Update"}
+    if isinstance(value, str) and value.isdigit():
+        value = int(value)
+    if isinstance(value, int):
+        value = numeric.get(value, value)
+    aliases = {
+        "start": "Start",
+        "stop": "Stop",
+        "interim-update": "Interim-Update",
+        "interim_update": "Interim-Update",
+    }
+    return aliases.get(str(value).lower(), str(value))
+
+
+def _event_timestamp(value: Any) -> datetime | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)) or (isinstance(value, str) and value.isdigit()):
+        return datetime.fromtimestamp(float(value), tz=timezone.utc)
+    if isinstance(value, str):
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return value
+
+
+def _normalize_authorize(payload: dict[str, Any]) -> RadiusAuthorizeRequest:
+    return RadiusAuthorizeRequest(
+        nas_identifier=_attribute(payload, "nas_identifier", "NAS-Identifier"),
+        username=_attribute(payload, "username", "User-Name"),
+        password=_attribute(payload, "password", "User-Password", default=""),
+        framed_ip_address=_attribute(payload, "framed_ip_address", "Framed-IP-Address"),
+        calling_station_id=_attribute(payload, "calling_station_id", "Calling-Station-Id"),
+    )
+
+
+def _normalize_accounting(payload: dict[str, Any]) -> RadiusAccountingRequest:
+    return RadiusAccountingRequest(
+        nas_identifier=_attribute(payload, "nas_identifier", "NAS-Identifier"),
+        username=_attribute(payload, "username", "User-Name"),
+        acct_session_id=_attribute(payload, "acct_session_id", "Acct-Session-Id"),
+        status_type=_accounting_status(_attribute(payload, "status_type", "Acct-Status-Type")),
+        event_timestamp=_event_timestamp(_attribute(payload, "event_timestamp", "Event-Timestamp")),
+        framed_ip_address=_attribute(payload, "framed_ip_address", "Framed-IP-Address"),
+        calling_station_id=_attribute(payload, "calling_station_id", "Calling-Station-Id"),
+        session_time_seconds=int(_attribute(payload, "session_time_seconds", "Acct-Session-Time", default=0)),
+        input_octets=int(_attribute(payload, "input_octets", "Acct-Input-Octets", default=0)),
+        output_octets=int(_attribute(payload, "output_octets", "Acct-Output-Octets", default=0)),
+        input_gigawords=int(_attribute(payload, "input_gigawords", "Acct-Input-Gigawords", default=0)),
+        output_gigawords=int(_attribute(payload, "output_gigawords", "Acct-Output-Gigawords", default=0)),
+    )
+
 @router.post(
     "/authorize",
     response_model=RadiusAuthorizeResponse,
     dependencies=[Depends(require_radius_internal_key)],
 )
-def radius_authorize(payload: RadiusAuthorizeRequest, db: Session = Depends(get_db)):
+def radius_authorize(payload: dict[str, Any] = Body(...), db: Session = Depends(get_db)):
+    request = _normalize_authorize(payload)
     try:
         result = authorize_card(
             db,
-            nas_identifier=payload.nas_identifier,
-            username=payload.username,
-            password=payload.password,
-            framed_ip_address=payload.framed_ip_address,
-            calling_station_id=payload.calling_station_id,
+            nas_identifier=request.nas_identifier,
+            username=request.username,
+            password=request.password,
+            framed_ip_address=request.framed_ip_address,
+            calling_station_id=request.calling_station_id,
         )
     except CredentialEncryptionNotConfigured as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -92,8 +161,9 @@ def radius_authorize(payload: RadiusAuthorizeRequest, db: Session = Depends(get_
     response_model=RadiusAccountingResponse,
     dependencies=[Depends(require_radius_internal_key)],
 )
-def radius_accounting(payload: RadiusAccountingRequest, db: Session = Depends(get_db)):
-    result = process_accounting(db, payload.model_dump())
+def radius_accounting(payload: dict[str, Any] = Body(...), db: Session = Depends(get_db)):
+    request = _normalize_accounting(payload)
+    result = process_accounting(db, request.model_dump())
     if not result["processed"]:
         return JSONResponse(status_code=409, content=result)
     return result
