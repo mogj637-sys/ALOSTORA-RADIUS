@@ -195,6 +195,14 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
             return {"processed": True, "duplicate": True, "disconnect_required": False, "reason": "تم تسجيل بداية الجلسة مسبقاً"}
         if card.status in {"suspended", "cancelled", "expired", "exhausted"}:
             return {"processed": False, "reason": "حالة الكرت لا تسمح ببدء الجلسة"}
+        if card.first_used_at is None:
+            return {"processed": False, "reason": "لم يتم قبول المصادقة لهذا الكرت"}
+        active_session = db.query(RadiusSession.id).filter(
+            RadiusSession.card_id == card.id,
+            RadiusSession.stopped_at.is_(None),
+        ).first()
+        if active_session is not None:
+            return {"processed": False, "reason": "يوجد اتصال نشط آخر لهذا الكرت"}
         if session is None:
             session = RadiusSession(
                 card_id=card.id,
@@ -243,8 +251,8 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     session.calling_station_id = payload.get("calling_station_id") or session.calling_station_id
     session.last_packet_fingerprint = fingerprint
 
-    disconnect_required = False
-    reason = "تم تحديث المحاسبة"
+    disconnect_required = card.status == "suspended"
+    reason = "الكرت موقوف ويجب فصل الجلسة" if disconnect_required else "تم تحديث المحاسبة"
     remaining_time, remaining_data = _remaining_limits(card, event_time)
     if remaining_time is not None and remaining_time <= 0:
         card.status = "exhausted"
