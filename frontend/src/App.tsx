@@ -270,6 +270,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   useEffect(() => {
+    if (page !== "pos") setPrintPreviewCards([]);
     if (page === "plans" || page === "cards" || page === "pos") {
       setError("");
       Promise.all([
