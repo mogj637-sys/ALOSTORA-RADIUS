@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_owner
 from app.db.session import get_db
 from app.models.auth import AdminUser
-from app.models.core import Card, CardEvent, Plan
+from app.models.core import Card, CardEvent, Plan, RadiusSession
+from app.services.radius_disconnect import send_disconnect_for_session
 from app.schemas.cards import (
     CardBatchCreate,
     CardBatchResponse,
@@ -158,6 +159,26 @@ def update_card_status(
         actor=user.username,
     ))
     db.commit()
+    if payload.action == "suspend":
+        active_sessions = (
+            db.query(RadiusSession)
+            .filter(
+                RadiusSession.card_id == card.id,
+                RadiusSession.stopped_at.is_(None),
+            )
+            .all()
+        )
+        for active_session in active_sessions:
+            disconnect_sent = send_disconnect_for_session(db, active_session)
+            if disconnect_sent is not None:
+                db.add(CardEvent(
+                    card_id=card.id,
+                    event_type="radius_disconnect_sent" if disconnect_sent else "radius_disconnect_failed",
+                    details={"acct_session_id": active_session.acct_session_id, "reason": "admin_suspend"},
+                    actor=user.username,
+                ))
+        if active_sessions:
+            db.commit()
     db.refresh(card)
     return card
 
