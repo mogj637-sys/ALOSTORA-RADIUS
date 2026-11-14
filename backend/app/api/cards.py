@@ -189,7 +189,7 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
                 card_id=card.id,
                 event_type="created",
                 details={"plan_id": plan.id, "is_free": False, "card_type": payload.card_type, "batch": True},
-                actor="admin",
+                actor=user.username,
             )
             for card in cards
         ])
