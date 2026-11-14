@@ -85,6 +85,13 @@ def test_print_allocation_is_idempotent_and_reprint_does_not_duplicate_stock(own
     assert reprinted.status_code == 201, reprinted.text
     assert reprinted.json()["is_reprint"] is True
 
+    cannot_cancel_printed = client.patch(
+        f"/api/v1/cards/{card_ids[0]}/status",
+        headers=headers,
+        json={"action": "cancel"},
+    )
+    assert cannot_cancel_printed.status_code == 409
+
     db = SessionLocal()
     saved_cards = db.query(Card).filter(Card.id.in_([UUID(value) for value in card_ids])).all()
     assert len(saved_cards) == 2
