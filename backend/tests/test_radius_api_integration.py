@@ -1,3 +1,4 @@
+import hashlib
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
