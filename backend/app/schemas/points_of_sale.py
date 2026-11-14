@@ -12,7 +12,7 @@ class PointOfSaleCreate(BaseModel):
 
 
 class PointOfSaleUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=2, max_length=150)
+    name: str = Field(default=None, min_length=2, max_length=150)
     contact_name: str | None = Field(default=None, max_length=150)
     phone: str | None = Field(default=None, max_length=40)
     is_active: bool | None = None
