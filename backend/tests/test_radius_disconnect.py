@@ -1,3 +1,5 @@
+import os
+import secrets
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -5,7 +7,8 @@ from pyrad import packet
 from pyrad.client import Timeout
 
 from app.db.session import SessionLocal
-from app.models.core import Card, RadiusSession
+from app.models.core import Card, RadiusSession, Router
+from app.services.router_secrets import decrypt_router_secret
 from app.services.radius_disconnect import send_disconnect_for_session
 
 
@@ -16,10 +19,10 @@ def _active_session(owner_client):
         headers=headers,
         json={
             "name": "CoA test router",
-            "nas_identifier": "coa-nas-" + __import__("secrets").token_hex(4),
+            "nas_identifier": "coa-nas-" + secrets.token_hex(4),
             "management_host": "192.0.2.60",
             "radius_client_address": "192.0.2.60/32",
-            "radius_secret": "coa-shared-secret-" + __import__("secrets").token_hex(6),
+            "radius_secret": "coa-shared-secret-" + secrets.token_hex(6),
         },
     )
     assert router.status_code == 201, router.text
@@ -28,7 +31,7 @@ def _active_session(owner_client):
         "/api/v1/plans",
         headers=headers,
         json={
-            "code": "COA-" + __import__("secrets").token_hex(4).upper(),
+            "code": "COA-" + secrets.token_hex(4).upper(),
             "name": "CoA plan",
             "price": "10.00",
             "session_time_limit_seconds": 300,
@@ -42,14 +45,12 @@ def _active_session(owner_client):
         headers=headers,
         json={
             "plan_id": plan.json()["id"],
-            "username": "COA" + __import__("secrets").token_hex(5).upper(),
+            "username": "COA" + secrets.token_hex(5).upper(),
             "card_type": "separate_credentials",
             "password": "coa-test-password",
         },
     )
     assert card.status_code == 201, card.text
-
-    import os
 
     internal = {"X-Radius-Internal-Key": os.environ["RADIUS_INTERNAL_API_KEY"]}
     auth = client.post(
@@ -69,7 +70,7 @@ def _active_session(owner_client):
         json={
             "nas_identifier": router.json()["nas_identifier"],
             "username": card.json()["username"],
-            "acct_session_id": "coa-session-" + __import__("secrets").token_hex(5),
+            "acct_session_id": "coa-session-" + secrets.token_hex(5),
             "status_type": "Start",
         },
     )
@@ -107,8 +108,12 @@ def test_disconnect_sender_builds_signed_disconnect_request(monkeypatch, owner_c
         assert created["client_kwargs"]["coaport"] == 1700
         assert created["packet_kwargs"]["code"] == packet.DisconnectRequest
         assert created["packet_kwargs"]["message_authenticator"] is True
+        card = db.get(Card, session.card_id)
+        router = db.get(Router, session.router_id)
         assert created["packet_kwargs"]["Acct_Session_Id"] == session.acct_session_id
-        assert created["packet_kwargs"]["NAS_Identifier"] == "coa-nas-" + created["packet_kwargs"]["NAS_Identifier"].split("coa-nas-")[-1]
+        assert created["packet_kwargs"]["User_Name"] == card.username
+        assert created["packet_kwargs"]["NAS_Identifier"] == router.nas_identifier
+        assert created["client_kwargs"]["secret"] == decrypt_router_secret(router.radius_secret_encrypted).encode("utf-8")
     finally:
         db.close()
 
