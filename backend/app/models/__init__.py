@@ -1,3 +1,4 @@
+from app.models.auth import AdminUser, Role
 from app.models.core import (
     Card,
     CardEvent,
@@ -10,6 +11,8 @@ from app.models.core import (
 )
 
 __all__ = [
+    "AdminUser",
+    "Role",
     "Card",
     "CardEvent",
     "Plan",
