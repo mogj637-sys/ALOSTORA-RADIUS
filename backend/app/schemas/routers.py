@@ -17,6 +17,13 @@ class RouterCreate(BaseModel):
     routeros_version: str | None = Field(default=None, max_length=30)
     is_active: bool = True
 
+    @field_validator("radius_secret", "api_secret")
+    @classmethod
+    def validate_printable_secrets(cls, value: str | None) -> str | None:
+        if value is not None and not value.isprintable():
+            raise ValueError("الأسرار يجب ألا تحتوي على محارف تحكم أو أسطر جديدة")
+        return value
+
     @field_validator("radius_client_address")
     @classmethod
     def validate_radius_client_address(cls, value: str | None) -> str | None:
@@ -45,6 +52,13 @@ class RouterUpdate(BaseModel):
     radius_secret: str = Field(default=None, min_length=8, max_length=500)
     routeros_version: str | None = Field(default=None, max_length=30)
     is_active: bool = Field(default=None)
+
+    @field_validator("radius_secret", "api_secret")
+    @classmethod
+    def validate_printable_secrets(cls, value: str | None) -> str | None:
+        if value is not None and not value.isprintable():
+            raise ValueError("الأسرار يجب ألا تحتوي على محارف تحكم أو أسطر جديدة")
+        return value
 
     @field_validator("radius_client_address")
     @classmethod
