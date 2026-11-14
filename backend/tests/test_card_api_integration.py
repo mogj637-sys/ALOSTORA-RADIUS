@@ -1,4 +1,5 @@
 import secrets
+from uuid import UUID
 
 import pytest
 from cryptography.fernet import Fernet
