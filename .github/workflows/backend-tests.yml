@@ -9,6 +9,23 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: alostora_radius_test
+          POSTGRES_USER: alostora
+          POSTGRES_PASSWORD: test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U alostora -d alostora_radius_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://alostora:test-password@localhost:5432/alostora_radius_test
+      APP_SECRET_KEY: ci-only-secret-key-with-more-than-thirty-two-characters
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -24,3 +41,6 @@ jobs:
       - name: Run unit and schema tests
         working-directory: backend
         run: pytest -q
+      - name: Apply PostgreSQL migrations
+        working-directory: backend
+        run: alembic upgrade head
