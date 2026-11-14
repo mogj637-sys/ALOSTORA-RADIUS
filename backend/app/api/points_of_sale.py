@@ -101,6 +101,6 @@ def point_of_sale_inventory(point_id: int, db: Session = Depends(get_db)):
         allocated_cards=allocated,
         used_cards=used,
         suspended_cards=suspended,
-        commercial_stock_value=stock_value,
+        commercial_printed_value=stock_value,
         free_cards_printed=free_printed,
     )
