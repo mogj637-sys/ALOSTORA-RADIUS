@@ -16,6 +16,7 @@ RUN chmod 0755 /usr/local/bin/render-radius-clients /usr/local/bin/alostora-radi
     && ln -sf ../mods-available/rest /etc/freeradius/3.0/mods-enabled/rest \
     && rm -f /etc/freeradius/3.0/sites-enabled/default \
               /etc/freeradius/3.0/sites-enabled/inner-tunnel \
+              /etc/freeradius/3.0/mods-enabled/eap \
     && sed 's|__RADIUS_INTERNAL_API_KEY__|build-validation-key-012345678901234567890123456789|g' \
        /opt/alostora.template > /etc/freeradius/3.0/sites-enabled/alostora \
     && freeradius -XC
