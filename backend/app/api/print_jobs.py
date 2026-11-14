@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,8 @@ from app.models.core import (
 from app.services.credentials import CredentialEncryptionNotConfigured, decrypt_credential
 from app.schemas.print_jobs import (
     PrintJobCreate,
+    PrintJobHistoryCardResponse,
+    PrintJobHistoryResponse,
     PrintJobItemResponse,
     PrintJobResponse,
 )
@@ -106,6 +108,43 @@ def _existing_job(
             detail="مفتاح العملية مستخدم سابقاً لطلب طباعة مختلف",
         )
     return _response(job, db)
+
+
+@router.get("", response_model=list[PrintJobHistoryResponse])
+def list_print_jobs(
+    point_of_sale_id: int = Query(gt=0),
+    limit: int = Query(default=30, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    point = db.get(PointOfSale, point_of_sale_id)
+    if point is None:
+        raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
+    jobs = (
+        db.query(PrintJob)
+        .filter(PrintJob.point_of_sale_id == point_of_sale_id)
+        .order_by(PrintJob.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        PrintJobHistoryResponse(
+            id=job.id,
+            template_code=job.template_code,
+            card_count=job.card_count,
+            is_reprint=job.is_reprint,
+            created_at=job.created_at,
+            cards=[
+                PrintJobHistoryCardResponse(
+                    card_id=item.card_id,
+                    serial_number=item.serial_number_snapshot,
+                    username=item.username_snapshot,
+                    is_free=item.is_free,
+                )
+                for item in job.items
+            ],
+        )
+        for job in jobs
+    ]
 
 
 @router.post("", response_model=PrintJobResponse, status_code=status.HTTP_201_CREATED)
