@@ -563,7 +563,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
         <div className="pos-toolbar">
           <label>اختر نقطة البيع
-            <select value={selectedPosId} onChange={(e) => { setSelectedPrintCardIds([]); setSelectedPosId(e.target.value); Promise.all([loadPosInventory(e.target.value), loadPrintHistory(e.target.value)]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل بيانات نقطة البيع")); }}>
+            <select value={selectedPosId} onChange={(e) => { setSelectedPrintCardIds([]); setPrintPreviewCards([]); setSelectedPosId(e.target.value); Promise.all([loadPosInventory(e.target.value), loadPrintHistory(e.target.value)]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل بيانات نقطة البيع")); }}>
               <option value="">-- اختر نقطة بيع --</option>
               {points.map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}</option>)}
             </select>
