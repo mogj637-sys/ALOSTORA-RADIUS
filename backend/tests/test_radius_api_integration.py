@@ -16,6 +16,7 @@ def _router(client, headers):
             "name": "RADIUS test router",
             "nas_identifier": "radius-nas-" + secrets.token_hex(4),
             "management_host": "192.0.2.50",
+            "radius_client_address": "192.0.2.50",
             "radius_secret": "radius-shared-" + secrets.token_hex(8),
         },
     )
