@@ -85,6 +85,15 @@ def test_print_allocation_is_idempotent_and_reprint_does_not_duplicate_stock(own
     reprinted = client.post("/api/v1/print-jobs", headers=headers, json=reprint_payload)
     assert reprinted.status_code == 201, reprinted.text
     assert reprinted.json()["is_reprint"] is True
+    assert Decimal(reprinted.json()["total_amount"]) == Decimal("0.00")
+
+    history = client.get(
+        f"/api/v1/print-jobs?point_of_sale_id={point['id']}",
+        headers=headers,
+    )
+    assert history.status_code == 200, history.text
+    assert len(history.json()) == 2
+    assert all("password" not in item["cards"][0] for item in history.json())
 
     cannot_cancel_printed = client.patch(
         f"/api/v1/cards/{card_ids[0]}/status",
