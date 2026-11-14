@@ -1,21 +1,16 @@
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel
 
 
 class PrintJobCreate(BaseModel):
-    idempotency_key: str = Field(min_length=8, max_length=120)
-    point_of_sale_id: int = Field(gt=0)
-    card_ids: list[UUID] = Field(min_length=1, max_length=5000)
-    template_code: str | None = Field(default=None, max_length=80)
+    idempotency_key: str
+    point_of_sale_id: int
+    card_ids: list[UUID]
+    template_code: str | None = None
     is_reprint: bool = False
-
-    @model_validator(mode="after")
-    def unique_card_ids(self):
-        if len(set(self.card_ids)) != len(self.card_ids):
-            raise ValueError("لا يمكن تكرار الكرت داخل عملية الطباعة")
-        return self
 
 
 class PrintJobItemResponse(BaseModel):
@@ -38,3 +33,19 @@ class PrintJobResponse(BaseModel):
     free_card_count: int
     total_amount: Decimal
     items: list[PrintJobItemResponse]
+
+
+class PrintJobHistoryCardResponse(BaseModel):
+    card_id: UUID
+    serial_number: str
+    username: str
+    is_free: bool
+
+
+class PrintJobHistoryResponse(BaseModel):
+    id: UUID
+    template_code: str | None
+    card_count: int
+    is_reprint: bool
+    created_at: datetime
+    cards: list[PrintJobHistoryCardResponse]
