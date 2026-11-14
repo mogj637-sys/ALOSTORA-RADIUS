@@ -24,3 +24,9 @@ def test_access_token_contains_subject_and_expiry(monkeypatch):
     payload = jwt.decode(token, secret, algorithms=["HS256"])
     assert payload["sub"] == "42"
     assert "exp" in payload
+
+
+def test_placeholder_jwt_secret_is_rejected(monkeypatch):
+    monkeypatch.setenv("APP_SECRET_KEY", "replace-with-a-long-random-secret-before-use")
+    with pytest.raises(RuntimeError):
+        create_access_token("42")
