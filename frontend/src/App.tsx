@@ -41,6 +41,34 @@ type GeneratedCard = {
   password: string;
 };
 
+type PointOfSale = {
+  id: number;
+  code: string;
+  name: string;
+  contact_name: string | null;
+  phone: string | null;
+  is_active: boolean;
+};
+
+type PosInventory = {
+  point_of_sale_id: number;
+  point_of_sale_name: string;
+  allocated_cards: number;
+  used_cards: number;
+  suspended_cards: number;
+  commercial_printed_value: number;
+  free_cards_printed: number;
+};
+
+type PrintJobResult = {
+  id: string;
+  card_count: number;
+  commercial_card_count: number;
+  free_card_count: number;
+  total_amount: number;
+  is_reprint: boolean;
+};
+
 async function apiRequest<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${token}`);
@@ -112,12 +140,18 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
 }
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
-  const [page, setPage] = useState<"overview" | "plans" | "cards">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "cards" | "pos">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [cardSearch, setCardSearch] = useState("");
+  const [points, setPoints] = useState<PointOfSale[]>([]);
+  const [selectedPosId, setSelectedPosId] = useState("");
+  const [posInventory, setPosInventory] = useState<PosInventory | null>(null);
+  const [posDraft, setPosDraft] = useState({ code: "", name: "", contactName: "", phone: "" });
+  const [selectedPrintCardIds, setSelectedPrintCardIds] = useState<string[]>([]);
+  const [printTemplate, setPrintTemplate] = useState("classic-green");
   const [cardMode, setCardMode] = useState<"batch" | "single">("batch");
   const [singleDraft, setSingleDraft] = useState({ planId: "", username: "", cardType: "username_only", password: "", isFree: false });
   const [notice, setNotice] = useState("");
@@ -142,17 +176,104 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function loadCards(search = cardSearch) {
-    const params = new URLSearchParams({ offset: "0", limit: "50" });
+    const params = new URLSearchParams({ offset: "0", limit: "200" });
     if (search.trim()) params.set("search", search.trim());
     const result = await apiRequest<Card[]>(token, `/api/v1/cards?${params.toString()}`);
     setCards(result);
   }
 
+  async function loadPosInventory(pointId: string) {
+    if (!pointId) { setPosInventory(null); return; }
+    const result = await apiRequest<PosInventory>(token, `/api/v1/points-of-sale/${pointId}/inventory`);
+    setPosInventory(result);
+  }
+
+  async function loadPointsOfSale() {
+    const result = await apiRequest<PointOfSale[]>(token, "/api/v1/points-of-sale?include_inactive=true");
+    setPoints(result);
+    const current = selectedPosId && result.some((point) => String(point.id) === selectedPosId)
+      ? selectedPosId
+      : (result.find((point) => point.is_active)?.id ?? result[0]?.id)?.toString() ?? "";
+    setSelectedPosId(current);
+    await loadPosInventory(current);
+  }
+
+  async function createPointOfSale(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const point = await apiRequest<PointOfSale>(token, "/api/v1/points-of-sale", {
+        method: "POST",
+        body: JSON.stringify({
+          code: posDraft.code,
+          name: posDraft.name,
+          contact_name: posDraft.contactName || null,
+          phone: posDraft.phone || null,
+        }),
+      });
+      setPosDraft({ code: "", name: "", contactName: "", phone: "" });
+      await loadPointsOfSale();
+      setSelectedPosId(String(point.id));
+      await loadPosInventory(String(point.id));
+      setNotice("تم إنشاء نقطة البيع بنجاح.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر إنشاء نقطة البيع");
+    } finally { setBusy(false); }
+  }
+
+  async function togglePointOfSale(point: PointOfSale) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<PointOfSale>(token, `/api/v1/points-of-sale/${point.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_active: !point.is_active }),
+      });
+      await loadPointsOfSale();
+      setNotice(point.is_active ? "تم إيقاف نقطة البيع." : "تم تفعيل نقطة البيع.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تغيير حالة نقطة البيع");
+    } finally { setBusy(false); }
+  }
+
+  function togglePrintCard(cardId: string) {
+    setSelectedPrintCardIds((current) =>
+      current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]
+    );
+  }
+
+  async function printSelectedCards() {
+    if (!selectedPosId || selectedPrintCardIds.length === 0) {
+      setError("اختر نقطة البيع وكرتاً واحداً على الأقل.");
+      return;
+    }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await apiRequest<PrintJobResult>(token, "/api/v1/print-jobs", {
+        method: "POST",
+        body: JSON.stringify({
+          idempotency_key: `print-${crypto.randomUUID()}`,
+          point_of_sale_id: Number(selectedPosId),
+          card_ids: selectedPrintCardIds,
+          template_code: printTemplate,
+          is_reprint: false,
+        }),
+      });
+      setSelectedPrintCardIds([]);
+      await Promise.all([loadCards(), loadPosInventory(selectedPosId)]);
+      setNotice(`تم تسجيل طباعة ${result.card_count} كرت: ${result.commercial_card_count} تجاري و${result.free_card_count} مجاني. القيمة التجارية: ${Number(result.total_amount).toFixed(2)}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تنفيذ الطباعة");
+    } finally { setBusy(false); }
+  }
+
   useEffect(() => {
-    if (page === "plans" || page === "cards") {
+    if (page === "plans" || page === "cards" || page === "pos") {
       setError("");
-      Promise.all([loadPlans(), page === "cards" ? loadCards() : Promise.resolve()])
-        .catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل البيانات"));
+      Promise.all([
+        loadPlans(),
+        page === "cards" || page === "pos" ? loadCards() : Promise.resolve(),
+        page === "pos" ? loadPointsOfSale() : Promise.resolve(),
+      ]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل البيانات"));
     }
     // Data is refreshed when the selected section changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
