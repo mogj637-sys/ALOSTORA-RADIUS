@@ -321,7 +321,7 @@ def test_accounting_supports_gigawords_and_closes_sessions_after_router_deactiva
     assert saved.upload_bytes == (2**32) + 15
     assert saved.download_bytes == 30
     assert saved.used_seconds == 40
-    assert saved.status == "generated"
+    assert saved.status == "exhausted"
     session = db.query(RadiusSession).filter_by(acct_session_id=base["acct_session_id"]).one()
     assert session.stopped_at is not None
     db.close()
