@@ -504,6 +504,54 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  function renderPointsOfSale() {
+    const printableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
+    const activePoints = points.filter((point) => point.is_active);
+    return (
+      <>
+        <div className="section-heading">
+          <div><h2>نقاط البيع والطباعة</h2><p>أنشئ نقاط البيع، راجع القيمة التجارية للكروت المطبوعة، ثم خصص دفعات الكروت بالطباعة.</p></div>
+        </div>
+        <form className="panel form-grid" onSubmit={createPointOfSale}>
+          <label>رمز نقطة البيع<input value={posDraft.code} onChange={(e) => setPosDraft({ ...posDraft, code: e.target.value })} required minLength={2} maxLength={50} /></label>
+          <label>اسم نقطة البيع<input value={posDraft.name} onChange={(e) => setPosDraft({ ...posDraft, name: e.target.value })} required minLength={2} maxLength={150} /></label>
+          <label>اسم المسؤول<input value={posDraft.contactName} onChange={(e) => setPosDraft({ ...posDraft, contactName: e.target.value })} /></label>
+          <label>رقم الهاتف<input value={posDraft.phone} onChange={(e) => setPosDraft({ ...posDraft, phone: e.target.value })} /></label>
+          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "إضافة نقطة بيع"}</button></div>
+        </form>
+        <div className="section-heading compact-heading"><div><h2>النقاط المسجلة</h2></div><span className="count-tag">{points.length} نقطة</span></div>
+        <div className="table-wrap">
+          <table><thead><tr><th>الرمز</th><th>النقطة</th><th>المسؤول</th><th>الهاتف</th><th>الحالة</th><th>الإجراء</th></tr></thead>
+            <tbody>{points.map((point) => <tr key={point.id}><td>{point.code}</td><td>{point.name}</td><td>{point.contact_name || "—"}</td><td>{point.phone || "—"}</td><td>{point.is_active ? "مفعلة" : "متوقفة"}</td><td><button type="button" className="table-action" disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف" : "تفعيل"}</button></td></tr>)}</tbody>
+          </table>
+          {points.length === 0 && <div className="empty-state">لا توجد نقاط بيع بعد. أضف أول نقطة من النموذج.</div>}
+        </div>
+        <div className="section-heading compact-heading"><div><h2>ملخص نقطة البيع</h2><p>القيمة هنا هي إجمالي قيمة الكروت التجارية التي تم ترحيلها بالطباعة، وليست تحصيلات نقدية.</p></div></div>
+        <div className="panel pos-print-panel">
+          <label>اختر نقطة البيع<select value={selectedPosId} onChange={(e) => { setSelectedPosId(e.target.value); loadPosInventory(e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الملخص")); }}><option value="">اختر نقطة بيع</option>{activePoints.map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}</option>)}</select></label>
+          {posInventory && <div className="pos-metrics">
+            <div><span>الكروت المخصصة</span><strong>{posInventory.allocated_cards}</strong></div>
+            <div><span>بدأ استخدامها</span><strong>{posInventory.used_cards}</strong></div>
+            <div><span>الكروت الموقوفة</span><strong>{posInventory.suspended_cards}</strong></div>
+            <div><span>القيمة التجارية المطبوعة</span><strong>{Number(posInventory.commercial_printed_value).toLocaleString("en-US")}</strong></div>
+            <div><span>كروت مجانية مطبوعة</span><strong>{posInventory.free_cards_printed}</strong></div>
+          </div>}
+        </div>
+        <div className="section-heading compact-heading"><div><h2>طباعة وتخصيص الكروت</h2><p>حدد الكروت المنشأة غير المخصصة. عند تنفيذ العملية تُسجل القيمة التجارية مباشرة على نقطة البيع.</p></div><span className="count-tag">{selectedPrintCardIds.length} محدد</span></div>
+        <div className="panel print-controls">
+          <label>قالب الطباعة<input value={printTemplate} onChange={(e) => setPrintTemplate(e.target.value)} maxLength={80} /></label>
+          <button type="button" disabled={busy || !selectedPosId || selectedPrintCardIds.length === 0} onClick={printSelectedCards}>{busy ? "جارٍ تسجيل الطباعة..." : `طباعة وترحيل ${selectedPrintCardIds.length} كرت`}</button>
+        </div>
+        <div className="table-wrap">
+          <table><thead><tr><th><input aria-label="تحديد كل الكروت المعروضة" type="checkbox" checked={printableCards.length > 0 && printableCards.every((card) => selectedPrintCardIds.includes(card.id))} onChange={(e) => setSelectedPrintCardIds(e.target.checked ? printableCards.map((card) => card.id) : [])} /></th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>الباقة</th><th>السعر</th><th>النوع</th></tr></thead>
+            <tbody>{printableCards.map((card) => <tr key={card.id}><td><input type="checkbox" checked={selectedPrintCardIds.includes(card.id)} onChange={() => togglePrintCard(card.id)} /></td><td>{card.serial_number}</td><td>{card.username}</td><td>{plans.find((plan) => plan.id === card.plan_id)?.name ?? card.plan_id}</td><td>{card.is_free ? "مجاني" : Number(card.price_snapshot).toLocaleString("en-US")}</td><td>{card.is_free ? "خاص / مجاني" : "تجاري"}</td></tr>)}</tbody>
+          </table>
+          {printableCards.length === 0 && <div className="empty-state">لا توجد كروت منشأة غير مخصصة للطباعة حالياً. أنشئ كروتاً أولاً من قسم الكروت.</div>}
+        </div>
+      </>
+    );
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -514,17 +562,18 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>نظرة عامة</button>
           <button className={page === "plans" ? "nav-item active" : "nav-item"} onClick={() => setPage("plans")}>الباقات</button>
           <button className={page === "cards" ? "nav-item active" : "nav-item"} onClick={() => setPage("cards")}>الكروت</button>
+          <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>نقاط البيع والطباعة</button>
         </nav>
         <div className="sidebar-foot">ALOSTORA-RADIUS · 0.4.0</div>
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : "إدارة الكروت"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : "نقاط البيع والطباعة"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : renderCards()}
+        {page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : renderPointsOfSale()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
