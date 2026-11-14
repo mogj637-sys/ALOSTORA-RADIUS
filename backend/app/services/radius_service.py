@@ -444,14 +444,20 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
     session.last_packet_fingerprint = fingerprint
     router.last_seen_at = max(_utc(router.last_seen_at), event_time)
 
-    disconnect_required = card.status in {"suspended", "exhausted"} or not router.is_active
+    disconnect_required = card.status in {"suspended", "exhausted", "expired"} or not router.is_active
     reason = "الكرت أو الراوتر متوقف ويجب فصل الجلسة" if disconnect_required else "تم تحديث المحاسبة"
-    remaining_time, remaining_data = _remaining_limits(card, event_time)
-    if remaining_time is not None and remaining_time <= 0:
+    validity_expired = card.expires_at is not None and _utc(card.expires_at) <= event_time
+    time_limit = _snapshot_limit(card, "session_time_limit_seconds")
+    data_limit = _snapshot_limit(card, "data_limit_bytes")
+    if validity_expired:
+        card.status = "expired"
+        disconnect_required = True
+        reason = "انتهت صلاحية الكرت ويجب فصل الجلسة"
+    elif time_limit is not None and int(card.used_seconds) >= time_limit:
         card.status = "exhausted"
         disconnect_required = True
         reason = "انتهى رصيد وقت الاستخدام ويجب فصل الجلسة"
-    elif remaining_data is not None and remaining_data <= 0:
+    elif data_limit is not None and int(card.upload_bytes) + int(card.download_bytes) >= data_limit:
         card.status = "exhausted"
         disconnect_required = True
         reason = "انتهى رصيد البيانات ويجب فصل الجلسة"
