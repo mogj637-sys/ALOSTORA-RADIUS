@@ -71,6 +71,7 @@ type PrintJobHistory = {
 
 type PrintJobResult = {
   id: string;
+  template_code: string | null;
   card_count: number;
   commercial_card_count: number;
   free_card_count: number;
@@ -300,6 +301,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         }),
       });
       setSelectedPrintCardIds([]);
+      setPrintTemplate(result.template_code || printTemplate);
       setPrintPreviewCards(result.items);
       await Promise.all([loadCards(), loadPosInventory(selectedPosId), loadPrintHistory(selectedPosId)]);
       setNotice(`تم تسجيل طباعة ${result.card_count} كرت: ${result.commercial_card_count} تجاري و${result.free_card_count} مجاني. القيمة التجارية: ${Number(result.total_amount).toFixed(2)}.`);
@@ -466,6 +468,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           is_reprint: true,
         }),
       });
+      setPrintTemplate(result.template_code || printTemplate);
       setPrintPreviewCards(result.items);
       await Promise.all([loadPosInventory(selectedPosId), loadPrintHistory(selectedPosId)]);
       setNotice(`تم تجهيز نسخة إعادة طباعة من ${result.card_count} كرت. لم تتم إضافة قيمة جديدة للمخزون.`);
