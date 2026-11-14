@@ -87,7 +87,7 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 Set the result as `RADIUS_INTERNAL_API_KEY`. Keep it identical for the API and FreeRADIUS containers. After registering a router in the dashboard, enter its RADIUS client IP/CIDR, NAS Identifier and shared secret, then reload the client list:
 
 ```bash
-docker compose restart radius
+docker compose restart freeradius
 ```
 
 The first integration uses the REST-backed authorization/accounting endpoints. CoA/Disconnect and automatic client-list refresh are not implemented yet, and the service still needs end-to-end validation against a real MikroTik router.
