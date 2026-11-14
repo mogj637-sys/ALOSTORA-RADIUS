@@ -27,7 +27,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
     db.commit()
 
     expires_in = int(os.getenv("JWT_ACCESS_TOKEN_MINUTES", "30")) * 60
-    token = create_access_token(str(user.id))
+    try:
+        token = create_access_token(str(user.id))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="مفتاح الأمان APP_SECRET_KEY غير مضبوط") from exc
     return TokenResponse(access_token=token, expires_in=expires_in)
 
 
