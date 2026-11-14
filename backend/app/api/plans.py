@@ -2,12 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_owner
 from app.db.session import get_db
 from app.models.core import Plan
 from app.schemas.plans import PlanCreate, PlanResponse
 
-router = APIRouter(prefix="/api/v1/plans", tags=["plans"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/v1/plans", tags=["plans"], dependencies=[Depends(get_current_owner)])
 
 
 @router.get("", response_model=list[PlanResponse])
