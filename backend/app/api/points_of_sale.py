@@ -70,7 +70,6 @@ def point_of_sale_inventory(point_id: int, db: Session = Depends(get_db)):
 
     allocated = db.query(func.count(Card.id)).filter(
         Card.assigned_pos_id == point_id,
-        Card.status.in_([ "allocated", "active", "suspended" ]),
     ).scalar() or 0
     used = db.query(func.count(Card.id)).filter(
         Card.assigned_pos_id == point_id,
@@ -80,10 +79,9 @@ def point_of_sale_inventory(point_id: int, db: Session = Depends(get_db)):
         Card.assigned_pos_id == point_id,
         Card.status == "suspended",
     ).scalar() or 0
-    stock_value = db.query(func.coalesce(func.sum(Card.price_snapshot), 0)).filter(
+    printed_value = db.query(func.coalesce(func.sum(Card.price_snapshot), 0)).filter(
         Card.assigned_pos_id == point_id,
         Card.is_free.is_(False),
-        Card.status.in_([ "allocated", "active", "suspended" ]),
     ).scalar() or Decimal("0.00")
     free_printed = (
         db.query(func.count(PrintJobItem.id))
@@ -101,6 +99,6 @@ def point_of_sale_inventory(point_id: int, db: Session = Depends(get_db)):
         allocated_cards=allocated,
         used_cards=used,
         suspended_cards=suspended,
-        commercial_printed_value=stock_value,
+        commercial_printed_value=printed_value,
         free_cards_printed=free_printed,
     )
