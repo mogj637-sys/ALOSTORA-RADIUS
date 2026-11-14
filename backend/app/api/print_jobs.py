@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -111,9 +111,13 @@ def _existing_job(
 @router.post("", response_model=PrintJobResponse, status_code=status.HTTP_201_CREATED)
 def create_print_job(
     payload: PrintJobCreate,
+    response: Response,
     db: Session = Depends(get_db),
     user: AdminUser = Depends(get_current_owner),
 ):
+    # Voucher credentials are returned only to authenticated owners and must not be cached.
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    response.headers["Pragma"] = "no-cache"
     existing = _existing_job(db, payload)
     if existing is not None:
         return existing
