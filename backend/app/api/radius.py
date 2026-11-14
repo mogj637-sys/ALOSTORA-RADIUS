@@ -13,7 +13,6 @@ from app.schemas.radius import (
     RadiusAccountingRequest,
     RadiusAccountingResponse,
     RadiusAuthorizeRequest,
-    RadiusAuthorizeResponse,
 )
 from app.services.credentials import CredentialEncryptionNotConfigured
 from app.services.router_secrets import RouterSecretEncryptionNotConfigured, decrypt_router_secret
@@ -147,7 +146,7 @@ def _normalize_accounting(payload: dict[str, Any]) -> RadiusAccountingRequest:
 
 @router.post(
     "/authorize",
-    response_model=RadiusAuthorizeResponse,
+    response_model=dict[str, str | int],
     dependencies=[Depends(require_radius_internal_key)],
 )
 def radius_authorize(payload: dict[str, Any] = Body(...), db: Session = Depends(get_db)):
