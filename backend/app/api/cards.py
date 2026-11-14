@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_owner
 from app.db.session import get_db
 from app.models.core import Card, CardEvent, Plan
 from app.schemas.cards import (
@@ -20,7 +20,7 @@ from app.schemas.cards import (
 from app.services.card_generator import generate_password, generate_username
 from app.services.credentials import CredentialEncryptionNotConfigured, encrypt_credential
 
-router = APIRouter(prefix="/api/v1/cards", tags=["cards"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/v1/cards", tags=["cards"], dependencies=[Depends(get_current_owner)])
 
 
 def _plan_snapshot(plan: Plan) -> dict:
