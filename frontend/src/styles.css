@@ -187,3 +187,32 @@ tbody tr:hover { background: #fbfdfc; }
 .mode-tab.active { background: #e9f6f0; border-color: #b9e2d0; color: #147858; font-weight: 700; }
 .form-grid .checkbox-label { display: flex; flex-direction: row; align-items: center; gap: 9px; align-self: center; }
 .checkbox-label input { width: 16px; height: 16px; accent-color: #168767; }
+
+
+/* Plan and card lifecycle controls */
+.table-action {
+  border: 1px solid #d8e9e1;
+  background: #f3faf6;
+  color: #176b51;
+  border-radius: 6px;
+  padding: 6px 9px;
+  margin: 2px 3px;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.table-action:disabled { opacity: .55; cursor: wait; }
+.table-action.danger-action { border-color: #f0d5d7; background: #fff5f5; color: #a52d36; }
+.actions-cell { min-width: 135px; }
+.card-search { display: flex; align-items: center; gap: 12px; margin: 0 0 13px; }
+.card-search label { color: #354258; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.card-search input {
+  width: min(100%, 380px); height: 39px; border: 1px solid #dfe5ed; border-radius: 8px;
+  padding: 0 11px; background: #fff; color: #253249; font: inherit; font-size: 12px;
+}
+.card-search input:focus { outline: none; border-color: #15916d; box-shadow: 0 0 0 3px #15916d18; }
+@media (max-width: 620px) {
+  .card-search { align-items: stretch; flex-direction: column; gap: 7px; }
+  .card-search input { width: 100%; }
+}
