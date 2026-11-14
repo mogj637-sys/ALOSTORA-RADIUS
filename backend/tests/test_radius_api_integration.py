@@ -528,8 +528,8 @@ def test_radius_authorize_supports_chap_challenge_response(owner_client):
         json={
             "nas_identifier": router["nas_identifier"],
             "username": card["username"],
-            "chap_password_hex": chap_packet.hex(),
-            "chap_challenge_hex": challenge.hex(),
+            "CHAP-Password": {"type": "octets", "value": [chap_packet.hex()]},
+            "CHAP-Challenge": {"type": "octets", "value": [challenge.hex()]},
         },
     )
     assert accepted.status_code == 200
