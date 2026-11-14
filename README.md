@@ -72,3 +72,22 @@
 التصميم يستهدف Linux وWindows 10 وWindows 11. خدمات التطبيق وقاعدة البيانات تُشغّل بالحاويات. FreeRADIUS خدمة Linux-first وستعمل داخل حاوية Linux/WSL2 على Windows. يجب التحقق من متطلبات Docker/WSL2 الفعلية على إصدار Windows 10 المستخدم قبل اعتماد دعمه.
 
 لا تضع كلمات مرور أو RADIUS secrets أو بيانات راوترات حقيقية في المستودع.
+
+
+## FreeRADIUS container
+
+Docker Compose now includes a FreeRADIUS 3 service listening on UDP 1812 (authentication) and UDP 1813 (accounting). It loads active RADIUS clients from the protected API when the container starts.
+
+Before starting the stack, add a private internal key to `.env`:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Set the result as `RADIUS_INTERNAL_API_KEY`. Keep it identical for the API and FreeRADIUS containers. After registering a router in the dashboard, enter its RADIUS client IP/CIDR, NAS Identifier and shared secret, then reload the client list:
+
+```bash
+docker compose restart radius
+```
+
+The first integration uses the REST-backed authorization/accounting endpoints. CoA/Disconnect and automatic client-list refresh are not implemented yet, and the service still needs end-to-end validation against a real MikroTik router.
