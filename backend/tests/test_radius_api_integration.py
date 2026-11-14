@@ -337,3 +337,127 @@ def test_accounting_supports_gigawords_and_closes_sessions_after_router_deactiva
     )
     assert new_start.status_code == 200
     assert new_start.json()["processed"] is False
+
+
+def test_radius_rejects_wrong_password_without_starting_first_use(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    card, _ = _card(client, headers)
+    response = client.post(
+        "/internal/radius/authorize",
+        headers=_radius_headers(),
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": card["username"],
+            "password": "definitely-the-wrong-password",
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["accepted"] is False
+
+    db = SessionLocal()
+    saved = db.get(Card, UUID(card["id"]))
+    assert saved.first_used_at is None
+    assert saved.expires_at is None
+    assert saved.radius_auth_reserved_until is None
+    db.close()
+
+
+def test_radius_accounting_handles_gigawords_and_out_of_order_packets(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    card, password = _card(client, headers, time_limit=None, data_limit=None, validity=None)
+    internal_headers = _radius_headers()
+    auth = client.post(
+        "/internal/radius/authorize",
+        headers=internal_headers,
+        json={"nas_identifier": router["nas_identifier"], "username": card["username"], "password": password},
+    )
+    assert auth.status_code == 200
+
+    started_at = datetime.now(timezone.utc)
+    base = {
+        "nas_identifier": router["nas_identifier"],
+        "username": card["username"],
+        "acct_session_id": "wide-" + secrets.token_hex(6),
+    }
+    started = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={**base, "status_type": "Start", "event_timestamp": started_at.isoformat()},
+    )
+    assert started.status_code == 200
+
+    latest = {
+        **base,
+        "status_type": "Interim-Update",
+        "event_timestamp": (started_at + timedelta(seconds=60)).isoformat(),
+        "session_time_seconds": 60,
+        "input_octets": 10,
+        "output_octets": 20,
+        "input_gigawords": 1,
+        "output_gigawords": 2,
+    }
+    first = client.post("/internal/radius/accounting", headers=internal_headers, json=latest)
+    assert first.status_code == 200
+
+    older = {
+        **base,
+        "status_type": "Interim-Update",
+        "event_timestamp": (started_at + timedelta(seconds=30)).isoformat(),
+        "session_time_seconds": 30,
+        "input_octets": 5,
+        "output_octets": 10,
+    }
+    out_of_order = client.post("/internal/radius/accounting", headers=internal_headers, json=older)
+    assert out_of_order.status_code == 200
+
+    db = SessionLocal()
+    saved = db.get(Card, UUID(card["id"]))
+    assert saved.upload_bytes == (2**32) + 10
+    assert saved.download_bytes == (2 * (2**32)) + 20
+    assert saved.used_seconds == 60
+    db.close()
+
+
+def test_validity_expiry_continues_after_disconnect(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    card, password = _card(client, headers, time_limit=None, data_limit=None, validity=1)
+    internal_headers = _radius_headers()
+    auth = client.post(
+        "/internal/radius/authorize",
+        headers=internal_headers,
+        json={"nas_identifier": router["nas_identifier"], "username": card["username"], "password": password},
+    )
+    assert auth.status_code == 200
+
+    started_at = datetime.now(timezone.utc)
+    base = {
+        "nas_identifier": router["nas_identifier"],
+        "username": card["username"],
+        "acct_session_id": "expiry-" + secrets.token_hex(6),
+    }
+    started = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={**base, "status_type": "Start", "event_timestamp": started_at.isoformat()},
+    )
+    assert started.status_code == 200
+    stopped = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={
+            **base,
+            "status_type": "Stop",
+            "event_timestamp": (started_at + timedelta(seconds=3)).isoformat(),
+            "session_time_seconds": 1,
+        },
+    )
+    assert stopped.status_code == 200
+
+    db = SessionLocal()
+    saved = db.get(Card, UUID(card["id"]))
+    assert saved.status == "expired"
+    assert saved.used_seconds == 1
+    db.close()
