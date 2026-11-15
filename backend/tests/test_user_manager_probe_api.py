@@ -239,3 +239,79 @@ def test_single_user_preview_recognizes_source_link_without_card(owner_client, m
     data = response.json()
     assert data["classification"] == "already_linked"
     assert data["credential_state"] == "unavailable"
+
+
+
+def test_preview_listing_is_paginated_read_only_and_scoped_to_router(owner_client, monkeypatch):
+    client, headers, _ = owner_client
+    router_id = _create_router(client, headers)
+
+    def fake_inspect(**kwargs):
+        username = kwargs["target_username"]
+        return {
+            "external_id": f"*{username}",
+            "username": username,
+            "actual_profile": "basic",
+            "usage": {},
+            "profile": None,
+            "limitations": [],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(user_manager, "inspect_user_manager_user", fake_inspect)
+    for username in ("preview-a", "preview-b", "preview-c"):
+        created = client.post(
+            f"/api/v1/routers/{router_id}/user-manager/preview-user",
+            headers=headers,
+            json={"username": username},
+        )
+        assert created.status_code == 200, created.text
+
+    first = client.get(
+        f"/api/v1/routers/{router_id}/user-manager/previews?offset=0&limit=2",
+        headers=headers,
+    )
+    assert first.status_code == 200, first.text
+    data = first.json()
+    assert data["total"] == 3
+    assert len(data["items"]) == 2
+    assert data["read_only"] is True
+    assert data["imported"] is False
+    assert data["credentials_read"] is False
+    assert [row["username"] for row in data["items"]] == ["preview-a", "preview-b"]
+    assert all(row["credential_state"] == "unavailable" for row in data["items"])
+    assert "password" not in first.text.lower()
+
+    second = client.get(
+        f"/api/v1/routers/{router_id}/user-manager/previews?offset=2&limit=2",
+        headers=headers,
+    )
+    assert second.status_code == 200, second.text
+    assert [row["username"] for row in second.json()["items"]] == ["preview-c"]
+
+
+def test_preview_listing_rejects_run_from_another_router(owner_client):
+    client, headers, _ = owner_client
+    router_a = _create_router(client, headers)
+    router_b = _create_router(client, headers)
+    db = SessionLocal()
+    try:
+        run = UserManagerSyncRun(
+            id=__import__("uuid").uuid4(),
+            router_id=router_a,
+            run_type="preview",
+            status="completed",
+            discovered_users=0,
+            checkpoint={"mode": "single_user_preview"},
+        )
+        db.add(run)
+        db.commit()
+        run_id = str(run.id)
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/api/v1/routers/{router_b}/user-manager/previews?run_id={run_id}",
+        headers=headers,
+    )
+    assert response.status_code == 404
