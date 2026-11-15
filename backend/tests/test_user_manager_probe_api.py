@@ -323,3 +323,66 @@ def test_preview_listing_rejects_run_from_another_router(owner_client):
         headers=headers,
     )
     assert response.status_code == 404
+
+
+def test_preview_run_history_is_limited_read_only_and_scoped_to_router(owner_client):
+    client, headers, _ = owner_client
+    router_id = _create_router(client, headers)
+    db = SessionLocal()
+    try:
+        run_ids = []
+        for index in range(3):
+            run = UserManagerSyncRun(
+                id=__import__("uuid").uuid4(),
+                router_id=router_id,
+                run_type="preview",
+                status="completed",
+                discovered_users=index + 1,
+                checkpoint={"mode": "single_user_preview"},
+            )
+            db.add(run)
+            db.flush()
+            if index != 1:
+                db.add(UserManagerImportPreview(
+                    sync_run_id=run.id,
+                    external_user_id=f"*HISTORY{index}",
+                    username=f"history-{index}",
+                    source_profile_id="basic",
+                    classification="new",
+                    credential_mode=None,
+                    credential_state="unavailable",
+                    matched_card_id=None,
+                    safe_snapshot={"usage": {}},
+                    issues=[],
+                    source_fingerprint=f"history-fingerprint-{index}",
+                ))
+            run_ids.append(str(run.id))
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/api/v1/routers/{router_id}/user-manager/previews/runs?limit=2",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert data["items"][0]["id"] == run_ids[2]
+    assert data["items"][0]["preview_count"] == 1
+    assert data["items"][1]["id"] == run_ids[1]
+    assert data["items"][1]["preview_count"] == 0
+    assert data["read_only"] is True
+    assert data["imported"] is False
+    assert data["credentials_read"] is False
+    assert "password" not in response.text.lower()
+
+
+def test_preview_run_history_rejects_unknown_router(owner_client):
+    client, headers, _ = owner_client
+    response = client.get(
+        "/api/v1/routers/999999/user-manager/previews/runs",
+        headers=headers,
+    )
+    assert response.status_code == 404
+
