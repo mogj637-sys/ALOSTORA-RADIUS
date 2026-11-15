@@ -172,6 +172,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [cardSearch, setCardSearch] = useState("");
+  const [cardOffset, setCardOffset] = useState(0);
+  const [hasMoreCards, setHasMoreCards] = useState(false);
   const [points, setPoints] = useState<PointOfSale[]>([]);
   const [selectedPosId, setSelectedPosId] = useState("");
   const [posInventory, setPosInventory] = useState<PosInventory | null>(null);
@@ -248,11 +250,20 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } finally { setBusy(false); }
   }
 
-  async function loadCards(search = cardSearch) {
-    const params = new URLSearchParams({ offset: "0", limit: "200" });
+  async function loadCards(search = cardSearch, offset = cardOffset) {
+    const params = new URLSearchParams({ offset: String(offset), limit: "200" });
     if (search.trim()) params.set("search", search.trim());
     const result = await apiRequest<Card[]>(token, `/api/v1/cards?${params.toString()}`);
     setCards(result);
+    setHasMoreCards(result.length === 200);
+  }
+
+  function changeCardPage(nextOffset: number) {
+    const safeOffset = Math.max(0, nextOffset);
+    setCardOffset(safeOffset);
+    loadCards(cardSearch, safeOffset).catch((err) =>
+      setError(err instanceof Error ? err.message : "تعذر تحميل صفحة الكروت")
+    );
   }
 
   async function loadPosInventory(pointId: string) {
@@ -603,9 +614,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <div className="table-wrap"><table><thead><tr><th>التسلسل</th><th>اسم المستخدم</th><th>كلمة المرور</th></tr></thead><tbody>{generatedCards.map((card) => <tr key={card.serial_number}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.password || "بدون كلمة مرور"}</td></tr>)}</tbody></table></div>
           </section>
         )}
-        <div className="section-heading compact-heading"><div><h2>سجل الكروت</h2><p>ابحث باسم المستخدم أو الرقم التسلسلي، ثم أوقف الكرت أو أعد تفعيله أو ألغِ الكرت غير المستخدم.</p></div><span className="count-tag">حتى 50 نتيجة</span></div>
-        <div className="card-search"><label htmlFor="card-search">بحث في الكروت</label><input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); loadCards(e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" /></div>
-        <div className="table-wrap"><table><thead><tr><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>{cards.map((card) => <tr key={card.id}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td><td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td><td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td><td>{card.is_free ? "نعم" : "لا"}</td><td className="actions-cell">{card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null}{["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button>}</td></tr>)}</tbody></table>{cards.length === 0 && <div className="empty-state">لا توجد كروت تطابق البحث.</div>}</div>
+        <div className="section-heading compact-heading"><div><h2>سجل الكروت</h2><p>ابحث باسم المستخدم أو الرقم التسلسلي، ثم أوقف الكرت أو أعد تفعيله أو ألغِ الكرت غير المستخدم.</p></div><span className="count-tag">200 كرت لكل صفحة</span></div>
+        <div className="card-search"><label htmlFor="card-search">بحث في الكروت</label><input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" /></div>
+        <div className="table-wrap"><table><thead><tr><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>{cards.map((card) => <tr key={card.id}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td><td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td><td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td><td>{card.is_free ? "نعم" : "لا"}</td><td className="actions-cell">{card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null}{["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button>}</td></tr>)}</tbody></table>{cards.length === 0 && <div className="empty-state">لا توجد كروت تطابق البحث في هذه الصفحة.</div>}</div>
+        <div className="pagination-controls">
+          <button type="button" className="table-action" disabled={cardOffset === 0 || busy} onClick={() => changeCardPage(cardOffset - 200)}>السابق</button>
+          <span>الصفحة {Math.floor(cardOffset / 200) + 1}</span>
+          <button type="button" className="table-action" disabled={!hasMoreCards || busy} onClick={() => changeCardPage(cardOffset + 200)}>التالي</button>
+        </div>
       </>
     );
   }
@@ -657,8 +673,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <div className="section-heading compact-heading"><div><h2>الكروت الجاهزة للتخصيص</h2><p>حدد الكروت المنشأة وغير المخصصة. عند التسجيل تُرحّل القيمة التجارية مرة واحدة فقط.</p></div><span className="count-tag">{printableCards.length} كرت</span></div>
             <div className="card-search">
               <label htmlFor="pos-card-search">بحث عن كرت</label>
-              <input id="pos-card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); loadCards(e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" />
-              <button type="button" className="table-action" onClick={() => loadCards().catch((err) => setError(err instanceof Error ? err.message : "تعذر التحديث"))}>تحديث</button>
+              <input id="pos-card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" />
+              <button type="button" className="table-action" onClick={() => loadCards(cardSearch, cardOffset).catch((err) => setError(err instanceof Error ? err.message : "تعذر التحديث"))}>تحديث</button>
             </div>
             <div className="table-wrap">
               <table><thead><tr><th>اختيار</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>الباقة</th><th>القيمة</th><th>التصنيف</th></tr></thead>
@@ -670,7 +686,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   <td>{card.is_free ? "مجاني" : "تجاري"}</td>
                 </tr>)}</tbody>
               </table>
-              {printableCards.length === 0 && <div className="empty-state">لا توجد كروت جاهزة في النتائج الحالية.</div>}
+              {printableCards.length === 0 && <div className="empty-state">لا توجد كروت جاهزة في هذه الصفحة من نتائج البحث.</div>}
+            </div>
+            <div className="pagination-controls">
+              <button type="button" className="table-action" disabled={cardOffset === 0 || busy} onClick={() => changeCardPage(cardOffset - 200)}>السابق</button>
+              <span>صفحة {Math.floor(cardOffset / 200) + 1}</span>
+              <button type="button" className="table-action" disabled={!hasMoreCards || busy} onClick={() => changeCardPage(cardOffset + 200)}>التالي</button>
             </div>
             <div className="panel pos-print-panel">
               <label>قالب الطباعة
