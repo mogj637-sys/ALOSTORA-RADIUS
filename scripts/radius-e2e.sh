@@ -59,7 +59,7 @@ printf "%s\n" "$wrong_output"
 printf "%s\n" "$wrong_output" | grep -q "Access-Reject"
 
 CHALLENGE="0102030405060708"
-CHAP_PASSWORD="$(python3 -c '''import hashlib,sys; p=sys.argv[1].encode(); c=bytes.fromhex(sys.argv[2]); i=b"\\x01"; print((i+hashlib.md5(i+p+c).digest()).hex())''' "$PASSWORD" "$CHALLENGE")"
+CHAP_PASSWORD="$(python3 -c "import hashlib,sys; p=sys.argv[1].encode(); c=bytes.fromhex(sys.argv[2]); i=bytes([1]); print((i+hashlib.md5(i+p+c).digest()).hex())" "$PASSWORD" "$CHALLENGE")"
 chap_output="$(printf "User-Name = \"%s\"\nCHAP-Password = 0x%s\nCHAP-Challenge = 0x%s\nNAS-Identifier = \"%s\"\nNAS-IP-Address = %s\n" "$USER" "$CHAP_PASSWORD" "$CHALLENGE" "$NAS" "$SERVER" | radclient -x -r 1 -t 3 "$SERVER:1812" auth "$RADIUS_TEST_SHARED_SECRET" 2>&1)"
 printf "%s\n" "$chap_output"
 printf "%s\n" "$chap_output" | grep -q "Access-Accept"
