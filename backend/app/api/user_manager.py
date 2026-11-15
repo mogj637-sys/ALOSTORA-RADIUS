@@ -183,9 +183,15 @@ def preview_user_manager_user_endpoint(
         )
         .first()
     )
+    # A source mapping remains meaningful even if its card_id is temporarily
+    # null (for example, an interrupted/legacy migration). Preserve that fact
+    # so the preview cannot misclassify the source record as a brand-new card.
     links = (
-        {str(source_record["external_id"]): str(source_link[0])}
-        if source_link is not None and source_link[0] is not None else {}
+        {
+            str(source_record["external_id"]):
+                str(source_link[0]) if source_link[0] is not None else None
+        }
+        if source_link is not None else {}
     )
     classified = build_user_manager_preview(
         [source_record],
