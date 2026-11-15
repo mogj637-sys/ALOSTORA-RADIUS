@@ -326,7 +326,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [userManagerPreviews, setUserManagerPreviews] = useState<UserManagerPreviewList | null>(null);
   const [savingUserPreview, setSavingUserPreview] = useState(false);
   const [inspectingUser, setInspectingUser] = useState(false);
-  const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
+  const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
   const [cards, setCards] = useState<Card[]>([]);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
@@ -395,7 +395,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           routeros_version: routerDraft.routerosVersion || null,
         }),
       });
-      setRouterDraft({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
+      setRouterDraft({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
       await loadRouters();
       setNotice("تم تسجيل الراوتر وحفظ أسراره مشفرة.");
     } catch (err) {
@@ -1206,7 +1206,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <label>NAS Identifier<input value={routerDraft.nasIdentifier} onChange={(e) => setRouterDraft({ ...routerDraft, nasIdentifier: e.target.value })} required maxLength={150} placeholder="مثال: router-aden-01" /><small className="field-hint">يجب أن يطابق اسم الهوية في MikroTik: /system identity.</small></label>
           <label>عنوان الإدارة / IP<input value={routerDraft.managementHost} onChange={(e) => setRouterDraft({ ...routerDraft, managementHost: e.target.value })} required maxLength={255} placeholder="مثال: 192.168.88.1" /></label>
           <label>عنوان RADIUS للراوتر أو CIDR<input value={routerDraft.radiusClientAddress} onChange={(e) => setRouterDraft({ ...routerDraft, radiusClientAddress: e.target.value })} maxLength={255} placeholder="مثال: 192.168.88.1 أو 192.168.88.0/24" /><small className="field-hint">عنوان مصدر حزم RADIUS كما يراه الخادم، وقد يختلف عن عنوان إدارة API. إذا تركته فارغاً فلن يُحمّل الراوتر كعميل RADIUS.</small></label>
-          <label>منفذ MikroTik API<input type="number" min="1" max="65535" value={routerDraft.apiPort} onChange={(e) => setRouterDraft({ ...routerDraft, apiPort: e.target.value })} required /></label>
+          <label>منفذ MikroTik API<input type="number" min="1" max="65535" value={routerDraft.apiPort} onChange={(e) => setRouterDraft({ ...routerDraft, apiPort: e.target.value })} required /><small className="field-hint">الافتراضي 8729 لاتصال API المشفر TLS. استخدم 8728 فقط داخل شبكة إدارة موثوقة ومعزولة.</small></label>
           <label>اسم مستخدم API (اختياري)<input value={routerDraft.apiUsername} onChange={(e) => setRouterDraft({ ...routerDraft, apiUsername: e.target.value })} maxLength={120} /></label>
           <label>كلمة مرور API (اختياري)<input type="password" autoComplete="new-password" value={routerDraft.apiSecret} onChange={(e) => setRouterDraft({ ...routerDraft, apiSecret: e.target.value })} minLength={8} maxLength={500} /></label>
           <label>RADIUS Shared Secret<input type="password" autoComplete="new-password" value={routerDraft.radiusSecret} onChange={(e) => setRouterDraft({ ...routerDraft, radiusSecret: e.target.value })} required minLength={8} maxLength={500} /><small className="field-hint">استخدم القيمة نفسها في إعداد /radius على MikroTik؛ لن تظهر مرة أخرى بعد الحفظ.</small></label>
