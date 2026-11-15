@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +12,7 @@ from app.models.core import (
     Card,
     CardEvent,
     PointOfSale,
+    Plan,
     PosInventoryMovement,
     PosAccountEntry,
     PrintJob,
@@ -276,11 +277,12 @@ def create_print_job(
                 )
             )
 
-        # Original commercial allocation creates one debit in the POS ledger.
-        # Free cards and reprints never create a financial charge.
+        # Original commercial allocation creates a debit for delivered cards
+        # and a credit for configured commissions. Free cards and reprints are excluded.
         if not payload.is_reprint:
+            commercial_cards = [card for card in cards if not card.is_free]
             commercial_total = sum(
-                (card.price_snapshot for card in cards if not card.is_free),
+                (card.price_snapshot for card in commercial_cards),
                 Decimal("0.00"),
             )
             if commercial_total > 0:
@@ -293,6 +295,44 @@ def create_print_job(
                         description=f"تسليم كروت عبر عملية الطباعة {job.id}",
                         reference=str(job.id),
                         idempotency_key=f"print-job-account:{job.id}",
+                        created_by=user.username,
+                    )
+                )
+
+            plan_ids = {card.plan_id for card in commercial_cards}
+            plans_by_id = {
+                plan.id: plan
+                for plan in db.query(Plan).filter(Plan.id.in_(plan_ids)).all()
+            } if plan_ids else {}
+            commission_by_plan: dict[int, Decimal] = {}
+            for card in commercial_cards:
+                plan = plans_by_id.get(card.plan_id)
+                if plan is None or plan.commission_type == "none":
+                    continue
+                if plan.commission_type == "percentage":
+                    commission = (
+                        card.price_snapshot * plan.commission_value / Decimal("100")
+                    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                elif plan.commission_type == "fixed":
+                    # A card's historical price snapshot is the hard upper bound.
+                    commission = min(plan.commission_value, card.price_snapshot)
+                else:
+                    continue
+                if commission > 0:
+                    commission_by_plan[plan.id] = (
+                        commission_by_plan.get(plan.id, Decimal("0.00")) + commission
+                    )
+
+            for plan_id, commission_total in commission_by_plan.items():
+                db.add(
+                    PosAccountEntry(
+                        point_of_sale_id=point_of_sale.id,
+                        entry_type="commission",
+                        direction="credit",
+                        amount=commission_total,
+                        description=f"عمولة تسليم باقة {plans_by_id[plan_id].name} عبر الطباعة {job.id}",
+                        reference=str(job.id),
+                        idempotency_key=f"print-job-commission:{job.id}:{plan_id}",
                         created_by=user.username,
                     )
                 )
