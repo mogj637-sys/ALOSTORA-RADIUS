@@ -5,6 +5,12 @@ import pytest
 from app.services import user_manager_routeros as adapter
 
 
+class FakeResponse(list):
+    def __init__(self, rows=None, done_message=None):
+        super().__init__(rows or [])
+        self.done_message = done_message or {}
+
+
 class FakeResource:
     def __init__(self, rows=None, count=None, error=None):
         self.rows = rows or []
@@ -17,16 +23,19 @@ class FakeResource:
             raise self.error
         return self.rows
 
-    def call(self, command, params):
+    def call(self, command, params=None, queries=None):
         assert command == "print"
         if self.error:
             raise self.error
-        self.calls.append((command, dict(params)))
+        params = dict(params or {})
+        queries = dict(queries or {})
+        self.calls.append((command, params, queries))
         if "count-only" in params:
-            assert params["count-only"] == ""
-            return [{"ret": str(self.count)}]
+            assert params["count-only"] is None
+            return FakeResponse(done_message={"ret": str(self.count)})
         self.last_params = params
-        return self.rows
+        self.last_queries = queries
+        return FakeResponse(self.rows)
 
 
 class FakeApi:
@@ -213,12 +222,12 @@ def test_exact_user_inspection_uses_device_query_and_never_requests_password(mon
         "warnings": [],
     }
     assert user_resource.calls[0] == (
-        "print", {"?username": "voucher-100", "count-only": ""}
+        "print", {"count-only": None}, {"username": "voucher-100"}
     )
     assert user_resource.last_params == {
-        "?username": "voucher-100",
         ".proplist": ".id,username,customer,disabled,actual-profile,shared-users,uptime-used,download-used,upload-used,last-seen,active-sessions",
     }
+    assert user_resource.last_queries == {"username": "voucher-100"}
     assert "password" not in user_resource.last_params[".proplist"]
     assert FakePool.last.disconnected is True
 
@@ -301,7 +310,7 @@ def test_exact_user_filter_count_prevents_bulk_read_when_router_ignores_query(mo
         )
 
     assert user_resource.calls == [
-        ("print", {"?username": "voucher-100", "count-only": ""})
+        ("print", {"count-only": None}, {"username": "voucher-100"})
     ]
     assert FakePool.last.disconnected is True
 
@@ -324,7 +333,7 @@ def test_exact_user_count_zero_skips_detail_print(monkeypatch):
 
     assert result is None
     assert user_resource.calls == [
-        ("print", {"?username": "missing-card", "count-only": ""})
+        ("print", {"count-only": None}, {"username": "missing-card"})
     ]
 
 
@@ -357,6 +366,6 @@ def test_profile_relation_count_guard_stops_before_large_detail_read(monkeypatch
         )
 
     assert relation_resource.calls == [
-        ("print", {"?profile": "basic", "count-only": ""})
+        ("print", {"count-only": None}, {"profile": "basic"})
     ]
     assert FakePool.last.disconnected is True
