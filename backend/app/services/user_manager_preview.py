@@ -129,7 +129,11 @@ def build_user_manager_preview(
             "credential_state": credential["credential_state"],
             "safe_snapshot": safe_snapshot,
             "issues": issues,
-            "source_fingerprint": _fingerprint(safe_snapshot),
+            "source_fingerprint": _fingerprint({
+                "safe_snapshot": safe_snapshot,
+                "credential_mode": credential["credential_mode"],
+                "credential_state": credential["credential_state"],
+            }),
         })
 
     return output
