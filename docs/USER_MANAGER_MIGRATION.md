@@ -100,6 +100,7 @@
 - [x] بناء أولي لـ RouterOS API read-only probe: قراءة هوية الجهاز والإصدار واللوحة والحزم، ثم عدّ موارد User Manager فقط دون تحميل الكروت.
 - [x] إضافة endpoint محمي للمالك: POST /api/v1/routers/{router_id}/user-manager/test-connection.
 - [x] إضافة اختبارات mock للاتصال، ورفض v7، وغياب الحزمة، وتنقية أخطاء الاتصال.
+- [x] إضافة زر في صفحة الراوترات لفحص User Manager وعرض أعداد الموارد والتحذيرات بوضع القراءة فقط.
 - [x] بناء جداول source mapping وsync runs/checkpoints.
 - [ ] التحقق من مسارات ونتائج count-only على جهاز User Manager الذي يحدده المستخدم فعلياً؛ الاختبارات الحالية لا تتصل براوتر.
 - [ ] بناء preview/import/incremental sync APIs.
