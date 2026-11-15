@@ -117,6 +117,30 @@ type PosReport = {
   totals: Omit<PosReportRow, "point_of_sale_id" | "point_of_sale_name">;
   points: PosReportRow[];
 };
+type PosStatementEntry = {
+  id: number;
+  created_at: string;
+  entry_type: string;
+  direction: "debit" | "credit";
+  amount: number;
+  description: string | null;
+  reference: string | null;
+  created_by: string | null;
+  debit: number;
+  credit: number;
+  running_balance: number;
+};
+type PosStatement = {
+  point_of_sale_id: number;
+  point_of_sale_name: string;
+  date_from: string;
+  date_to: string;
+  opening_balance: number;
+  total_debit: number;
+  total_credit: number;
+  closing_balance: number;
+  entries: PosStatementEntry[];
+};
 
 type PrintJobHistory = {
   id: string;
@@ -225,6 +249,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [posAccount, setPosAccount] = useState<PosAccountSummary | null>(null);
   const [posEntries, setPosEntries] = useState<PosAccountEntry[]>([]);
   const [posReport, setPosReport] = useState<PosReport | null>(null);
+  const [statementPointId, setStatementPointId] = useState("");
+  const [posStatement, setPosStatement] = useState<PosStatement | null>(null);
   const [reportFrom, setReportFrom] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
   const [reportTo, setReportTo] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
   const [accountDraft, setAccountDraft] = useState({ amount: "", entryType: "payment", direction: "credit" as "debit" | "credit", description: "", reference: "" });
@@ -329,6 +355,50 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       `/api/v1/reports/points-of-sale?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}`,
     );
     setPosReport(result);
+  }
+
+  async function loadPosStatement(pointId = statementPointId, from = reportFrom, to = reportTo) {
+    if (!pointId) { setPosStatement(null); return; }
+    const result = await apiRequest<PosStatement>(
+      token,
+      `/api/v1/reports/points-of-sale/${pointId}/statement?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}`,
+    );
+    setPosStatement(result);
+  }
+
+  async function loadReportData(from = reportFrom, to = reportTo) {
+    const [report, availablePoints] = await Promise.all([
+      apiRequest<PosReport>(token, `/api/v1/reports/points-of-sale?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}`),
+      apiRequest<PointOfSale[]>(token, "/api/v1/points-of-sale?include_inactive=true"),
+    ]);
+    setPosReport(report);
+    setPoints(availablePoints);
+    const currentPoint = statementPointId && availablePoints.some((point) => String(point.id) === statementPointId)
+      ? statementPointId
+      : String(availablePoints[0]?.id ?? "");
+    setStatementPointId(currentPoint);
+    if (currentPoint) await loadPosStatement(currentPoint, from, to);
+    else setPosStatement(null);
+  }
+
+  async function downloadProtectedFile(path: string, filename: string) {
+    const response = await fetch(`${API_BASE}${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      let message = "تعذر تنزيل الملف";
+      try { const data = await response.json(); if (typeof data.detail === "string") message = data.detail; } catch { /* ignore non-JSON error */ }
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
   }
 
   async function loadPosAccount(pointId: string) {
@@ -483,7 +553,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     if (page !== "pos") setPrintPreviewCards([]);
     if (page === "reports") {
       setError("");
-      loadPosReport().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقرير"));
+      loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقارير المالية"));
     }
     if (page === "plans" || page === "cards" || page === "pos" || page === "routers") {
       setError("");
@@ -894,6 +964,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </form>
         {posReport && (
           <>
+            <div className="report-actions">
+              <button type="button" disabled={busy} onClick={() => downloadProtectedFile(`/api/v1/reports/points-of-sale/export.xlsx?date_from=${encodeURIComponent(reportFrom)}&date_to=${encodeURIComponent(reportTo)}`, `pos-report-${reportFrom}-${reportTo}.xlsx`).catch((err) => setError(err instanceof Error ? err.message : "تعذر تنزيل Excel"))}>تنزيل التقرير Excel</button>
+              <button type="button" className="secondary-button" onClick={() => window.print()}>طباعة التقرير / حفظ PDF</button>
+            </div>
+            <div className="report-print-area">
             <div className="stats-grid">
               <article className="stat-card"><span>رصيد افتتاحي</span><strong>{money(totals?.opening_balance)} ريال</strong></article>
               <article className="stat-card"><span>قيمة الكروت المسلّمة</span><strong>{money(totals?.delivered_value)} ريال</strong></article>
@@ -911,6 +986,46 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               </table>
               {posReport.points.length === 0 && <div className="empty-state">لا توجد نقاط بيع مسجلة حتى الآن.</div>}
             </div>
+            </div>
+            <div className="section-heading compact-heading">
+              <div><h2>كشف حساب تفصيلي لنقطة البيع</h2><p>يعرض كل حركة بالترتيب مع الرصيد المتراكم بعد كل حركة.</p></div>
+            </div>
+            <div className="panel statement-controls">
+              <label>نقطة البيع
+                <select value={statementPointId} onChange={(event) => {
+                  const id = event.target.value;
+                  setStatementPointId(id);
+                  setBusy(true);
+                  loadPosStatement(id).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل كشف الحساب")).finally(() => setBusy(false));
+                }}>
+                  <option value="">اختر نقطة بيع</option>
+                  {points.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}
+                </select>
+              </label>
+              <div className="report-actions">
+                <button type="button" disabled={busy || !statementPointId || !posStatement} onClick={() => downloadProtectedFile(`/api/v1/reports/points-of-sale/${statementPointId}/statement/export.xlsx?date_from=${encodeURIComponent(reportFrom)}&date_to=${encodeURIComponent(reportTo)}`, `pos-${statementPointId}-statement-${reportFrom}-${reportTo}.xlsx`).catch((err) => setError(err instanceof Error ? err.message : "تعذر تنزيل كشف الحساب"))}>تنزيل كشف الحساب Excel</button>
+                <button type="button" className="secondary-button" disabled={!posStatement} onClick={() => window.print()}>طباعة الكشف / حفظ PDF</button>
+              </div>
+            </div>
+            {posStatement && (
+              <div className="statement-print-area">
+                <div className="statement-heading"><h3>كشف حساب: {posStatement.point_of_sale_name}</h3><span>الفترة: {posStatement.date_from} — {posStatement.date_to}</span></div>
+                <div className="stats-grid">
+                  <article className="stat-card"><span>الرصيد الافتتاحي</span><strong>{money(posStatement.opening_balance)} ريال</strong></article>
+                  <article className="stat-card"><span>إجمالي المدين</span><strong>{money(posStatement.total_debit)} ريال</strong></article>
+                  <article className="stat-card"><span>إجمالي الدائن</span><strong>{money(posStatement.total_credit)} ريال</strong></article>
+                  <article className="stat-card"><span>الرصيد الختامي</span><strong>{money(posStatement.closing_balance)} ريال</strong></article>
+                </div>
+                <div className="table-wrap">
+                  <table><thead><tr><th>التاريخ والوقت</th><th>نوع الحركة</th><th>البيان</th><th>المرجع</th><th>المستخدم</th><th>مدين</th><th>دائن</th><th>الرصيد المتراكم</th></tr></thead>
+                    <tbody>{posStatement.entries.map((entry) => <tr key={entry.id}>
+                      <td>{new Date(entry.created_at).toLocaleString("ar")}</td><td>{entry.entry_type}</td><td>{entry.description || "—"}</td><td>{entry.reference || "—"}</td><td>{entry.created_by || "—"}</td><td>{money(entry.debit)}</td><td>{money(entry.credit)}</td><td><strong>{money(entry.running_balance)}</strong></td>
+                    </tr>)}</tbody>
+                  </table>
+                  {posStatement.entries.length === 0 && <div className="empty-state">لا توجد حركات مالية لهذه النقطة خلال الفترة المحددة.</div>}
+                </div>
+              </div>
+            )}
           </>
         )}
       </>
