@@ -3,13 +3,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any, Iterable
 
 
+def _normalized_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value).strip().lower())
+
+
+# Match common RouterOS/API spellings as well as application credential fields.
 SENSITIVE_KEYS = {
-    "password", "passwd", "secret", "credential", "credential_ciphertext",
-    "password-hash", "password_hash", "verifier", "hash",
+    "password", "passwd", "pass", "userpassword", "cleartextpassword",
+    "passwordplaintext", "plaintextpassword", "secret", "apisecret",
+    "credential", "credentialciphertext", "passwordhash", "hashpassword",
+    "verifier", "hash",
 }
+VERIFIER_KEYS = {"passwordhash", "hashpassword", "verifier", "hash"}
+PASSWORD_KEYS = {"password", "passwd", "pass", "userpassword", "cleartextpassword",
+                 "passwordplaintext", "plaintextpassword"}
 
 
 def _safe_value(value: Any) -> Any:
@@ -19,11 +30,30 @@ def _safe_value(value: Any) -> Any:
         return {
             str(key): _safe_value(item)
             for key, item in value.items()
-            if str(key).strip().lower() not in SENSITIVE_KEYS
+            if _normalized_key(key) not in SENSITIVE_KEYS
         }
     if isinstance(value, (list, tuple)):
         return [_safe_value(item) for item in value]
     return str(value)
+
+
+def _credential_metadata(record: dict[str, Any], username: str) -> dict[str, str | None]:
+    """Infer only credential shape; never return or persist a credential value."""
+    normalized = {_normalized_key(key): value for key, value in record.items()}
+
+    if any(key in normalized and normalized[key] not in (None, "") for key in VERIFIER_KEYS):
+        return {"credential_mode": None, "credential_state": "verifier_unverified"}
+
+    password_key = next((key for key in PASSWORD_KEYS if key in normalized), None)
+    if password_key is None or normalized[password_key] is None:
+        return {"credential_mode": None, "credential_state": "unavailable"}
+
+    password = str(normalized[password_key])
+    if password == "":
+        return {"credential_mode": "username_only", "credential_state": "plaintext_available"}
+    if password == username:
+        return {"credential_mode": "same_credentials", "credential_state": "plaintext_available"}
+    return {"credential_mode": "separate_credentials", "credential_state": "plaintext_available"}
 
 
 def _fingerprint(snapshot: dict[str, Any]) -> str:
@@ -57,7 +87,13 @@ def build_user_manager_preview(
         )
         profile = record.get("actual_profile") or record.get("actual-profile")
         safe_snapshot = _safe_value(record)
+        credential = _credential_metadata(record, username)
         issues: list[str] = []
+
+        if credential["credential_state"] == "unavailable":
+            issues.append("بيانات الاعتماد غير متاحة في سجل المصدر")
+        elif credential["credential_state"] == "verifier_unverified":
+            issues.append("صيغة hash/verifier غير مثبتة التوافق مع مصادقة RADIUS")
 
         if not username:
             classification = "invalid"
@@ -89,6 +125,8 @@ def build_user_manager_preview(
             "source_profile_id": str(profile) if profile is not None else None,
             "classification": classification,
             "matched_card_id": str(matched_card_id) if matched_card_id is not None else None,
+            "credential_mode": credential["credential_mode"],
+            "credential_state": credential["credential_state"],
             "safe_snapshot": safe_snapshot,
             "issues": issues,
             "source_fingerprint": _fingerprint(safe_snapshot),
