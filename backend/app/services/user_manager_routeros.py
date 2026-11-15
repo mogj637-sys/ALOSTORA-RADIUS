@@ -50,13 +50,22 @@ def _count_only(
     # Query terms are applied by the router before any record body is returned.
     # This is especially important before an exact-user read: if the router
     # ignores the filter, the count exposes that without downloading the list.
-    params = dict(query or {})
-    params["count-only"] = ""
-    result = api.get_resource(path).call("print", params)
-    if isinstance(result, dict):
-        value = result.get("ret")
-        if value is not None:
-            return int(value)
+    # routeros-api separates command attributes from RouterOS query words.
+    # Passing ?field as an ordinary argument silently fails to filter records.
+    query_words = {
+        key[1:] if key.startswith("?") else key: value
+        for key, value in (query or {}).items()
+    }
+    result = api.get_resource(path).call(
+        "print",
+        {"count-only": None},
+        query_words,
+    )
+    done_message = getattr(result, "done_message", None)
+    if isinstance(done_message, dict) and done_message.get("ret") is not None:
+        return int(done_message["ret"])
+    if isinstance(result, dict) and result.get("ret") is not None:
+        return int(result["ret"])
     if isinstance(result, list):
         for row in result:
             if isinstance(row, dict) and row.get("ret") is not None:
@@ -157,10 +166,12 @@ def _query_one(api: Any, path: str, field: str, value: str, properties: str) -> 
         raise UserManagerConnectionError(
             "أعاد استعلام العلاقة أكثر من سجل مطابق؛ أوقف القراءة قبل تنزيل التفاصيل."
         )
-    rows = api.get_resource(path).call(
+    rows_response = api.get_resource(path).call(
         "print",
-        {**query, ".proplist": properties},
+        {".proplist": properties},
+        {field: value},
     )
+    rows = list(rows_response)
     if not isinstance(rows, list):
         raise UserManagerConnectionError("أعاد User Manager استجابة غير متوقعة أثناء قراءة علاقة البروفايل.")
     if len(rows) > 1:
@@ -225,13 +236,14 @@ def inspect_user_manager_user(
                 "أعاد الاستعلام أكثر من سجل أو لم يثبت تطابقاً واحداً؛ أوقف الفحص دون تنزيل تفاصيل القائمة."
             )
 
-        rows = api.get_resource(user_path).call(
+        rows_response = api.get_resource(user_path).call(
             "print",
             {
-                "?username": target_username,
                 ".proplist": ".id,username,customer,disabled,actual-profile,shared-users,uptime-used,download-used,upload-used,last-seen,active-sessions",
             },
+            {"username": target_username},
         )
+        rows = list(rows_response)
         if not isinstance(rows, list):
             raise UserManagerConnectionError("أعاد User Manager استجابة غير متوقعة عند فحص المستخدم.")
         if len(rows) > 1:
@@ -264,13 +276,12 @@ def inspect_user_manager_user(
                 raise UserManagerConnectionError(
                     "عدد قيود البروفايل تجاوز حد القراءة التشخيصية الآمن؛ أوقف القراءة قبل تنزيل التفاصيل."
                 )
-            relation_rows = api.get_resource(relation_path).call(
+            relation_response = api.get_resource(relation_path).call(
                 "print",
-                {
-                    "?profile": profile_name,
-                    ".proplist": "profile,limitation",
-                },
+                {".proplist": "profile,limitation"},
+                {"profile": profile_name},
             )
+            relation_rows = list(relation_response)
             if not isinstance(relation_rows, list):
                 raise UserManagerConnectionError("تعذر قراءة قيود البروفايل المرتبط بالكرت.")
             if len(relation_rows) != relation_count:
