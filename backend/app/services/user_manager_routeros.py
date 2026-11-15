@@ -149,9 +149,17 @@ def inspect_routeros_user_manager(
 
 
 def _query_one(api: Any, path: str, field: str, value: str, properties: str) -> dict[str, Any] | None:
+    query = {f"?{field}": value}
+    exact_count = _count_only(api, path, query)
+    if exact_count == 0:
+        return None
+    if exact_count != 1:
+        raise UserManagerConnectionError(
+            "أعاد استعلام العلاقة أكثر من سجل مطابق؛ أوقف القراءة قبل تنزيل التفاصيل."
+        )
     rows = api.get_resource(path).call(
         "print",
-        {f"?{field}": value, ".proplist": properties},
+        {**query, ".proplist": properties},
     )
     if not isinstance(rows, list):
         raise UserManagerConnectionError("أعاد User Manager استجابة غير متوقعة أثناء قراءة علاقة البروفايل.")
@@ -250,9 +258,13 @@ def inspect_user_manager_user(
             if profile is None:
                 relation_warnings.append("لم يُعثر على البروفايل الفعلي المشار إليه في سجل الكرت.")
 
-            relation_rows = api.get_resource(
-                "/tool/user-manager/profile/profile-limitation"
-            ).call(
+            relation_path = "/tool/user-manager/profile/profile-limitation"
+            relation_count = _count_only(api, relation_path, {"?profile": profile_name})
+            if relation_count > 100:
+                raise UserManagerConnectionError(
+                    "عدد قيود البروفايل تجاوز حد القراءة التشخيصية الآمن؛ أوقف القراءة قبل تنزيل التفاصيل."
+                )
+            relation_rows = api.get_resource(relation_path).call(
                 "print",
                 {
                     "?profile": profile_name,
@@ -261,8 +273,10 @@ def inspect_user_manager_user(
             )
             if not isinstance(relation_rows, list):
                 raise UserManagerConnectionError("تعذر قراءة قيود البروفايل المرتبط بالكرت.")
-            if len(relation_rows) > 100:
-                raise UserManagerConnectionError("عدد قيود البروفايل تجاوز حد القراءة التشخيصية الآمن.")
+            if len(relation_rows) != relation_count:
+                raise UserManagerConnectionError(
+                    "تغير عدد قيود البروفايل أثناء الفحص؛ أوقف القراءة لتجنب نتيجة جزئية."
+                )
             for relation in relation_rows:
                 if not isinstance(relation, dict) or str(relation.get("profile", "")) != profile_name:
                     raise UserManagerConnectionError("نتيجة ربط القيود لا تطابق البروفايل المطلوب.")
