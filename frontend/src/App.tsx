@@ -326,9 +326,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function togglePrintCard(cardId: string) {
-    setSelectedPrintCardIds((current) =>
-      current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]
-    );
+    setSelectedPrintCardIds((current) => {
+      if (current.includes(cardId)) return current.filter((id) => id !== cardId);
+      if (current.length >= 5000) {
+        setError("الحد الأقصى لعملية الطباعة الواحدة هو 5000 كرت.");
+        return current;
+      }
+      return [...current, cardId];
+    });
   }
 
   async function reprintJob(job: PrintJobHistory) {
