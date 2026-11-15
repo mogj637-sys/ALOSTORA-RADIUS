@@ -1,6 +1,9 @@
 import os
 import sys
 from decimal import Decimal
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db.session import SessionLocal
 from app.models.core import Card, Plan, RadiusSession, Router
