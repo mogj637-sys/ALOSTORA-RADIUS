@@ -10,7 +10,6 @@ rest {
         method = 'post'
         body = 'json'
         timeout = 5.0
-        data = '{"nas_identifier": %{jsonquote:NAS-Identifier}, "username": %{jsonquote:User-Name}, "password": %{jsonquote:User-Password}, "chap_password_hex": "%{hex:CHAP-Password}", "chap_challenge_hex": "%{hex:CHAP-Challenge}", "framed_ip_address": %{jsonquote:Framed-IP-Address}, "calling_station_id": %{jsonquote:Calling-Station-Id}}'
         tls = ${..tls}
     }
 
@@ -20,7 +19,6 @@ rest {
         body = 'json'
         force_to = 'plain'
         timeout = 5.0
-        data = '{"nas_identifier": %{jsonquote:NAS-Identifier}, "username": %{jsonquote:User-Name}, "acct_session_id": %{jsonquote:Acct-Session-Id}, "status_type": %{jsonquote:Acct-Status-Type}, "session_time_seconds": %{%{Acct-Session-Time}:-0}, "input_octets": %{%{Acct-Input-Octets}:-0}, "output_octets": %{%{Acct-Output-Octets}:-0}, "input_gigawords": %{%{Acct-Input-Gigawords}:-0}, "output_gigawords": %{%{Acct-Output-Gigawords}:-0}, "framed_ip_address": %{jsonquote:Framed-IP-Address}, "calling_station_id": %{jsonquote:Calling-Station-Id}}'
         tls = ${..tls}
     }
 
