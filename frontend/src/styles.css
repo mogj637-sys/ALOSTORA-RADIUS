@@ -410,3 +410,18 @@ tbody tr:hover { background: #fbfdfc; }
   .card-selection-toolbar span { margin-right: 0; }
   .card-selection-toolbar button { width: 100%; }
 }
+
+
+/* Expanded package editor */
+.plan-editor { display: grid; gap: 16px; }
+.plan-form-section { border: 1px solid #e1e7ef; border-radius: 10px; padding: 15px; background: #fff; }
+.plan-form-section h3 { margin: 0 0 13px; color: #168767; font-size: 13px; }
+.plan-form-section .form-grid { margin: 0; }
+.day-selector { display: flex; flex-wrap: wrap; gap: 9px 16px; margin: 12px 0; }
+.day-selector label, .checkbox-label { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #46536a; }
+.day-selector input, .checkbox-label input { accent-color: #168767; width: 15px; height: 15px; }
+.plan-editor .notice { margin: 0; }
+@media (max-width: 620px) {
+  .plan-form-section { padding: 11px; }
+  .day-selector { gap: 9px 12px; }
+}
