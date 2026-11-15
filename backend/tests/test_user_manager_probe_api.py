@@ -1,4 +1,5 @@
 import secrets
+from uuid import UUID
 
 from app.api import user_manager
 from app.db.session import SessionLocal
@@ -188,7 +189,7 @@ def test_single_user_preview_is_persisted_without_credentials_or_import(owner_cl
 
     db = SessionLocal()
     try:
-        run = db.get(UserManagerSyncRun, data["sync_run_id"])
+        run = db.get(UserManagerSyncRun, UUID(data["sync_run_id"]))
         preview = db.get(UserManagerImportPreview, data["preview_id"])
         assert run is not None
         assert preview is not None
