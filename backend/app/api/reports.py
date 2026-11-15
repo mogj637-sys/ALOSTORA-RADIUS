@@ -75,13 +75,11 @@ def points_of_sale_report(
                 else_=0,
             )), 0).label("returns"),
             func.coalesce(func.sum(case(
-                (PosAccountEntry.direction == "debit") & (PosAccountEntry.entry_type != "card_delivery"),
-                PosAccountEntry.amount,
+                ((PosAccountEntry.direction == "debit") & (PosAccountEntry.entry_type != "card_delivery"), PosAccountEntry.amount),
                 else_=0,
             )), 0).label("other_debits"),
             func.coalesce(func.sum(case(
-                (PosAccountEntry.direction == "credit") & (~PosAccountEntry.entry_type.in_(("commission", "payment", "return"))),
-                PosAccountEntry.amount,
+                ((PosAccountEntry.direction == "credit") & (~PosAccountEntry.entry_type.in_(("commission", "payment", "return"))), PosAccountEntry.amount),
                 else_=0,
             )), 0).label("other_credits"),
         )
