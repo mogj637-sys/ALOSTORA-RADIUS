@@ -91,17 +91,19 @@ def run_bounded_batches(
         if not page.records and not page.exhausted:
             raise BatchSafetyError("empty non-final page would prevent safe progress")
 
+        next_cursor = page.next_cursor
+        if next_cursor is not None:
+            if not isinstance(next_cursor, str) or not next_cursor:
+                raise BatchSafetyError("source adapter returned an invalid continuation cursor")
+            if next_cursor in seen_cursors:
+                raise BatchSafetyError("source adapter repeated a continuation cursor")
+
         # Do not advance the checkpoint unless processing the whole page succeeds.
         process_page(page.records)
         processed_records += len(page.records)
         processed_pages += 1
-        cursor = page.next_cursor
-
+        cursor = next_cursor
         if cursor is not None:
-            if not isinstance(cursor, str) or not cursor:
-                raise BatchSafetyError("source adapter returned an invalid continuation cursor")
-            if cursor in seen_cursors:
-                raise BatchSafetyError("source adapter repeated a continuation cursor")
             seen_cursors.add(cursor)
 
         state = {
