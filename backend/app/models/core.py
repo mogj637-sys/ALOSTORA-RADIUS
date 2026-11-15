@@ -66,6 +66,7 @@ class Plan(TimestampMixin, Base):
     # Starts at first successful authentication; counts wall-clock time continuously.
     validity_period_seconds: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     speed_profile: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
