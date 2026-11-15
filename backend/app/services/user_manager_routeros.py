@@ -222,7 +222,7 @@ def inspect_user_manager_user(
             return None
         if exact_count != 1:
             raise UserManagerConnectionError(
-                "لم يثبت أن استعلام اسم المستخدم يعيد سجلاً واحداً فقط؛ أوقف الفحص دون تنزيل تفاصيل القائمة."
+                "أعاد الاستعلام أكثر من سجل أو لم يثبت تطابقاً واحداً؛ أوقف الفحص دون تنزيل تفاصيل القائمة."
             )
 
         rows = api.get_resource(user_path).call(
