@@ -1,4 +1,4 @@
-name: Backend tests
+name: Backend tests # dashboard template and selection validation
 
 on:
   push:
