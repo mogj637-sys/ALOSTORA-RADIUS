@@ -1,0 +1,40 @@
+name: RADIUS end-to-end
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  radius-e2e:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_DB: alostora_radius_e2e
+      POSTGRES_USER: alostora
+      POSTGRES_PASSWORD: ci-radius-db-password
+      APP_SECRET_KEY: ci-only-app-secret-key-long-enough-for-radius-e2e-tests
+      CREDENTIAL_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      ROUTER_SECRET_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      RADIUS_INTERNAL_API_KEY: ci-only-radius-internal-key-012345678901234567890
+      RADIUS_SHARED_SECRET: ci-radius-e2e-shared-secret-2026
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run real RADIUS UDP integration test
+        run: bash scripts/radius-e2e.sh
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          if [ -f .env.e2e ]; then
+            docker compose --env-file .env.e2e -p alostora-radius-e2e logs --no-color
+          fi
+
+      - name: Stop integration services
+        if: always()
+        run: |
+          if [ -f .env.e2e ]; then
+            docker compose --env-file .env.e2e -p alostora-radius-e2e down -v
+          fi
