@@ -13,6 +13,7 @@ from app.models.core import (
     CardEvent,
     PointOfSale,
     PosInventoryMovement,
+    PosAccountEntry,
     PrintJob,
     PrintJobItem,
 )
@@ -274,6 +275,27 @@ def create_print_job(
                     actor=user.username,
                 )
             )
+
+        # Original commercial allocation creates one debit in the POS ledger.
+        # Free cards and reprints never create a financial charge.
+        if not payload.is_reprint:
+            commercial_total = sum(
+                (card.price_snapshot for card in cards if not card.is_free),
+                Decimal("0.00"),
+            )
+            if commercial_total > 0:
+                db.add(
+                    PosAccountEntry(
+                        point_of_sale_id=point_of_sale.id,
+                        entry_type="card_delivery",
+                        direction="debit",
+                        amount=commercial_total,
+                        description=f"تسليم كروت عبر عملية الطباعة {job.id}",
+                        reference=str(job.id),
+                        idempotency_key=f"print-job-account:{job.id}",
+                        created_by=user.username,
+                    )
+                )
 
         db.commit()
         db.refresh(job)
