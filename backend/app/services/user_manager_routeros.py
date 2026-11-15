@@ -138,3 +138,90 @@ def inspect_routeros_user_manager(
                 pool.disconnect()
             except Exception:
                 pass
+
+
+def inspect_user_manager_user(
+    *,
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    target_username: str,
+    timeout_seconds: float = 8.0,
+) -> dict[str, Any] | None:
+    """Read one exact User Manager username using RouterOS-side query filtering.
+
+    Passwords and other credential fields are deliberately excluded from
+    .proplist and from the returned object. This is a diagnostic lookup only;
+    it does not create, update, or import a card.
+    """
+    if not target_username or len(target_username) > 120:
+        raise ValueError("Invalid User Manager username")
+
+    use_ssl = port == 8729
+    pool = routeros_api.RouterOsApiPool(
+        host,
+        username=username,
+        password=password,
+        port=port,
+        plaintext_login=True,
+        use_ssl=use_ssl,
+        ssl_verify=True,
+        ssl_verify_hostname=True,
+    )
+    pool.socket_timeout = timeout_seconds
+    api = None
+    try:
+        api = pool.get_api()
+        system = api.get_resource("/system/resource").get()
+        version = _first(system, "version")
+        if not version or not version.startswith("6."):
+            raise UserManagerConnectionError(
+                "هذا الفحص مخصص حالياً لـ RouterOS v6؛ دعم v7 يحتاج موصلاً واختبارات منفصلة."
+            )
+
+        # RouterOS executes the exact-match query on the device. Keep the
+        # returned property list intentionally small and never request password.
+        rows = api.get_resource("/tool/user-manager/user").call(
+            "print",
+            {
+                "?username": target_username,
+                ".proplist": ".id,username,customer,disabled,actual-profile,shared-users",
+            },
+        )
+        if not isinstance(rows, list):
+            raise UserManagerConnectionError(
+                "أعاد User Manager استجابة غير متوقعة عند فحص المستخدم."
+            )
+        if len(rows) > 1:
+            raise UserManagerConnectionError(
+                "أعاد البحث أكثر من سجل مطابق؛ أوقف الفحص لتجنب اختيار سجل غير صحيح."
+            )
+        if not rows:
+            return None
+
+        row = rows[0]
+        if not isinstance(row, dict) or str(row.get("username", "")) != target_username:
+            raise UserManagerConnectionError(
+                "لم تتطابق نتيجة البحث مع اسم المستخدم المطلوب؛ أوقف الفحص."
+            )
+        return {
+            "external_id": str(row.get(".id")) if row.get(".id") is not None else None,
+            "username": target_username,
+            "customer": row.get("customer"),
+            "disabled": row.get("disabled"),
+            "actual_profile": row.get("actual-profile"),
+            "shared_users": row.get("shared-users"),
+        }
+    except UserManagerConnectionError:
+        raise
+    except Exception as exc:
+        raise UserManagerConnectionError(
+            "تعذر قراءة سجل المستخدم المحدد من User Manager. تحقق من صلاحيات القراءة وإصدار الجهاز."
+        ) from exc
+    finally:
+        if api is not None or getattr(pool, "connected", False):
+            try:
+                pool.disconnect()
+            except Exception:
+                pass
