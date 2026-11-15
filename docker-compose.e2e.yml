@@ -1,0 +1,3 @@
+services:
+  freeradius:
+    command: ["freeradius", "-X"]
