@@ -790,6 +790,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   useEffect(() => {
     if (page !== "pos") setPrintPreviewCards([]);
+    if (page === "pos" || page === "templates") {
+      loadCardTemplates().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل قوالب الطباعة"));
+    }
     if (page === "templates") {
       setError("");
       loadCardTemplates().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل القوالب"));
@@ -1082,6 +1085,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderPos() {
+    const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
     const printableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
     const selectedPoint = points.find((point) => String(point.id) === selectedPosId);
     return (
@@ -1176,9 +1180,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <div className="panel pos-print-panel">
               <label>قالب الطباعة
                 <select value={printTemplate} onChange={(e) => setPrintTemplate(e.target.value)}>
-                  <option value="classic-green">القالب الأخضر</option>
-                  <option value="classic-blue">القالب الأزرق</option>
-                  <option value="compact">القالب المختصر</option>
+                  {cardTemplates.map((item) => <option key={item.id} value={item.code}>{item.name}</option>)}
                 </select>
               </label>
               <div className="pos-print-summary">تم اختيار {selectedPrintCardIds.length} كرت. الكروت المجانية تظهر في القسائم ولا تدخل في قيمة نقطة البيع.</div>
@@ -1195,7 +1197,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 </div>
                 <div className="voucher-grid">
                   {printPreviewCards.map((card) => (
-                    <article className={`voucher-card ${printTemplate}`} key={card.card_id}>
+                    <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, minHeight: `${selectedTemplate.height_mm}mm` } : undefined}>
                       <div className="voucher-head"><strong>الأسطورة نت</strong><span>{card.is_free ? "كرت مجاني" : "بطاقة إنترنت"}</span></div>
                       <div className="voucher-user"><span>اسم المستخدم</span><strong>{card.username}</strong></div>
                       <div className="voucher-password"><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>
