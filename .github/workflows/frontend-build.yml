@@ -1,4 +1,4 @@
-name: Frontend build # dashboard creation and management validation
+name: Frontend build # extended package options validation
 
 on:
   pull_request:
