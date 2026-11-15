@@ -97,8 +97,11 @@
 ## حالة التنفيذ الحالية
 - [x] اعتماد المتطلب والمزامنة المستمرة أثناء مرحلة الانتقال.
 - [x] توثيق المعمارية والقيود ومعايير القبول.
-- [ ] بناء RouterOS API read-only adapter والتحقق من أوامر v6 الفعلية.
-- [ ] بناء جداول source mapping وsync runs/checkpoints.
+- [x] بناء أولي لـ RouterOS API read-only probe: قراءة هوية الجهاز والإصدار واللوحة والحزم، ثم عدّ موارد User Manager فقط دون تحميل الكروت.
+- [x] إضافة endpoint محمي للمالك: POST /api/v1/routers/{router_id}/user-manager/test-connection.
+- [x] إضافة اختبارات mock للاتصال، ورفض v7، وغياب الحزمة، وتنقية أخطاء الاتصال.
+- [x] بناء جداول source mapping وsync runs/checkpoints.
+- [ ] التحقق من مسارات ونتائج count-only على RB2011 RouterOS 6.49.23 فعلياً؛ الاختبارات الحالية لا تتصل براوتر.
 - [ ] بناء preview/import/incremental sync APIs.
 - [ ] واجهة معاينة واعتماد وسجل مزامنة.
 - [ ] اختبارات idempotency والانقطاع والاستئناف والتعارضات.
