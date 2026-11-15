@@ -105,17 +105,37 @@ def _event_timestamp(value: Any) -> datetime | None:
 
 
 def _hex_attribute(payload: dict[str, Any], *names: str) -> str | None:
-    value = _attribute(payload, *names)
-    if value is None:
-        return None
-    if isinstance(value, bytes):
-        return value.hex()
-    text = str(value).strip()
-    if text.startswith("0x"):
-        text = text[2:]
-    if len(text) % 2 == 0 and all(char in "0123456789abcdefABCDEF" for char in text):
-        return text.lower()
-    return text.encode("utf-8").hex()
+    for name in names:
+        if name not in payload:
+            continue
+        value = payload[name]
+        attribute_type = None
+        if isinstance(value, dict) and "value" in value:
+            attribute_type = value.get("type")
+            value = value["value"]
+        if isinstance(value, list):
+            if len(value) > 1 and all(isinstance(item, int) and 0 <= item <= 255 for item in value):
+                value = bytes(value)
+            else:
+                value = value[0] if value else None
+        if value is None:
+            return None
+        if isinstance(value, bytes):
+            return value.hex()
+        text = str(value).strip()
+        if text.lower().startswith("0x"):
+            text = text[2:]
+            if len(text) % 2 == 0 and all(char in "0123456789abcdefABCDEF" for char in text):
+                return text.lower()
+        if attribute_type == "octets":
+            try:
+                return text.encode("latin-1").hex()
+            except UnicodeEncodeError:
+                return text.encode("utf-8").hex()
+        if len(text) % 2 == 0 and all(char in "0123456789abcdefABCDEF" for char in text):
+            return text.lower()
+        return text.encode("utf-8").hex()
+    return None
 
 
 def _normalize_authorize(payload: dict[str, Any]) -> RadiusAuthorizeRequest:
