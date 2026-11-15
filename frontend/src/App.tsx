@@ -95,6 +95,16 @@ type UserManagerPreviewList = {
   credentials_read: boolean;
 };
 
+type UserManagerPreviewRun = {
+  id: string;
+  status: string;
+  discovered_users: number;
+  preview_count: number;
+  created_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
 type UserManagerUserInspect = {
   router_id: number;
   found: boolean;
@@ -324,6 +334,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [inspectUsername, setInspectUsername] = useState("");
   const [userManagerUserInspect, setUserManagerUserInspect] = useState<UserManagerUserInspect | null>(null);
   const [userManagerPreviews, setUserManagerPreviews] = useState<UserManagerPreviewList | null>(null);
+  const [userManagerPreviewRuns, setUserManagerPreviewRuns] = useState<UserManagerPreviewRun[]>([]);
+  const [selectedPreviewRunId, setSelectedPreviewRunId] = useState("");
+  const [loadingPreviewRuns, setLoadingPreviewRuns] = useState(false);
   const [savingUserPreview, setSavingUserPreview] = useState(false);
   const [inspectingUser, setInspectingUser] = useState(false);
   const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
@@ -449,6 +462,50 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
   }
 
+  async function loadUserManagerPreviewRuns(routerId: number, preferredRunId?: string) {
+    setLoadingPreviewRuns(true);
+    try {
+      const result = await apiRequest<{ items: UserManagerPreviewRun[]; read_only: boolean; imported: boolean; credentials_read: boolean }>(
+        token,
+        `/api/v1/routers/${routerId}/user-manager/previews/runs?limit=50`,
+      );
+      setUserManagerPreviewRuns(result.items);
+      const nextRunId = preferredRunId && result.items.some((run) => run.id === preferredRunId)
+        ? preferredRunId
+        : result.items[0]?.id || "";
+      setSelectedPreviewRunId(nextRunId);
+      if (nextRunId) {
+        const previews = await apiRequest<UserManagerPreviewList>(
+          token,
+          `/api/v1/routers/${routerId}/user-manager/previews?run_id=${encodeURIComponent(nextRunId)}&offset=0&limit=50`,
+        );
+        setUserManagerPreviews(previews);
+      } else {
+        setUserManagerPreviews(null);
+      }
+    } finally {
+      setLoadingPreviewRuns(false);
+    }
+  }
+
+  async function selectUserManagerPreviewRun(runId: string) {
+    setSelectedPreviewRunId(runId);
+    if (!runId || !inspectRouterId) {
+      setUserManagerPreviews(null);
+      return;
+    }
+    try {
+      const result = await apiRequest<UserManagerPreviewList>(
+        token,
+        `/api/v1/routers/${Number(inspectRouterId)}/user-manager/previews?run_id=${encodeURIComponent(runId)}&offset=0&limit=50`,
+      );
+      setUserManagerPreviews(result);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تحميل المعاينة المختارة");
+    }
+  }
+
   async function saveUserManagerPreview() {
     const routerId = Number(inspectRouterId);
     const targetUsername = inspectUsername.trim();
@@ -462,11 +519,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         `/api/v1/routers/${routerId}/user-manager/preview-user`,
         { method: "POST", body: JSON.stringify({ username: targetUsername }) },
       );
-      const result = await apiRequest<UserManagerPreviewList>(
-        token,
-        `/api/v1/routers/${routerId}/user-manager/previews?run_id=${encodeURIComponent(created.sync_run_id)}&offset=0&limit=50`,
-      );
-      setUserManagerPreviews(result);
+      await loadUserManagerPreviewRuns(routerId, created.sync_run_id);
       setNotice("حُفظت معاينة الكرت بنجاح. لم يتم استيراده ولم تُقرأ كلمة المرور.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر حفظ معاينة الكرت");
@@ -1217,7 +1270,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <section className="panel form-grid">
           <div className="section-heading"><div><h2>فحص كرت واحد من User Manager</h2><p>بحث تشخيصي بالاسم الدقيق؛ لا ينشئ كرتاً ولا يستورده ولا يغيّر بيانات المصدر.</p></div></div>
           <label>جهاز User Manager
-            <select value={inspectRouterId} onChange={(event) => { setInspectRouterId(event.target.value); setUserManagerUserInspect(null); }}>
+            <select value={inspectRouterId} onChange={(event) => { const nextId = event.target.value; setInspectRouterId(nextId); setUserManagerUserInspect(null); setUserManagerPreviews(null); setUserManagerPreviewRuns([]); setSelectedPreviewRunId(""); if (nextId) loadUserManagerPreviewRuns(Number(nextId)).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل سجل المعاينات")); }}>
               <option value="">اختر الراوتر المسجل</option>
               {routers.filter((item) => item.is_active && item.api_username).map((item) => (
                 <option key={item.id} value={item.id}>{item.name} — {item.management_host}:{item.api_port}</option>
@@ -1285,10 +1338,29 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             </div>
           )}
         </section>
+        {(userManagerPreviewRuns.length > 0 || loadingPreviewRuns) && (
+          <section className="panel um-probe-panel">
+            <div className="section-heading">
+              <div><h2>سجل عمليات المعاينة</h2><p>اختر عملية سابقة لعرض الكروت التي حُفظت فيها.</p></div>
+              <button type="button" className="table-action" disabled={loadingPreviewRuns || !inspectRouterId} onClick={() => loadUserManagerPreviewRuns(Number(inspectRouterId), selectedPreviewRunId)}>تحديث السجل</button>
+            </div>
+            <label>عملية المعاينة
+              <select value={selectedPreviewRunId} disabled={loadingPreviewRuns} onChange={(event) => selectUserManagerPreviewRun(event.target.value)}>
+                <option value="">اختر عملية</option>
+                {userManagerPreviewRuns.map((run) => (
+                  <option key={run.id} value={run.id}>
+                    {run.created_at ? new Date(run.created_at).toLocaleString("ar") : run.id} — {run.preview_count} معاينة
+                  </option>
+                ))}
+              </select>
+            </label>
+            {loadingPreviewRuns && <small className="field-hint">جارٍ تحميل سجل المعاينات...</small>}
+          </section>
+        )}
         {userManagerPreviews && (
           <section className="panel um-probe-panel">
             <div className="section-heading">
-              <div><h2>المعاينة المحفوظة</h2><p>نتائج محفوظة محلياً للمراجعة قبل أي استيراد.</p></div>
+              <div><h2>المعاينة المحفوظة</h2><p>{userManagerPreviews.run?.created_at ? new Date(userManagerPreviews.run.created_at).toLocaleString("ar") : "نتائج محفوظة للمراجعة قبل أي استيراد."}</p></div>
               <span className="count-tag">{userManagerPreviews.total} سجل</span>
             </div>
             {userManagerPreviews.items.map((preview) => (
