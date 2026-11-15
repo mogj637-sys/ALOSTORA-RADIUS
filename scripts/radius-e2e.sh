@@ -24,7 +24,7 @@ RADIUS_COA_TIMEOUT_SECONDS=2
 EOF
 
 compose() {
-  docker compose --env-file "$ENV_FILE" -p "$PROJECT" "$@"
+  docker compose --env-file "$ENV_FILE" -p "$PROJECT" -f docker-compose.yml -f docker-compose.e2e.yml "$@"
 }
 
 compose up -d --build
