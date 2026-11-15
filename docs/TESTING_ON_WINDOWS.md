@@ -9,25 +9,28 @@
 3. افتح PowerShell.
 4. نزّل فرع التجربة:
 
-   \`git clone --branch feature/user-manager-sync https://github.com/mogj637-sys/ALOSTORA-RADIUS.git\`
+~~~powershell
+git clone --branch feature/user-manager-sync https://github.com/mogj637-sys/ALOSTORA-RADIUS.git
+~~~
 
 5. ادخل مجلد المشروع:
 
-   \`cd ALOSTORA-RADIUS\`
+~~~powershell
+cd ALOSTORA-RADIUS
+~~~
 
 ## تشغيل تلقائي
 
 نفّذ في PowerShell:
 
-\`Set-ExecutionPolicy -Scope Process Bypass\`
-
-ثم:
-
-\`.\scripts\start-windows.ps1\`
+~~~powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\start-windows.ps1
+~~~
 
 يقوم البرنامج المساعد بما يلي:
 - يتأكد من أن Docker يعمل.
-- ينشئ ملف \`.env\` محلياً بمفاتيح عشوائية إذا لم يكن موجوداً، ولا يستبدل ملفاً موجوداً.
+- ينشئ ملف .env محلياً بمفاتيح عشوائية إذا لم يكن موجوداً، ولا يستبدل ملفاً موجوداً.
 - يبني خدمات PostgreSQL وAPI وواجهة الويب وFreeRADIUS.
 - ينتظر فحص جاهزية API وقاعدة البيانات.
 - لا يفتح منافذ لوحة التحكم وAPI إلا على localhost وفق إعداد Docker Compose الحالي.
@@ -36,7 +39,9 @@
 
 بعد نجاح التشغيل، نفّذ:
 
-\`docker compose exec api python -m app.scripts.create_admin --username admin --display-name "مدير النظام"\`
+~~~powershell
+docker compose exec api python -m app.scripts.create_admin --username admin --display-name "مدير النظام"
+~~~
 
 اختر كلمة مرور قوية من 12 حرفاً على الأقل عند طلبها. لا توجد كلمة مرور افتراضية.
 
@@ -50,11 +55,15 @@
 
 لإيقاف الخدمات مع الاحتفاظ ببيانات التجربة:
 
-\`docker compose down\`
+~~~powershell
+docker compose down
+~~~
 
 لحذف قاعدة بيانات التجربة وكل بياناتها نهائياً:
 
-\`docker compose down -v\`
+~~~powershell
+docker compose down -v
+~~~
 
 ## حدود هذه التجربة
 
@@ -64,6 +73,6 @@
 - لا تربط راوتر إنتاج ولا تغيّر إعدادات RADIUS عليه.
 - اختبار FreeRADIUS داخل Docker لا يثبت بعد التوافق مع MikroTik فعلي.
 - قارئ User Manager v6 الجماعي غير معتمد حتى الآن؛ لا تعتبر هذه النسخة جاهزة لاستيراد الكروت القديمة.
-- لا تشارك ملف \`.env\`؛ يحتوي مفاتيح وأسراراً محلية.
+- لا تشارك ملف .env؛ يحتوي مفاتيح وأسراراً محلية.
 
 إذا تعذر تشغيل Docker Desktop على نسخة Windows لديك، أرسل نص رسالة الخطأ فقط بعد حذف أي أسرار أو كلمات مرور منها.
