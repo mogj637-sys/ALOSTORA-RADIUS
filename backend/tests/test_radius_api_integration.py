@@ -673,3 +673,26 @@ def test_authorize_recovers_same_router_session_when_accounting_stop_was_lost(ow
         },
     )
     assert new_session.status_code == 200, new_session.text
+
+
+def test_radius_chap_hex_accepts_free_radius_prefixed_hex_values(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    card, password = _card(client, headers)
+    challenge = bytes.fromhex("0102030405060708")
+    identifier = b"\\x01"
+    response = hashlib.md5(identifier + password.encode("utf-8") + challenge).digest()
+    chap_packet = (identifier + response).hex()
+    accepted = client.post(
+        "/internal/radius/authorize",
+        headers=_radius_headers(),
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": card["username"],
+            "password": "",
+            "chap_password_hex": "0x" + chap_packet,
+            "chap_challenge_hex": "0x" + challenge.hex(),
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["control:Auth-Type"] == "Accept"
