@@ -23,6 +23,8 @@ type Plan = {
   is_active: boolean;
 };
 
+type CardTemplate = { id: number; code: string; name: string; width_mm: number; height_mm: number; background_color: string; text_color: string; layout: Record<string, unknown>; is_default: boolean; };
+
 type Card = {
   id: string;
   serial_number: string;
@@ -325,7 +327,7 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
 }
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
-  const [page, setPage] = useState<"overview" | "plans" | "cards" | "pos" | "routers" | "reports">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "cards" | "pos" | "routers" | "reports" | "templates">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [routers, setRouters] = useState<RouterRecord[]>([]);
   const [userManagerProbe, setUserManagerProbe] = useState<UserManagerProbe | null>(null);
@@ -341,6 +343,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [inspectingUser, setInspectingUser] = useState(false);
   const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
   const [cards, setCards] = useState<Card[]>([]);
+  const [cardTemplates, setCardTemplates] = useState<CardTemplate[]>([]);
+  const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
+  const [templateDraft, setTemplateDraft] = useState({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37" });
+  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [cardSearch, setCardSearch] = useState("");
@@ -542,12 +548,30 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } finally { setBusy(false); }
   }
 
+  async function loadCardTemplates() {
+    const result = await apiRequest<CardTemplate[]>(token, "/api/v1/card-templates");
+    setCardTemplates(result);
+    if (result.length && !result.some((item) => item.code === printTemplate)) setPrintTemplate(result.find((item) => item.is_default)?.code ?? result[0].code);
+  }
+
   async function loadCards(search = cardSearch, offset = cardOffset) {
     const params = new URLSearchParams({ offset: String(offset), limit: "200" });
     if (search.trim()) params.set("search", search.trim());
     const result = await apiRequest<Card[]>(token, `/api/v1/cards?${params.toString()}`);
     setCards(result);
     setHasMoreCards(result.length === 200);
+  }
+
+  function toggleSelectedCard(cardId: string) {
+    setSelectedCardIds((current) => current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]);
+  }
+
+  function prepareSelectedCardsForPrinting() {
+    const eligible = cards.filter((card) => selectedCardIds.includes(card.id) && card.status === "generated" && card.assigned_pos_id === null);
+    if (!eligible.length) { setError("حدد كروتاً منشأة وغير مخصصة للطباعة الأصلية."); return; }
+    setSelectedPrintCardIds(eligible.map((card) => card.id));
+    setPage("pos");
+    setNotice("تم تجهيز الكروت المحددة. اختر نقطة البيع لمتابعة الطباعة.");
   }
 
   function changeCardPage(nextOffset: number) {
@@ -766,6 +790,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   useEffect(() => {
     if (page !== "pos") setPrintPreviewCards([]);
+    if (page === "templates") {
+      setError("");
+      loadCardTemplates().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل القوالب"));
+    }
     if (page === "reports") {
       setError("");
       loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقارير المالية"));
@@ -972,6 +1000,40 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  async function saveCardTemplate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError(""); setNotice("");
+    try {
+      const payload = { ...templateDraft, width_mm: Number(templateDraft.width_mm), height_mm: Number(templateDraft.height_mm) };
+      if (editingTemplateId) await apiRequest<CardTemplate>(token, `/api/v1/card-templates/${editingTemplateId}`, { method: "PATCH", body: JSON.stringify({ name: payload.name, width_mm: payload.width_mm, height_mm: payload.height_mm, background_color: payload.background_color, text_color: payload.text_color }) });
+      else await apiRequest<CardTemplate>(token, "/api/v1/card-templates", { method: "POST", body: JSON.stringify(payload) });
+      await loadCardTemplates(); setEditingTemplateId(null); setTemplateDraft({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37" }); setNotice("تم حفظ القالب.");
+    } catch (err) { setError(err instanceof Error ? err.message : "تعذر حفظ القالب"); } finally { setBusy(false); }
+  }
+
+  async function deleteCardTemplate(template: CardTemplate) {
+    if (template.is_default || !window.confirm(`حذف القالب ${template.name}؟`)) return;
+    setBusy(true); setError("");
+    try { await apiRequest<void>(token, `/api/v1/card-templates/${template.id}`, { method: "DELETE" }); await loadCardTemplates(); setNotice("تم حذف القالب."); }
+    catch (err) { setError(err instanceof Error ? err.message : "تعذر حذف القالب"); } finally { setBusy(false); }
+  }
+
+  function renderTemplates() {
+    return <>
+      <div className="section-heading"><div><h2>استديو تصميم الكروت</h2><p>إدارة قوالب الطباعة وأبعادها وألوانها. يمكن توسيع محرر العناصر في المرحلة التالية.</p></div></div>
+      <form className="panel form-grid" onSubmit={saveCardTemplate}>
+        <label>رمز القالب<input value={templateDraft.code} onChange={(e) => setTemplateDraft({ ...templateDraft, code: e.target.value })} disabled={!!editingTemplateId} required pattern="[A-Za-z0-9_-]+" /></label>
+        <label>اسم القالب<input value={templateDraft.name} onChange={(e) => setTemplateDraft({ ...templateDraft, name: e.target.value })} required minLength={2} /></label>
+        <label>العرض (مم)<input type="number" min="1" max="300" value={templateDraft.width_mm} onChange={(e) => setTemplateDraft({ ...templateDraft, width_mm: e.target.value })} required /></label>
+        <label>الارتفاع (مم)<input type="number" min="1" max="300" value={templateDraft.height_mm} onChange={(e) => setTemplateDraft({ ...templateDraft, height_mm: e.target.value })} required /></label>
+        <label>لون الخلفية<input type="color" value={templateDraft.background_color} onChange={(e) => setTemplateDraft({ ...templateDraft, background_color: e.target.value })} /></label>
+        <label>لون النص<input type="color" value={templateDraft.text_color} onChange={(e) => setTemplateDraft({ ...templateDraft, text_color: e.target.value })} /></label>
+        <div className="form-actions"><button type="submit" disabled={busy}>{editingTemplateId ? "حفظ التعديلات" : "إنشاء قالب"}</button><button type="button" className="secondary-button" onClick={() => { setEditingTemplateId(null); setTemplateDraft({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37" }); }}>جديد / إلغاء</button></div>
+      </form>
+      <div className="template-gallery">{cardTemplates.map((item) => <article className="panel template-item" key={item.id}><div className="template-sample" style={{ background: item.background_color, color: item.text_color, aspectRatio: `${item.width_mm}/${item.height_mm}` }}><strong>اسم المستخدم</strong><span>الأسطورة نت</span></div><h3>{item.name} {item.is_default ? "— افتراضي" : ""}</h3><small>{item.width_mm} × {item.height_mm} مم · {item.code}</small><div className="form-actions"><button type="button" className="table-action" onClick={() => { setEditingTemplateId(item.id); setTemplateDraft({ code: item.code, name: item.name, width_mm: String(item.width_mm), height_mm: String(item.height_mm), background_color: item.background_color, text_color: item.text_color }); }}>تعديل</button><button type="button" className="table-action danger-action" disabled={busy || item.is_default} onClick={() => deleteCardTemplate(item)}>حذف</button></div></article>)}</div>
+      {cardTemplates.length === 0 && <div className="empty-state">لا توجد قوالب محفوظة بعد.</div>}
+    </>;
+  }
+
   function renderCards() {
     return (
       <>
@@ -1007,9 +1069,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <div className="table-wrap"><table><thead><tr><th>التسلسل</th><th>اسم المستخدم</th><th>كلمة المرور</th></tr></thead><tbody>{generatedCards.map((card) => <tr key={card.serial_number}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.password || "بدون كلمة مرور"}</td></tr>)}</tbody></table></div>
           </section>
         )}
-        <div className="section-heading compact-heading"><div><h2>سجل الكروت</h2><p>ابحث باسم المستخدم أو الرقم التسلسلي، ثم أوقف الكرت أو أعد تفعيله أو ألغِ الكرت غير المستخدم.</p></div><span className="count-tag">200 كرت لكل صفحة</span></div>
+        <div className="section-heading compact-heading"><div><h2>سجل الكروت</h2><p>ابحث وحدد الكروت ثم جهّزها للطباعة أو أدر حالتها.</p></div><span className="count-tag">200 كرت لكل صفحة</span></div><div className="card-selection-toolbar"><label><input type="checkbox" checked={cards.length > 0 && cards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? [...new Set([...selectedCardIds, ...cards.map((card) => card.id)])] : selectedCardIds.filter((id) => !cards.some((card) => card.id === id)))} /> تحديد كروت الصفحة الحالية</label><span>تم تحديد {selectedCardIds.length} كرت</span><button type="button" disabled={!selectedCardIds.length} onClick={prepareSelectedCardsForPrinting}>تجهيز المحدد للطباعة</button></div>
         <div className="card-search"><label htmlFor="card-search">بحث في الكروت</label><input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" /></div>
-        <div className="table-wrap"><table><thead><tr><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>{cards.map((card) => <tr key={card.id}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td><td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td><td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td><td>{card.is_free ? "نعم" : "لا"}</td><td className="actions-cell">{card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null}{["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button>}</td></tr>)}</tbody></table>{cards.length === 0 && <div className="empty-state">لا توجد كروت تطابق البحث في هذه الصفحة.</div>}</div>
+        <div className="table-wrap"><table><thead><tr><th>تحديد</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>{cards.map((card) => <tr key={card.id}><td><input type="checkbox" aria-label={`تحديد ${card.username}`} checked={selectedCardIds.includes(card.id)} onChange={() => toggleSelectedCard(card.id)} /></td><td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td><td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td><td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td><td>{card.is_free ? "نعم" : "لا"}</td><td className="actions-cell">{card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null}{["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button>}</td></tr>)}</tbody></table>{cards.length === 0 && <div className="empty-state">لا توجد كروت تطابق البحث في هذه الصفحة.</div>}</div>
         <div className="pagination-controls">
           <button type="button" className="table-action" disabled={cardOffset === 0 || busy} onClick={() => changeCardPage(cardOffset - 200)}>السابق</button>
           <span>الصفحة {Math.floor(cardOffset / 200) + 1}</span>
@@ -1418,23 +1480,27 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <div className="brand-copy"><strong>الأسطورة RADIUS</strong><span>إدارة الشبكة والكروت</span></div>
         <div className="side-label">القائمة الرئيسية</div>
         <nav>
-          <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>نظرة عامة</button>
-          <button className={page === "plans" ? "nav-item active" : "nav-item"} onClick={() => setPage("plans")}>الباقات</button>
-          <button className={page === "cards" ? "nav-item active" : "nav-item"} onClick={() => setPage("cards")}>الكروت</button>
+          <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
+          <div className="nav-group"><span>نظام اليوزرمنجر</span>
+            <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إضافة / إدارة الكروت</button>
+            <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>
+            <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات ومزامنة اليوزرمنجر</button>
+            <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>تقارير اليوزرمنجر / المالية</button>
+          </div>
           <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>نقاط البيع والطباعة</button>
-          <button className={page === "routers" ? "nav-item active" : "nav-item"} onClick={() => setPage("routers")}>أجهزة MikroTik</button>
-          <button className={page === "reports" ? "nav-item active" : "nav-item"} onClick={() => setPage("reports")}>التقارير المالية</button>
+          <button className={page === "templates" ? "nav-item active" : "nav-item"} onClick={() => setPage("templates")}>تصاميم الكروت</button>
+          <div className="nav-group muted"><span>أقسام قيد التطوير</span><small>نظام الهوتسبوت · الكفتيريا والهوست · أجهزة البث · محرر الصفحات · الخدمات الإضافية · الإعدادات والصيانة</small></div>
         </nav>
         <div className="sidebar-foot">ALOSTORA-RADIUS · 0.4.0</div>
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "pos" ? "نقاط البيع والطباعة" : page === "reports" ? "التقارير المالية" : "إدارة أجهزة MikroTik"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "pos" ? "نقاط البيع والطباعة" : page === "reports" ? "تقارير اليوزرمنجر والمالية" : page === "templates" ? "استديو تصميم الكروت" : "إدارة أجهزة MikroTik"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "pos" ? renderPos() : page === "reports" ? renderReports() : renderRouters()}
+        {page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "pos" ? renderPos() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
