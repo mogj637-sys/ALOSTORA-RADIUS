@@ -66,14 +66,35 @@ def run_bounded_batches(
     limits = policy or BatchPolicy()
     state = dict(checkpoint or {})
     cursor = state.get("cursor")
-    if cursor is not None and not isinstance(cursor, str):
-        raise BatchSafetyError("checkpoint cursor must be a string or null")
+    if cursor is not None and (not isinstance(cursor, str) or not cursor):
+        raise BatchSafetyError("checkpoint cursor must be a non-empty string or null")
+
+    # Validate persisted counters before any source call or page side effect.
+    prior_records = state.get("processed_records", 0)
+    prior_pages = state.get("processed_pages", 0)
+    if (
+        isinstance(prior_records, bool) or not isinstance(prior_records, int)
+        or prior_records < 0
+        or isinstance(prior_pages, bool) or not isinstance(prior_pages, int)
+        or prior_pages < 0
+    ):
+        raise BatchSafetyError("checkpoint counters must be non-negative integers")
+    if state.get("source_complete") is True:
+        return BatchResult("completed", 0, 0, state)
+    if prior_records >= limits.max_records or prior_pages >= limits.max_pages:
+        return BatchResult("paused", 0, 0, state)
 
     processed_records = 0
     processed_pages = 0
     started = clock()
     seen_cursors: set[str] = set()
+    history = state.get("cursor_history", [])
+    if not isinstance(history, list) or any(not isinstance(item, str) or not item for item in history):
+        raise BatchSafetyError("checkpoint cursor_history must be a list of non-empty strings")
+    seen_cursors.update(history)
     if cursor is not None:
+        if cursor in seen_cursors:
+            raise BatchSafetyError("checkpoint cursor was already processed")
         seen_cursors.add(cursor)
 
     while processed_pages < limits.max_pages and processed_records < limits.max_records:
@@ -108,8 +129,9 @@ def run_bounded_batches(
 
         state = {
             "cursor": cursor,
-            "processed_records": int(state.get("processed_records", 0)) + len(page.records),
-            "processed_pages": int(state.get("processed_pages", 0)) + 1,
+            "processed_records": prior_records + processed_records + len(page.records),
+            "processed_pages": prior_pages + processed_pages + 1,
+            "cursor_history": sorted(seen_cursors),
             "source_complete": bool(page.exhausted),
         }
         save_checkpoint(state)
