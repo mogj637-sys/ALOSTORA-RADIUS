@@ -56,6 +56,21 @@ type RouterRecord = {
   last_seen_at: string | null;
 };
 
+type UserManagerProbe = {
+  connected: boolean;
+  router_id: number;
+  router_name: string;
+  identity: string | null;
+  routeros_version: string | null;
+  board_name: string | null;
+  architecture_name: string | null;
+  uptime: string | null;
+  user_manager_available: boolean;
+  resources: Record<string, { available: boolean; count: number | null }>;
+  warnings: string[];
+  read_only: boolean;
+};
+
 type PointOfSale = {
   id: number;
   code: string;
@@ -236,6 +251,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [page, setPage] = useState<"overview" | "plans" | "cards" | "pos" | "routers" | "reports">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [routers, setRouters] = useState<RouterRecord[]>([]);
+  const [userManagerProbe, setUserManagerProbe] = useState<UserManagerProbe | null>(null);
+  const [probingRouterId, setProbingRouterId] = useState<number | null>(null);
   const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
   const [cards, setCards] = useState<Card[]>([]);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
@@ -311,6 +328,26 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تسجيل الراوتر");
     } finally { setBusy(false); }
+  }
+
+  async function testRouterUserManager(item: RouterRecord) {
+    setProbingRouterId(item.id);
+    setUserManagerProbe(null);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiRequest<UserManagerProbe>(
+        token,
+        `/api/v1/routers/${item.id}/user-manager/test-connection`,
+        { method: "POST" },
+      );
+      setUserManagerProbe(result);
+      setNotice(`تم الاتصال بـ User Manager على ${item.name} وفحص الموارد بوضع القراءة فقط.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر فحص اتصال User Manager");
+    } finally {
+      setProbingRouterId(null);
+    }
   }
 
   async function toggleRouter(item: RouterRecord) {
@@ -1059,11 +1096,29 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <td>{router.name}</td><td>{router.nas_identifier}</td><td>{router.management_host}</td><td>{router.radius_client_address || "غير محدد"}</td><td>{router.api_port}</td>
               <td>{router.routeros_version || "غير محدد"}</td><td>{router.last_seen_at ? new Date(router.last_seen_at).toLocaleString("ar") : "لم يتصل بعد"}</td>
               <td>{router.is_active ? "مفعل" : "متوقف"}</td>
-              <td><button type="button" className="table-action" disabled={busy} onClick={() => toggleRouter(router)}>{router.is_active ? "تعطيل" : "تفعيل"}</button></td>
+              <td className="actions-cell">
+                <button type="button" className="table-action" disabled={busy || probingRouterId !== null || !router.api_username} onClick={() => testRouterUserManager(router)}>{probingRouterId === router.id ? "جارٍ الفحص..." : "فحص User Manager"}</button>
+                <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => toggleRouter(router)}>{router.is_active ? "تعطيل" : "تفعيل"}</button>
+              </td>
             </tr>)}</tbody>
           </table>
           {routers.length === 0 && <div className="empty-state">لا توجد راوترات مسجلة. أضف أول راوتر من النموذج أعلاه.</div>}
         </div>
+        {userManagerProbe && (
+          <section className="panel um-probe-panel">
+            <div className="section-heading">
+              <div><h2>نتيجة فحص User Manager</h2><p>{userManagerProbe.router_name} · {userManagerProbe.identity || "هوية غير متاحة"} · {userManagerProbe.routeros_version || "إصدار غير معروف"}</p></div>
+              <span className="count-tag">{userManagerProbe.user_manager_available ? "الخدمة متاحة" : "الخدمة غير مؤكدة"}</span>
+            </div>
+            <div className="pos-metrics">
+              {Object.entries(userManagerProbe.resources).map(([key, value]) => (
+                <div key={key}><span>{({ users: "الكروت", profiles: "البروفايلات", limitations: "القيود", profile_limitations: "ربط البروفايلات", sessions: "الجلسات", customers: "العملاء" } as Record<string, string>)[key] || key}</span><strong>{value.available && value.count !== null ? value.count.toLocaleString("ar") : "غير متاح"}</strong></div>
+              ))}
+            </div>
+            {(userManagerProbe.warnings.length > 0) && <div className="notice">{userManagerProbe.warnings.map((warning) => <div key={warning}>• {warning}</div>)}</div>}
+            <small className="field-hint">الفحص قراءة فقط؛ لم يتم تنزيل كلمات مرور أو تعديل أي سجل في User Manager.</small>
+          </section>
+        )}
       </>
     );
   }
