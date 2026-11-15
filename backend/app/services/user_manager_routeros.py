@@ -28,7 +28,9 @@ USER_MANAGER_RESOURCES = {
     "users": "/tool/user-manager/user",
     "profiles": "/tool/user-manager/profile",
     "limitations": "/tool/user-manager/limitation",
+    "profile_limitations": "/tool/user-manager/profile/profile-limitation",
     "sessions": "/tool/user-manager/session",
+    "customers": "/tool/user-manager/customer",
 }
 
 
@@ -82,6 +84,10 @@ def inspect_routeros_user_manager(
         identity = api.get_resource("/system/identity").get()
         packages = api.get_resource("/system/package").get()
         version = _first(system, "version")
+        if not version or not version.startswith("6."):
+            raise UserManagerConnectionError(
+                "هذا الموصل مخصص حالياً لـ RouterOS v6؛ دعم v7 يحتاج موصلاً واختبارات منفصلة."
+            )
         package_names = {
             str(row.get("name", "")).lower()
             for row in packages
@@ -118,6 +124,8 @@ def inspect_routeros_user_manager(
             resources=resources,
             warnings=warnings,
         )
+    except UserManagerConnectionError:
+        raise
     except Exception as exc:
         # Do not return library exception strings: some implementations include
         # request details. Keep the original exception only for server logs.
