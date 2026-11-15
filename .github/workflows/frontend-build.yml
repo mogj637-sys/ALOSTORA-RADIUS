@@ -1,4 +1,4 @@
-name: Frontend build # dashboard template and selection validation
+name: Frontend build # dashboard creation and management validation
 
 on:
   pull_request:
