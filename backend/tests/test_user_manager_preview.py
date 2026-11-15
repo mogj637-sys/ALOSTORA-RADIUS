@@ -108,3 +108,17 @@ def test_preview_rejects_non_object_record():
         assert "كائن بيانات" in str(exc)
     else:
         raise AssertionError("Expected ValueError")
+
+
+
+def test_preview_fingerprint_tracks_credential_availability_without_storing_secret():
+    unavailable = build_user_manager_preview([{
+        "external_id": "*10", "username": "credential-card"
+    }])[0]
+    available = build_user_manager_preview([{
+        "external_id": "*10", "username": "credential-card", "password": ""
+    }])[0]
+
+    assert unavailable["source_fingerprint"] != available["source_fingerprint"]
+    assert "password" not in repr(unavailable["safe_snapshot"]).lower()
+    assert "password" not in repr(available["safe_snapshot"]).lower()
