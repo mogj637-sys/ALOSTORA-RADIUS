@@ -28,6 +28,10 @@ class UserManagerImportPreview(Base):
     username: Mapped[str] = mapped_column(String(120), nullable=False)
     source_profile_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     classification: Mapped[str] = mapped_column(String(30), nullable=False)
+    credential_mode: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    credential_state: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="unavailable"
+    )
     matched_card_id: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("cards.id", ondelete="RESTRICT"), nullable=True
     )
