@@ -243,13 +243,13 @@ def export_point_of_sale_statement(
     sheet = workbook.active
     sheet.title = "كشف حساب نقطة البيع"
     sheet.append(["التاريخ", "نوع الحركة", "البيان", "المرجع", "المستخدم", "مدين", "دائن", "الرصيد بعد الحركة"])
+    sheet.append(["", "", "الرصيد الافتتاحي", "", "", 0, 0, float(statement.opening_balance)])
     for entry in statement.entries:
         sheet.append([
             entry.created_at.replace(tzinfo=None), entry.entry_type, entry.description or "",
             entry.reference or "", entry.created_by or "", float(entry.debit),
             float(entry.credit), float(entry.running_balance),
         ])
-    sheet.append(["", "", "الرصيد الافتتاحي", "", "", 0, 0, float(statement.opening_balance)])
     sheet.append(["", "", "إجمالي الفترة", "", "", float(statement.total_debit), float(statement.total_credit), float(statement.closing_balance)])
     _style_sheet(sheet)
     for row in sheet.iter_rows(min_row=2, min_col=1, max_col=1):
