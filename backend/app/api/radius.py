@@ -122,7 +122,7 @@ def _hex_attribute(payload: dict[str, Any], *names: str) -> str | None:
             return None
         if isinstance(value, bytes):
             return value.hex()
-        text = str(value).strip()
+        text = str(value) if attribute_type == "octets" else str(value).strip()
         if text.lower().startswith("0x"):
             text = text[2:]
             if len(text) % 2 == 0 and all(char in "0123456789abcdefABCDEF" for char in text):
