@@ -14,6 +14,8 @@ type Plan = {
   code: string;
   name: string;
   price: number;
+  commission_type: "none" | "fixed" | "percentage";
+  commission_value: number;
   data_limit_bytes: number | null;
   session_time_limit_seconds: number | null;
   validity_period_seconds: number | null;
@@ -212,7 +214,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [planDraft, setPlanDraft] = useState({
-    code: "", name: "", price: "", dataGb: "", timeHours: "", validityDays: "", speedProfile: "",
+    code: "", name: "", price: "", commissionType: "none" as "none" | "fixed" | "percentage", commissionValue: "", dataGb: "", timeHours: "", validityDays: "", speedProfile: "",
   });
   const [batchDraft, setBatchDraft] = useState({
     planId: "", quantity: "100", cardType: "separate_credentials",
@@ -469,6 +471,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         code: planDraft.code,
         name: planDraft.name,
         price: Number(planDraft.price),
+        commission_type: planDraft.commissionType,
+        commission_value: planDraft.commissionType === "none" ? 0 : Number(planDraft.commissionValue),
         data_limit_bytes: numberOrNull(planDraft.dataGb, 1024 ** 3),
         session_time_limit_seconds: numberOrNull(planDraft.timeHours, 3600),
         validity_period_seconds: numberOrNull(planDraft.validityDays, 86400),
@@ -478,7 +482,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         method: editingPlanId ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
-      setPlanDraft({ code: "", name: "", price: "", dataGb: "", timeHours: "", validityDays: "", speedProfile: "" });
+      setPlanDraft({ code: "", name: "", price: "", commissionType: "none", commissionValue: "", dataGb: "", timeHours: "", validityDays: "", speedProfile: "" });
       const wasEditing = editingPlanId !== null;
       setEditingPlanId(null);
       await loadPlans();
@@ -496,6 +500,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       code: plan.code,
       name: plan.name,
       price: String(plan.price),
+      commissionType: plan.commission_type,
+      commissionValue: plan.commission_type === "none" ? "" : String(plan.commission_value),
       dataGb: plan.data_limit_bytes === null ? "" : String(plan.data_limit_bytes / 1024 ** 3),
       timeHours: plan.session_time_limit_seconds === null ? "" : String(plan.session_time_limit_seconds / 3600),
       validityDays: plan.validity_period_seconds === null ? "" : String(plan.validity_period_seconds / 86400),
@@ -628,6 +634,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <label>رمز الباقة<input value={planDraft.code} onChange={(e) => setPlanDraft({ ...planDraft, code: e.target.value })} required /></label>
           <label>اسم الباقة<input value={planDraft.name} onChange={(e) => setPlanDraft({ ...planDraft, name: e.target.value })} required /></label>
           <label>السعر<input type="number" min="0" step="0.01" value={planDraft.price} onChange={(e) => setPlanDraft({ ...planDraft, price: e.target.value })} required /></label>
+          <label>نوع العمولة<select value={planDraft.commissionType} onChange={(e) => setPlanDraft({ ...planDraft, commissionType: e.target.value as "none" | "fixed" | "percentage", commissionValue: e.target.value === "none" ? "" : planDraft.commissionValue })}><option value="none">بدون عمولة</option><option value="percentage">نسبة مئوية</option><option value="fixed">مبلغ ثابت لكل كرت</option></select></label>
+          {planDraft.commissionType !== "none" && <label>{planDraft.commissionType === "percentage" ? "نسبة العمولة (%)" : "العمولة لكل كرت (ريال)"}<input type="number" min="0" max={planDraft.commissionType === "percentage" ? "100" : planDraft.price || undefined} step="0.01" value={planDraft.commissionValue} onChange={(e) => setPlanDraft({ ...planDraft, commissionValue: e.target.value })} required /></label>}
           <label>الحجم بالجيجابايت <span className="field-hint">اتركه فارغاً ليكون مفتوحاً</span><input type="number" min="0.001" step="0.001" value={planDraft.dataGb} onChange={(e) => setPlanDraft({ ...planDraft, dataGb: e.target.value })} /></label>
           <label>وقت الاستخدام بالساعات <span className="field-hint">اتركه فارغاً ليكون مفتوحاً</span><input type="number" min="0.01" step="0.01" value={planDraft.timeHours} onChange={(e) => setPlanDraft({ ...planDraft, timeHours: e.target.value })} /></label>
           <label>الصلاحية بالأيام <span className="field-hint">تبدأ من أول دخول</span><input type="number" min="0.01" step="0.01" value={planDraft.validityDays} onChange={(e) => setPlanDraft({ ...planDraft, validityDays: e.target.value })} /></label>
@@ -635,8 +643,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPlanId ? "حفظ التعديلات" : "إنشاء الباقة"}</button>{editingPlanId !== null && <button type="button" className="secondary-button" onClick={() => { setEditingPlanId(null); setPlanDraft({ code: "", name: "", price: "", dataGb: "", timeHours: "", validityDays: "", speedProfile: "" }); setNotice(""); }}>إلغاء التعديل</button>}</div>
         </form>
         <div className="section-heading compact-heading"><div><h2>الباقات المسجلة</h2></div><span className="count-tag">{plans.length} باقة</span></div>
-        <div className="table-wrap"><table><thead><tr><th>الرمز</th><th>اسم الباقة</th><th>السعر</th><th>الحجم</th><th>الوقت</th><th>الصلاحية</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
-          <tbody>{plans.map((plan) => <tr key={plan.id}><td>{plan.code}</td><td>{plan.name}</td><td>{Number(plan.price).toLocaleString("en-US")}</td><td>{plan.data_limit_bytes === null ? "مفتوح" : `${(plan.data_limit_bytes / 1024 ** 3).toFixed(2)} GB`}</td><td>{plan.session_time_limit_seconds === null ? "مفتوح" : `${(plan.session_time_limit_seconds / 3600).toFixed(2)} ساعة`}</td><td>{plan.validity_period_seconds === null ? "مفتوح" : `${(plan.validity_period_seconds / 86400).toFixed(2)} يوم`}</td><td>{plan.is_active ? "مفعلة" : "متوقفة"}</td><td><button type="button" className="table-action" onClick={() => editPlan(plan)}>تعديل</button><button type="button" className="table-action" disabled={busy} onClick={() => togglePlan(plan)}>{plan.is_active ? "إيقاف" : "تفعيل"}</button></td></tr>)}</tbody>
+        <div className="table-wrap"><table><thead><tr><th>الرمز</th><th>اسم الباقة</th><th>السعر</th><th>عمولة نقطة البيع</th><th>الحجم</th><th>الوقت</th><th>الصلاحية</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+          <tbody>{plans.map((plan) => <tr key={plan.id}><td>{plan.code}</td><td>{plan.name}</td><td>{Number(plan.price).toLocaleString("en-US")}</td><td>{plan.commission_type === "none" ? "بدون" : plan.commission_type === "percentage" ? `${Number(plan.commission_value)}%` : `${Number(plan.commission_value).toFixed(2)} ريال`}</td><td>{plan.data_limit_bytes === null ? "مفتوح" : `${(plan.data_limit_bytes / 1024 ** 3).toFixed(2)} GB`}</td><td>{plan.session_time_limit_seconds === null ? "مفتوح" : `${(plan.session_time_limit_seconds / 3600).toFixed(2)} ساعة`}</td><td>{plan.validity_period_seconds === null ? "مفتوح" : `${(plan.validity_period_seconds / 86400).toFixed(2)} يوم`}</td><td>{plan.is_active ? "مفعلة" : "متوقفة"}</td><td><button type="button" className="table-action" onClick={() => editPlan(plan)}>تعديل</button><button type="button" className="table-action" disabled={busy} onClick={() => togglePlan(plan)}>{plan.is_active ? "إيقاف" : "تفعيل"}</button></td></tr>)}</tbody>
         </table>{plans.length === 0 && <div className="empty-state">لا توجد باقات بعد. أنشئ أول باقة من النموذج أعلاه.</div>}</div>
       </>
     );
