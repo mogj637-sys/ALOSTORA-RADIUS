@@ -326,3 +326,37 @@ def test_exact_user_count_zero_skips_detail_print(monkeypatch):
     assert user_resource.calls == [
         ("print", {"?username": "missing-card", "count-only": ""})
     ]
+
+
+
+def test_profile_relation_count_guard_stops_before_large_detail_read(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    resources = _fake_resources()
+    resources["/tool/user-manager/user"] = FakeResource(rows=[{
+        ".id": "*A1",
+        "username": "voucher-100",
+        "actual-profile": "basic",
+    }])
+    profile_resource = FakeResource(rows=[{"name": "basic"}])
+    resources["/tool/user-manager/profile"] = profile_resource
+    relation_resource = FakeResource(
+        rows=[{"profile": "basic", "limitation": "lim-1"}],
+        count=101,
+    )
+    resources["/tool/user-manager/profile/profile-limitation"] = relation_resource
+    api = FakeApi(resources)
+    monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
+
+    with pytest.raises(adapter.UserManagerConnectionError, match="تجاوز حد القراءة"):
+        adapter.inspect_user_manager_user(
+            host="192.0.2.10",
+            port=8729,
+            username="reader",
+            password="secret",
+            target_username="voucher-100",
+        )
+
+    assert relation_resource.calls == [
+        ("print", {"?profile": "basic", "count-only": ""})
+    ]
+    assert FakePool.last.disconnected is True
