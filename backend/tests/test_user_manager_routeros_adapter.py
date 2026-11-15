@@ -18,10 +18,13 @@ class FakeResource:
 
     def call(self, command, params):
         assert command == "print"
-        assert params == {"count-only": ""}
         if self.error:
             raise self.error
-        return [{"ret": str(self.count)}]
+        if "count-only" in params:
+            assert params == {"count-only": ""}
+            return [{"ret": str(self.count)}]
+        self.last_params = params
+        return self.rows
 
 
 class FakeApi:
@@ -138,3 +141,100 @@ def test_api_error_is_sanitized(monkeypatch):
             host="192.0.2.10", port=8728, username="reader", password="secret"
         )
     assert "sensitive router command details" not in str(error.value)
+
+
+
+def test_exact_user_inspection_uses_device_query_and_never_requests_password(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    resources = _fake_resources()
+    user_resource = FakeResource(rows=[{
+        ".id": "*A1",
+        "username": "voucher-100",
+        "customer": "admin",
+        "disabled": "false",
+        "actual-profile": "basic",
+        "shared-users": "1",
+    }])
+    resources["/tool/user-manager/user"] = user_resource
+    api = FakeApi(resources)
+    monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
+
+    result = adapter.inspect_user_manager_user(
+        host="192.0.2.10",
+        port=8729,
+        username="reader",
+        password="secret",
+        target_username="voucher-100",
+    )
+
+    assert result == {
+        "external_id": "*A1",
+        "username": "voucher-100",
+        "customer": "admin",
+        "disabled": "false",
+        "actual_profile": "basic",
+        "shared_users": "1",
+    }
+    assert user_resource.last_params == {
+        "?username": "voucher-100",
+        ".proplist": ".id,username,customer,disabled,actual-profile,shared-users",
+    }
+    assert "password" not in user_resource.last_params[".proplist"]
+    assert FakePool.last.disconnected is True
+
+
+def test_exact_user_inspection_returns_none_when_not_found(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    resources = _fake_resources()
+    resources["/tool/user-manager/user"] = FakeResource(rows=[])
+    api = FakeApi(resources)
+    monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
+
+    result = adapter.inspect_user_manager_user(
+        host="192.0.2.10",
+        port=8728,
+        username="reader",
+        password="secret",
+        target_username="missing-card",
+    )
+
+    assert result is None
+
+
+def test_exact_user_inspection_rejects_unfiltered_or_ambiguous_result(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    resources = _fake_resources()
+    resources["/tool/user-manager/user"] = FakeResource(rows=[
+        {"username": "voucher-100"},
+        {"username": "voucher-100"},
+    ])
+    api = FakeApi(resources)
+    monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
+
+    with pytest.raises(adapter.UserManagerConnectionError, match="أكثر من سجل"):
+        adapter.inspect_user_manager_user(
+            host="192.0.2.10",
+            port=8728,
+            username="reader",
+            password="secret",
+            target_username="voucher-100",
+        )
+
+
+def test_exact_user_inspection_rejects_wrong_username_returned_by_query(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    resources = _fake_resources()
+    resources["/tool/user-manager/user"] = FakeResource(rows=[
+        {"username": "different-user"},
+    ])
+    api = FakeApi(resources)
+    monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
+
+    with pytest.raises(adapter.UserManagerConnectionError, match="لم تتطابق"):
+        adapter.inspect_user_manager_user(
+            host="192.0.2.10",
+            port=8728,
+            username="reader",
+            password="secret",
+            target_username="voucher-100",
+        )
