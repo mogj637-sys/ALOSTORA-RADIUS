@@ -6,6 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.auth import router as auth_router
 from app.api.cards import router as cards_router
+from app.api.card_templates import router as card_templates_router
 from app.api.plans import router as plans_router
 from app.api.points_of_sale import router as points_of_sale_router
 from app.api.pos_accounts import router as pos_accounts_router
@@ -34,6 +35,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(plans_router)
 app.include_router(cards_router)
+app.include_router(card_templates_router)
 app.include_router(points_of_sale_router)
 app.include_router(pos_accounts_router)
 app.include_router(print_jobs_router)
