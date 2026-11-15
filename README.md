@@ -40,6 +40,7 @@
 - [x] FreeRADIUS Docker service مع rlm_rest وقائمة NAS ديناميكية وفحص إعدادات الحاوية في CI.
 - [x] اختبارات تكامل PostgreSQL لمصادقة RADIUS والمحاسبة والحدود الأساسية.
 - [x] اختبارات تكامل PostgreSQL وبناء الواجهة عبر GitHub Actions.
+- [x] اختبار UDP متكامل مع FreeRADIUS 3.2.10: CHAP Access-Accept/Reject وAccounting Start/Interim/Stop.
 - [ ] إدارة التحصيلات النقدية والديون والعمولات والتسويات.
 - [ ] اختبار Access-Accept/Reject وAccounting من راوتر MikroTik فعلياً بعد إعداد NAS-Identifier وعنوان مصدر RADIUS.
 - [ ] ربط MikroTik RouterOS v6/v7 فعلياً واختبار الاتصال والإدارة.
@@ -62,7 +63,7 @@
 - لا يُعلن عن نجاح ميزة RADIUS أو السرعة أو الفصل إلا بعد اختبارها فعلياً.
 
 ## تشغيل بيئة التطوير
-راجع [دليل التطوير](docs/DEVELOPMENT.md) و[دليل المصادقة](docs/AUTHENTICATION.md).
+راجع [دليل التطوير](docs/DEVELOPMENT.md)، و[دليل المصادقة](docs/AUTHENTICATION.md)، و[دليل ربط MikroTik الفعلي](docs/MIKROTIK_RADIUS_INTEGRATION.md).
 
 باختصار:
 1. انسخ المستودع.
@@ -93,4 +94,4 @@ Set the result as `RADIUS_INTERNAL_API_KEY`. Keep it identical for the API and F
 docker compose restart freeradius
 ```
 
-The first integration uses the REST-backed authorization/accounting endpoints. CoA/Disconnect and automatic client-list refresh are not implemented yet, and the service still needs end-to-end validation against a real MikroTik router.
+The current CI test sends real UDP RADIUS packets through FreeRADIUS and the REST-backed API, but it does not replace a test against a physical MikroTik. NAS clients are loaded when FreeRADIUS starts; restart the service after changing router client details. CoA/Disconnect remains disabled by default and requires a separate RouterOS test. Follow [the MikroTik integration guide](docs/MIKROTIK_RADIUS_INTEGRATION.md) for a controlled first connection.
