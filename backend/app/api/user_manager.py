@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -251,6 +252,69 @@ def preview_user_manager_user_endpoint(
         "credentials_read": False,
     }
 
+
+
+@router.get("/{router_id}/user-manager/previews/runs")
+def list_user_manager_preview_runs(
+    router_id: int,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """List recent read-only preview runs for one router without contacting RouterOS."""
+    item = db.get(Router, router_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="الراوتر غير موجود")
+
+    runs = (
+        db.query(UserManagerSyncRun)
+        .filter(
+            UserManagerSyncRun.router_id == router_id,
+            UserManagerSyncRun.run_type == "preview",
+        )
+        .order_by(
+            UserManagerSyncRun.created_at.desc(),
+            UserManagerSyncRun.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    if not runs:
+        return {
+            "items": [],
+            "limit": limit,
+            "read_only": True,
+            "imported": False,
+            "credentials_read": False,
+        }
+
+    run_ids = [run.id for run in runs]
+    counts = dict(
+        db.query(
+            UserManagerImportPreview.sync_run_id,
+            func.count(UserManagerImportPreview.id),
+        )
+        .filter(UserManagerImportPreview.sync_run_id.in_(run_ids))
+        .group_by(UserManagerImportPreview.sync_run_id)
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": str(run.id),
+                "status": run.status,
+                "discovered_users": run.discovered_users,
+                "preview_count": counts.get(run.id, 0),
+                "created_at": run.created_at.isoformat() if run.created_at else None,
+                "started_at": run.started_at.isoformat() if run.started_at else None,
+                "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+            }
+            for run in runs
+        ],
+        "limit": limit,
+        "read_only": True,
+        "imported": False,
+        "credentials_read": False,
+    }
 
 
 @router.get("/{router_id}/user-manager/previews")
