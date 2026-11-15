@@ -124,13 +124,12 @@ def run_bounded_batches(
         processed_records += len(page.records)
         processed_pages += 1
         cursor = next_cursor
-        if cursor is not None:
-            seen_cursors.add(cursor)
-
+        # The next cursor is pending, not processed. Persist only cursors whose
+        # pages have already completed so a resumed run can fetch this cursor.
         state = {
             "cursor": cursor,
-            "processed_records": prior_records + processed_records + len(page.records),
-            "processed_pages": prior_pages + processed_pages + 1,
+            "processed_records": prior_records + processed_records,
+            "processed_pages": prior_pages + processed_pages,
             "cursor_history": sorted(seen_cursors),
             "source_complete": bool(page.exhausted),
         }
