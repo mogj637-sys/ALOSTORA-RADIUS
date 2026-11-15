@@ -70,6 +70,24 @@ class Plan(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class CardTemplate(TimestampMixin, Base):
+    __tablename__ = "card_templates"
+    __table_args__ = (
+        CheckConstraint("width_mm > 0 AND width_mm <= 300", name="ck_card_templates_width"),
+        CheckConstraint("height_mm > 0 AND height_mm <= 300", name="ck_card_templates_height"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    width_mm: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=90)
+    height_mm: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=50)
+    background_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#ffffff")
+    text_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#173b2d")
+    layout: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
 class PointOfSale(TimestampMixin, Base):
     __tablename__ = "points_of_sale"
 
