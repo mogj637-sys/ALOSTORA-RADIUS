@@ -1,0 +1,91 @@
+import secrets
+
+from app.api import user_manager
+from app.db.session import SessionLocal
+from app.models.core import Router
+from app.services.user_manager_routeros import RouterProbe
+
+
+def _create_router(client, headers):
+    response = client.post(
+        "/api/v1/routers",
+        headers=headers,
+        json={
+            "name": "UM probe " + secrets.token_hex(3),
+            "nas_identifier": "um-probe-" + secrets.token_hex(4),
+            "management_host": "192.0.2.55",
+            "api_port": 8728,
+            "api_username": "um-reader",
+            "api_secret": "api-secret-" + secrets.token_hex(8),
+            "radius_secret": "radius-secret-" + secrets.token_hex(8),
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+def test_user_manager_probe_returns_read_only_router_inventory(owner_client, monkeypatch):
+    client, headers, _ = owner_client
+    router_id = _create_router(client, headers)
+    seen = {}
+
+    def fake_probe(**kwargs):
+        seen.update(kwargs)
+        return RouterProbe(
+            identity="RB2011-test",
+            version="6.49.23 (stable)",
+            board_name="RB2011UiAS-2HnD",
+            architecture_name="mipsbe",
+            uptime="1d2h",
+            user_manager_available=True,
+            resources={
+                "users": {"available": True, "count": 123},
+                "profiles": {"available": True, "count": 4},
+                "limitations": {"available": True, "count": 2},
+                "sessions": {"available": True, "count": 9},
+            },
+            warnings=["API العادي دون TLS"],
+        )
+
+    monkeypatch.setattr(user_manager, "inspect_routeros_user_manager", fake_probe)
+    response = client.post(
+        f"/api/v1/routers/{router_id}/user-manager/test-connection",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["connected"] is True
+    assert data["read_only"] is True
+    assert data["routeros_version"] == "6.49.23 (stable)"
+    assert data["resources"]["users"]["count"] == 123
+    assert "password" not in data
+    assert seen["host"] == "192.0.2.55"
+    assert seen["username"] == "um-reader"
+    assert seen["password"].startswith("api-secret-")
+
+
+def test_user_manager_probe_requires_owner(owner_client):
+    client, _, _ = owner_client
+    response = client.post("/api/v1/routers/999/user-manager/test-connection")
+    assert response.status_code == 401
+
+
+def test_user_manager_probe_requires_saved_api_credentials(owner_client):
+    client, headers, _ = owner_client
+    response = client.post(
+        "/api/v1/routers",
+        headers=headers,
+        json={
+            "name": "No API credentials",
+            "nas_identifier": "um-no-api-" + secrets.token_hex(4),
+            "management_host": "192.0.2.56",
+            "radius_secret": "radius-secret-" + secrets.token_hex(8),
+        },
+    )
+    assert response.status_code == 201
+    router_id = response.json()["id"]
+    result = client.post(
+        f"/api/v1/routers/{router_id}/user-manager/test-connection",
+        headers=headers,
+    )
+    assert result.status_code == 409
