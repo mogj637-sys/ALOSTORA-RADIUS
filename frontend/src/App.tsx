@@ -96,6 +96,28 @@ type PosAccountEntry = {
   created_at: string;
 };
 
+type PosReportRow = {
+  point_of_sale_id: number;
+  point_of_sale_name: string;
+  opening_balance: number;
+  delivered_value: number;
+  other_debits: number;
+  commissions: number;
+  payments: number;
+  returns: number;
+  other_credits: number;
+  period_debit: number;
+  period_credit: number;
+  closing_balance: number;
+};
+type PosReport = {
+  date_from: string;
+  date_to: string;
+  point_count: number;
+  totals: Omit<PosReportRow, "point_of_sale_id" | "point_of_sale_name">;
+  points: PosReportRow[];
+};
+
 type PrintJobHistory = {
   id: string;
   template_code: string | null;
@@ -140,7 +162,7 @@ const modules = [
   { title: "أجهزة MikroTik", detail: "تسجيل الراوترات وإعداد بيانات الاتصال", icon: "⌁", page: "routers" as const },
   { title: "نقاط البيع", detail: "المخزون وتخصيص الكروت بالطباعة", icon: "▣", page: "pos" as const },
   { title: "جلسات RADIUS", detail: "المصادقة والاستهلاك والجلسات", icon: "◉", page: "overview" as const },
-  { title: "التقارير", detail: "المبيعات والاستخدام والأرشفة", icon: "▥", page: "overview" as const },
+  { title: "التقارير", detail: "المبيعات والاستخدام والأرشفة", icon: "▥", page: "reports" as const },
 ];
 
 function LoginScreen({ onLogin }: { onLogin: (username: string, password: string) => Promise<void> }) {
@@ -187,7 +209,7 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
 }
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
-  const [page, setPage] = useState<"overview" | "plans" | "cards" | "pos" | "routers">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "cards" | "pos" | "routers" | "reports">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [routers, setRouters] = useState<RouterRecord[]>([]);
   const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
@@ -202,6 +224,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [posInventory, setPosInventory] = useState<PosInventory | null>(null);
   const [posAccount, setPosAccount] = useState<PosAccountSummary | null>(null);
   const [posEntries, setPosEntries] = useState<PosAccountEntry[]>([]);
+  const [posReport, setPosReport] = useState<PosReport | null>(null);
+  const [reportFrom, setReportFrom] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
+  const [reportTo, setReportTo] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
   const [accountDraft, setAccountDraft] = useState({ amount: "", entryType: "payment", direction: "credit" as "debit" | "credit", description: "", reference: "" });
   const [printHistory, setPrintHistory] = useState<PrintJobHistory[]>([]);
   const [posDraft, setPosDraft] = useState({ code: "", name: "", contactName: "", phone: "" });
@@ -296,6 +321,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     if (!pointId) { setPosInventory(null); return; }
     const result = await apiRequest<PosInventory>(token, `/api/v1/points-of-sale/${pointId}/inventory`);
     setPosInventory(result);
+  }
+
+  async function loadPosReport(from = reportFrom, to = reportTo) {
+    const result = await apiRequest<PosReport>(
+      token,
+      `/api/v1/reports/points-of-sale?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}`,
+    );
+    setPosReport(result);
   }
 
   async function loadPosAccount(pointId: string) {
@@ -448,6 +481,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   useEffect(() => {
     if (page !== "pos") setPrintPreviewCards([]);
+    if (page === "reports") {
+      setError("");
+      loadPosReport().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقرير"));
+    }
     if (page === "plans" || page === "cards" || page === "pos" || page === "routers") {
       setError("");
       Promise.all([
@@ -838,6 +875,45 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  function renderReports() {
+    const totals = posReport?.totals;
+    const money = (value: number | undefined) => Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (
+      <>
+        <div className="section-heading">
+          <div><h2>تقارير نقاط البيع</h2><p>ملخص التسليمات والعمولات والسدادات والأرصدة خلال الفترة المحددة.</p></div>
+          <span className="count-tag">{posReport?.point_count ?? 0} نقطة بيع</span>
+        </div>
+        <form className="panel form-grid" onSubmit={(event) => { event.preventDefault(); setBusy(true); setError(""); loadPosReport().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقرير")).finally(() => setBusy(false)); }}>
+          <label>من تاريخ<input type="date" value={reportFrom} max={reportTo} onChange={(event) => setReportFrom(event.target.value)} required /></label>
+          <label>إلى تاريخ<input type="date" value={reportTo} min={reportFrom} onChange={(event) => setReportTo(event.target.value)} required /></label>
+          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ إعداد التقرير..." : "عرض التقرير"}</button></div>
+        </form>
+        {posReport && (
+          <>
+            <div className="stats-grid">
+              <article className="stat-card"><span>رصيد افتتاحي</span><strong>{money(totals?.opening_balance)} ريال</strong></article>
+              <article className="stat-card"><span>قيمة الكروت المسلّمة</span><strong>{money(totals?.delivered_value)} ريال</strong></article>
+              <article className="stat-card"><span>عمولات نقاط البيع</span><strong>{money(totals?.commissions)} ريال</strong></article>
+              <article className="stat-card"><span>إجمالي السدادات</span><strong>{money(totals?.payments)} ريال</strong></article>
+              <article className="stat-card"><span>رصيد نهاية الفترة</span><strong>{money(totals?.closing_balance)} ريال</strong></article>
+            </div>
+            <div className="section-heading compact-heading"><div><h2>تفاصيل كل نقطة بيع</h2><p>الرصيد الختامي = الرصيد الافتتاحي + المدين خلال الفترة − الدائن خلال الفترة.</p></div></div>
+            <div className="table-wrap">
+              <table><thead><tr><th>نقطة البيع</th><th>رصيد افتتاحي</th><th>تسليم كروت</th><th>مدين آخر</th><th>العمولات</th><th>السدادات</th><th>المرتجعات</th><th>دائن آخر</th><th>رصيد ختامي</th></tr></thead>
+                <tbody>{posReport.points.map((row) => <tr key={row.point_of_sale_id}>
+                  <td>{row.point_of_sale_name}</td><td>{money(row.opening_balance)}</td><td>{money(row.delivered_value)}</td><td>{money(row.other_debits)}</td><td>{money(row.commissions)}</td><td>{money(row.payments)}</td><td>{money(row.returns)}</td><td>{money(row.other_credits)}</td><td><strong>{money(row.closing_balance)}</strong></td>
+                </tr>)}</tbody>
+                <tfoot><tr><th>الإجمالي</th><th>{money(totals.opening_balance)}</th><th>{money(totals.delivered_value)}</th><th>{money(totals.other_debits)}</th><th>{money(totals.commissions)}</th><th>{money(totals.payments)}</th><th>{money(totals.returns)}</th><th>{money(totals.other_credits)}</th><th>{money(totals.closing_balance)}</th></tr></tfoot>
+              </table>
+              {posReport.points.length === 0 && <div className="empty-state">لا توجد نقاط بيع مسجلة حتى الآن.</div>}
+            </div>
+          </>
+        )}
+      </>
+    );
+  }
+
   function renderRouters() {
     return (
       <>
@@ -886,17 +962,18 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "cards" ? "nav-item active" : "nav-item"} onClick={() => setPage("cards")}>الكروت</button>
           <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>نقاط البيع والطباعة</button>
           <button className={page === "routers" ? "nav-item active" : "nav-item"} onClick={() => setPage("routers")}>أجهزة MikroTik</button>
+          <button className={page === "reports" ? "nav-item active" : "nav-item"} onClick={() => setPage("reports")}>التقارير المالية</button>
         </nav>
         <div className="sidebar-foot">ALOSTORA-RADIUS · 0.4.0</div>
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "pos" ? "نقاط البيع والطباعة" : "إدارة أجهزة MikroTik"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "pos" ? "نقاط البيع والطباعة" : page === "reports" ? "التقارير المالية" : "إدارة أجهزة MikroTik"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "pos" ? renderPos() : renderRouters()}
+        {page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "pos" ? renderPos() : page === "reports" ? renderReports() : renderRouters()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
