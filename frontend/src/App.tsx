@@ -73,6 +73,27 @@ type PosInventory = {
   free_cards_printed: number;
 };
 
+
+type PosAccountSummary = {
+  point_of_sale_id: number;
+  point_of_sale_name: string;
+  total_debit: number;
+  total_credit: number;
+  balance_due: number;
+};
+type PosAccountEntry = {
+  id: number;
+  point_of_sale_id: number;
+  entry_type: string;
+  direction: "debit" | "credit";
+  amount: number;
+  description: string | null;
+  reference: string | null;
+  idempotency_key: string;
+  created_by: string | null;
+  created_at: string;
+};
+
 type PrintJobHistory = {
   id: string;
   template_code: string | null;
@@ -177,6 +198,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [points, setPoints] = useState<PointOfSale[]>([]);
   const [selectedPosId, setSelectedPosId] = useState("");
   const [posInventory, setPosInventory] = useState<PosInventory | null>(null);
+  const [posAccount, setPosAccount] = useState<PosAccountSummary | null>(null);
+  const [posEntries, setPosEntries] = useState<PosAccountEntry[]>([]);
+  const [accountDraft, setAccountDraft] = useState({ amount: "", entryType: "payment", direction: "credit" as "debit" | "credit", description: "", reference: "" });
   const [printHistory, setPrintHistory] = useState<PrintJobHistory[]>([]);
   const [posDraft, setPosDraft] = useState({ code: "", name: "", contactName: "", phone: "" });
   const [selectedPrintCardIds, setSelectedPrintCardIds] = useState<string[]>([]);
@@ -272,6 +296,40 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setPosInventory(result);
   }
 
+  async function loadPosAccount(pointId: string) {
+    if (!pointId) { setPosAccount(null); setPosEntries([]); return; }
+    const [summary, entries] = await Promise.all([
+      apiRequest<PosAccountSummary>(token, `/api/v1/points-of-sale/${pointId}/account`),
+      apiRequest<PosAccountEntry[]>(token, `/api/v1/points-of-sale/${pointId}/account/entries?limit=100`),
+    ]);
+    setPosAccount(summary);
+    setPosEntries(entries);
+  }
+
+  async function createAccountEntry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedPosId || Number(accountDraft.amount) <= 0) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<PosAccountEntry>(token, `/api/v1/points-of-sale/${selectedPosId}/account/entries`, {
+        method: "POST",
+        body: JSON.stringify({
+          idempotency_key: `pos-entry-${crypto.randomUUID()}`,
+          entry_type: accountDraft.entryType,
+          direction: accountDraft.direction,
+          amount: accountDraft.amount,
+          description: accountDraft.description || null,
+          reference: accountDraft.reference || null,
+        }),
+      });
+      setAccountDraft({ amount: "", entryType: "payment", direction: "credit", description: "", reference: "" });
+      await loadPosAccount(selectedPosId);
+      setNotice("تم تسجيل الحركة المالية وتحديث كشف الحساب.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تسجيل الحركة المالية");
+    } finally { setBusy(false); }
+  }
+
   async function loadPrintHistory(pointId: string) {
     if (!pointId) { setPrintHistory([]); return; }
     const result = await apiRequest<PrintJobHistory[]>(token, `/api/v1/print-jobs?point_of_sale_id=${pointId}&limit=30`);
@@ -285,7 +343,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       ? selectedPosId
       : (result.find((point) => point.is_active)?.id ?? result[0]?.id)?.toString() ?? "";
     setSelectedPosId(current);
-    await Promise.all([loadPosInventory(current), loadPrintHistory(current)]);
+    await Promise.all([loadPosInventory(current), loadPrintHistory(current), loadPosAccount(current)]);
   }
 
   async function createPointOfSale(event: FormEvent<HTMLFormElement>) {
@@ -304,7 +362,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setPosDraft({ code: "", name: "", contactName: "", phone: "" });
       await loadPointsOfSale();
       setSelectedPosId(String(point.id));
-      await Promise.all([loadPosInventory(String(point.id)), loadPrintHistory(String(point.id))]);
+      await Promise.all([loadPosInventory(String(point.id)), loadPrintHistory(String(point.id)), loadPosAccount(String(point.id))]);
       setNotice("تم إنشاء نقطة البيع بنجاح.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر إنشاء نقطة البيع");
@@ -379,7 +437,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setSelectedPrintCardIds([]);
       setPrintTemplate(result.template_code || printTemplate);
       setPrintPreviewCards(result.items);
-      await Promise.all([loadCards(), loadPosInventory(selectedPosId), loadPrintHistory(selectedPosId)]);
+      await Promise.all([loadCards(), loadPosInventory(selectedPosId), loadPrintHistory(selectedPosId), loadPosAccount(selectedPosId)]);
       setNotice(`تم تسجيل طباعة ${result.card_count} كرت: ${result.commercial_card_count} تجاري و${result.free_card_count} مجاني. القيمة التجارية: ${Number(result.total_amount).toFixed(2)}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تنفيذ الطباعة");
@@ -654,7 +712,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               setSelectedPrintCardIds([]);
               setPrintPreviewCards([]);
               setSelectedPosId(id);
-              Promise.all([loadPosInventory(id), loadPrintHistory(id)]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل بيانات نقطة البيع"));
+              Promise.all([loadPosInventory(id), loadPrintHistory(id), loadPosAccount(id)]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل بيانات نقطة البيع"));
             }}>
               <option value="">-- اختر نقطة بيع --</option>
               {points.map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}</option>)}
@@ -671,6 +729,31 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <div><span>القيمة التجارية المطبوعة</span><strong>{Number(posInventory.commercial_printed_value).toLocaleString("en-US")}</strong></div>
             <div><span>الكروت المجانية المطبوعة</span><strong>{posInventory.free_cards_printed}</strong></div>
           </div>
+        )}
+
+        {selectedPosId && posAccount && (
+          <section className="pos-account-section">
+            <div className="section-heading compact-heading"><div><h2>الحساب المالي لنقطة البيع</h2><p>الرصيد يُحدّث تلقائياً عند تخصيص الكروت التجارية، ولا تُحتسب إعادة الطباعة أو الكروت المجانية.</p></div></div>
+            <div className="pos-stats account-stats">
+              <div><span>إجمالي المديونية</span><strong>{Number(posAccount.total_debit).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</strong></div>
+              <div><span>إجمالي السداد والخصومات</span><strong>{Number(posAccount.total_credit).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</strong></div>
+              <div><span>الرصيد المستحق</span><strong>{Number(posAccount.balance_due).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</strong></div>
+            </div>
+            <form className="panel form-grid account-entry-form" onSubmit={createAccountEntry}>
+              <label>نوع الحركة<select value={accountDraft.entryType} onChange={(e) => setAccountDraft({ ...accountDraft, entryType: e.target.value, direction: e.target.value === "payment" || e.target.value === "commission" || e.target.value === "return" ? "credit" : accountDraft.direction })}>
+                <option value="payment">سداد من نقطة البيع</option><option value="commission">عمولة مستحقة للنقطة</option><option value="return">مرتجع / خصم</option><option value="adjustment">تسوية يدوية</option>
+              </select></label>
+              <label>اتجاه الحركة<select value={accountDraft.direction} onChange={(e) => setAccountDraft({ ...accountDraft, direction: e.target.value as "debit" | "credit" })}><option value="credit">يخصم من المديونية (دائن)</option><option value="debit">يضاف للمديونية (مدين)</option></select></label>
+              <label>المبلغ بالريال<input type="number" min="0.01" step="0.01" value={accountDraft.amount} onChange={(e) => setAccountDraft({ ...accountDraft, amount: e.target.value })} required /></label>
+              <label>البيان<input value={accountDraft.description} onChange={(e) => setAccountDraft({ ...accountDraft, description: e.target.value })} maxLength={500} placeholder="مثال: سداد نقدي" /></label>
+              <label>رقم مرجعي (اختياري)<input value={accountDraft.reference} onChange={(e) => setAccountDraft({ ...accountDraft, reference: e.target.value })} maxLength={120} /></label>
+              <div className="form-actions"><button type="submit" disabled={busy || !accountDraft.amount || Number(accountDraft.amount) <= 0}>{busy ? "جارٍ التسجيل..." : "تسجيل الحركة"}</button></div>
+            </form>
+            <div className="section-heading compact-heading"><div><h2>كشف الحساب</h2><p>آخر 100 حركة مالية، مرتبة من الأحدث إلى الأقدم.</p></div><span className="count-tag">{posEntries.length} حركة</span></div>
+            <div className="table-wrap"><table><thead><tr><th>التاريخ</th><th>نوع الحركة</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الموظف</th><th>المرجع</th></tr></thead><tbody>
+              {posEntries.map((entry) => <tr key={entry.id}><td>{new Date(entry.created_at).toLocaleString("ar")}</td><td>{({ card_delivery: "تسليم كروت", payment: "سداد", commission: "عمولة", return: "مرتجع", adjustment: "تسوية" } as Record<string, string>)[entry.entry_type] ?? entry.entry_type}</td><td>{entry.description || "—"}</td><td>{entry.direction === "debit" ? Number(entry.amount).toFixed(2) : "—"}</td><td>{entry.direction === "credit" ? Number(entry.amount).toFixed(2) : "—"}</td><td>{entry.created_by || "—"}</td><td>{entry.reference || "—"}</td></tr>)}
+            </tbody></table>{posEntries.length === 0 && <div className="empty-state">لا توجد حركات مالية مسجلة لهذه النقطة.</div>}</div>
+          </section>
         )}
 
         {selectedPosId && (
