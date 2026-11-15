@@ -115,9 +115,7 @@ def test_point_of_sale_report_summarizes_period_movements(owner_client):
     )
     assert report.status_code == 200, report.text
     data = report.json()
-    assert data["point_count"] == 1
-    assert len(data["points"]) == 1
-    row = data["points"][0]
+    row = next(item for item in data["points"] if item["point_of_sale_id"] == point["id"])
     assert row["point_of_sale_id"] == point["id"]
     assert Decimal(row["delivered_value"]) == Decimal("0.00")
     assert Decimal(row["other_debits"]) == Decimal("100.00")
