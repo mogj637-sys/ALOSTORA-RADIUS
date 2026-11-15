@@ -81,6 +81,25 @@ type UserManagerUserInspect = {
     disabled: string | null;
     actual_profile: string | null;
     shared_users: string | null;
+    profile: {
+      name: string;
+      validity: string | null;
+      "starts-when": string | null;
+      price: string | null;
+      "override-shared-users": string | null;
+      comment: string | null;
+    } | null;
+    limitations: {
+      name: string;
+      "uptime-limit": string | null;
+      "download-limit": string | null;
+      "upload-limit": string | null;
+      "transfer-limit": string | null;
+      "rate-limit-rx": string | null;
+      "rate-limit-tx": string | null;
+      group: string | null;
+    }[];
+    warnings: string[];
   } | null;
   read_only: boolean;
   credentials_read: boolean;
@@ -1162,9 +1181,31 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   <div>البروفايل الفعلي: {userManagerUserInspect.user.actual_profile || "غير متاح"}</div>
                   <div>معطّل: {userManagerUserInspect.user.disabled ?? "غير متاح"}</div>
                   <div>المستخدمون المشتركون: {userManagerUserInspect.user.shared_users || "غير متاح"}</div>
+                  {userManagerUserInspect.user.profile && (
+                    <div className="notice">
+                      <strong>تفاصيل البروفايل: {userManagerUserInspect.user.profile.name}</strong>
+                      <div>الصلاحية: {userManagerUserInspect.user.profile.validity || "غير محدد"}</div>
+                      <div>بداية الصلاحية: {userManagerUserInspect.user.profile["starts-when"] || "غير محدد"}</div>
+                      <div>السعر الأصلي في المصدر: {userManagerUserInspect.user.profile.price || "غير محدد"}</div>
+                      {userManagerUserInspect.user.profile.comment && <div>ملاحظات: {userManagerUserInspect.user.profile.comment}</div>}
+                    </div>
+                  )}
+                  <strong>القيود المرتبطة ({userManagerUserInspect.user.limitations.length})</strong>
+                  {userManagerUserInspect.user.limitations.map((limitation) => (
+                    <div className="notice" key={limitation.name}>
+                      <strong>{limitation.name}</strong>
+                      <div>وقت الاستخدام: {limitation["uptime-limit"] || "غير محدد"}</div>
+                      <div>التنزيل: {limitation["download-limit"] || "غير محدد"}</div>
+                      <div>الرفع: {limitation["upload-limit"] || "غير محدد"}</div>
+                      <div>إجمالي النقل: {limitation["transfer-limit"] || "غير محدد"}</div>
+                      <div>سرعة التنزيل: {limitation["rate-limit-rx"] || "غير محدد"}</div>
+                      <div>سرعة الرفع: {limitation["rate-limit-tx"] || "غير محدد"}</div>
+                    </div>
+                  ))}
+                  {userManagerUserInspect.user.warnings.map((warning) => <div className="field-hint" key={warning}>{warning}</div>)}
                 </>
               ) : <strong>لم يتم العثور على الكرت بهذا الاسم.</strong>}
-              <small className="field-hint">قراءة فقط · لم تُقرأ كلمة المرور · لم يتم الاستيراد.</small>
+              <small className="field-hint">قراءة فقط · لم تُقرأ كلمة المرور · لم يتم الاستيراد. القيم المعروضة هي كما أعادها المصدر ولا تُحوّل إلى وحدات النظام الجديد بعد.</small>
             </div>
           )}
         </section>
