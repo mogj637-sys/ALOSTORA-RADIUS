@@ -8,8 +8,9 @@ from app.services import user_manager_routeros as adapter
 class FakeResource:
     def __init__(self, rows=None, count=None, error=None):
         self.rows = rows or []
-        self.count = count
+        self.count = len(self.rows) if count is None else count
         self.error = error
+        self.calls = []
 
     def get(self):
         if self.error:
@@ -20,8 +21,9 @@ class FakeResource:
         assert command == "print"
         if self.error:
             raise self.error
+        self.calls.append((command, dict(params)))
         if "count-only" in params:
-            assert params == {"count-only": ""}
+            assert params["count-only"] == ""
             return [{"ret": str(self.count)}]
         self.last_params = params
         return self.rows
@@ -210,6 +212,9 @@ def test_exact_user_inspection_uses_device_query_and_never_requests_password(mon
         }],
         "warnings": [],
     }
+    assert user_resource.calls[0] == (
+        "print", {"?username": "voucher-100", "count-only": ""}
+    )
     assert user_resource.last_params == {
         "?username": "voucher-100",
         ".proplist": ".id,username,customer,disabled,actual-profile,shared-users,uptime-used,download-used,upload-used,last-seen,active-sessions",
@@ -273,3 +278,51 @@ def test_exact_user_inspection_rejects_wrong_username_returned_by_query(monkeypa
             password="secret",
             target_username="voucher-100",
         )
+
+
+
+def test_exact_user_filter_count_prevents_bulk_read_when_router_ignores_query(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    resources = _fake_resources()
+    # Simulate a router/API behavior that ignores ?username and reports the
+    # full 30,000-user menu count. The adapter must stop before print details.
+    user_resource = FakeResource(rows=[{"username": "voucher-100"}], count=30000)
+    resources["/tool/user-manager/user"] = user_resource
+    api = FakeApi(resources)
+    monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
+
+    with pytest.raises(adapter.UserManagerConnectionError, match="أكثر من سجل"):
+        adapter.inspect_user_manager_user(
+            host="192.0.2.10",
+            port=8729,
+            username="reader",
+            password="secret",
+            target_username="voucher-100",
+        )
+
+    assert user_resource.calls == [
+        ("print", {"?username": "voucher-100", "count-only": ""})
+    ]
+    assert FakePool.last.disconnected is True
+
+
+def test_exact_user_count_zero_skips_detail_print(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    resources = _fake_resources()
+    user_resource = FakeResource(rows=[{"username": "should-not-be-returned"}], count=0)
+    resources["/tool/user-manager/user"] = user_resource
+    api = FakeApi(resources)
+    monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
+
+    result = adapter.inspect_user_manager_user(
+        host="192.0.2.10",
+        port=8728,
+        username="reader",
+        password="secret",
+        target_username="missing-card",
+    )
+
+    assert result is None
+    assert user_resource.calls == [
+        ("print", {"?username": "missing-card", "count-only": ""})
+    ]
