@@ -51,17 +51,18 @@ class BatchResult:
 def run_bounded_batches(
     *,
     fetch_page: Callable[[str | None, int], SourcePage],
-    process_page: Callable[[Sequence[Mapping[str, Any]]], None],
-    save_checkpoint: Callable[[dict[str, Any]], None],
+    persist_page: Callable[[Sequence[Mapping[str, Any]], dict[str, Any]], None],
     checkpoint: Mapping[str, Any] | None = None,
     policy: BatchPolicy | None = None,
     clock: Callable[[], float] = monotonic,
 ) -> BatchResult:
-    """Process a strict bounded number of records and persist each safe checkpoint.
+    """Fetch bounded pages and persist each page with its checkpoint atomically.
 
-    The page fetcher contract is intentionally explicit: it must enforce the
-    requested limit at the source, not fetch an unbounded result and slice it.
-    A checkpoint is saved only after the page processor succeeds.
+    The fetcher must enforce the requested limit at the source, not fetch an
+    unbounded result and slice it. The persistence callback owns one transaction:
+    it must write all page records and the supplied checkpoint together, then
+    commit. If any write fails, it must roll back and raise. This function never
+    persists page data and checkpoint through separate callbacks.
     """
     limits = policy or BatchPolicy()
     state = dict(checkpoint or {})
@@ -69,7 +70,6 @@ def run_bounded_batches(
     if cursor is not None and (not isinstance(cursor, str) or not cursor):
         raise BatchSafetyError("checkpoint cursor must be a non-empty string or null")
 
-    # Validate persisted counters before any source call or page side effect.
     prior_records = state.get("processed_records", 0)
     prior_pages = state.get("processed_pages", 0)
     if (
@@ -87,18 +87,17 @@ def run_bounded_batches(
     processed_records = 0
     processed_pages = 0
     started = clock()
-    seen_cursors: set[str] = set()
     history = state.get("cursor_history", [])
     if not isinstance(history, list) or any(not isinstance(item, str) or not item for item in history):
         raise BatchSafetyError("checkpoint cursor_history must be a list of non-empty strings")
-    seen_cursors.update(history)
+    seen_cursors: set[str] = set(history)
+
     while processed_pages < limits.max_pages and processed_records < limits.max_records:
         if clock() - started >= limits.max_seconds:
             break
 
-        # Mark the cursor for the page being fetched as consumed. The pending
-        # next_cursor is intentionally added only when its page is fetched,
-        # which makes cycle detection survive a persisted/resumed checkpoint.
+        # A cursor becomes consumed when its page is about to be fetched. A
+        # pending next_cursor is not recorded until the next page is persisted.
         if cursor is not None:
             if cursor in seen_cursors:
                 raise BatchSafetyError("checkpoint cursor was already processed")
@@ -122,21 +121,23 @@ def run_bounded_batches(
             if next_cursor in seen_cursors:
                 raise BatchSafetyError("source adapter repeated a continuation cursor")
 
-        # Do not advance the checkpoint unless processing the whole page succeeds.
-        process_page(page.records)
-        processed_records += len(page.records)
-        processed_pages += 1
-        cursor = next_cursor
-        # The next cursor is pending, not processed. Persist only cursors whose
-        # pages have already completed so a resumed run can fetch this cursor.
-        state = {
-            "cursor": cursor,
-            "processed_records": prior_records + processed_records,
-            "processed_pages": prior_pages + processed_pages,
+        next_records = processed_records + len(page.records)
+        next_pages = processed_pages + 1
+        next_state = {
+            "cursor": next_cursor,
+            "processed_records": prior_records + next_records,
+            "processed_pages": prior_pages + next_pages,
             "cursor_history": sorted(seen_cursors),
             "source_complete": bool(page.exhausted),
         }
-        save_checkpoint(state)
+
+        # The callback must commit records and next_state in the same DB
+        # transaction. Do not advance local state until that callback succeeds.
+        persist_page(page.records, next_state)
+        processed_records = next_records
+        processed_pages = next_pages
+        cursor = next_cursor
+        state = next_state
 
         if page.exhausted:
             return BatchResult("completed", processed_records, processed_pages, state)
