@@ -98,3 +98,70 @@ def test_bounded_batches_reject_repeated_cursor_before_processing_or_checkpointi
 
     assert processed == [{"id": "1"}]
     assert len(saved) == 1
+
+
+def test_bounded_batches_resume_pending_cursor_and_keep_cumulative_counters():
+    first = run_bounded_batches(
+        fetch_page=lambda _cursor, _limit: SourcePage([{"id": "a"}], "cursor-2", False),
+        process_page=lambda _rows: None,
+        save_checkpoint=lambda _value: None,
+        policy=BatchPolicy(page_size=1, max_records=1, max_pages=1, max_seconds=5),
+    )
+    assert first.checkpoint["cursor"] == "cursor-2"
+    assert first.checkpoint["processed_records"] == 1
+    assert first.checkpoint["processed_pages"] == 1
+    assert first.checkpoint["cursor_history"] == []
+
+    requested = []
+    second = run_bounded_batches(
+        fetch_page=lambda cursor, _limit: (
+            requested.append(cursor) or SourcePage([{"id": "b"}], None, True)
+        ),
+        process_page=lambda _rows: None,
+        save_checkpoint=lambda _value: None,
+        checkpoint=first.checkpoint,
+        policy=BatchPolicy(page_size=1, max_records=10, max_pages=10, max_seconds=5),
+    )
+    assert requested == ["cursor-2"]
+    assert second.status == "completed"
+    assert second.checkpoint["processed_records"] == 2
+    assert second.checkpoint["processed_pages"] == 2
+
+
+def test_bounded_batches_reject_corrupt_checkpoint_before_source_or_processing():
+    called = []
+    try:
+        run_bounded_batches(
+            fetch_page=lambda _cursor, _limit: (
+                called.append("fetch") or SourcePage([{"id": "x"}], None, True)
+            ),
+            process_page=lambda _rows: called.append("process"),
+            save_checkpoint=lambda _value: None,
+            checkpoint={"processed_records": -1},
+        )
+    except BatchSafetyError as exc:
+        assert "counters" in str(exc)
+    else:
+        raise AssertionError("Expected invalid checkpoint failure")
+    assert called == []
+
+
+def test_bounded_batches_reject_cursor_cycle_across_resume():
+    first = run_bounded_batches(
+        fetch_page=lambda _cursor, _limit: SourcePage([{"id": "a"}], "cursor-2", False),
+        process_page=lambda _rows: None,
+        save_checkpoint=lambda _value: None,
+        policy=BatchPolicy(page_size=1, max_records=1, max_pages=1, max_seconds=5),
+    )
+    try:
+        run_bounded_batches(
+            fetch_page=lambda _cursor, _limit: SourcePage([{"id": "b"}], None, True),
+            process_page=lambda _rows: None,
+            save_checkpoint=lambda _value: None,
+            checkpoint={**first.checkpoint, "cursor_history": ["cursor-2"]},
+            policy=BatchPolicy(page_size=1, max_records=5, max_pages=5, max_seconds=5),
+        )
+    except BatchSafetyError as exc:
+        assert "already processed" in str(exc)
+    else:
+        raise AssertionError("Expected repeated checkpoint cursor failure")
