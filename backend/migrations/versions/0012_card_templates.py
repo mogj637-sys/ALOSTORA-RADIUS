@@ -28,6 +28,24 @@ def upgrade() -> None:
         sa.CheckConstraint("width_mm > 0 AND width_mm <= 300", name="ck_card_templates_width"),
         sa.CheckConstraint("height_mm > 0 AND height_mm <= 300", name="ck_card_templates_height"),
     )
+    op.bulk_insert(
+        sa.table(
+            "card_templates",
+            sa.column("code", sa.String),
+            sa.column("name", sa.String),
+            sa.column("width_mm", sa.Numeric),
+            sa.column("height_mm", sa.Numeric),
+            sa.column("background_color", sa.String),
+            sa.column("text_color", sa.String),
+            sa.column("layout", sa.JSON),
+            sa.column("is_default", sa.Boolean),
+        ),
+        [
+            {"code": "classic-green", "name": "القالب الأخضر", "width_mm": 90, "height_mm": 50, "background_color": "#e9f6ef", "text_color": "#174c37", "layout": {}, "is_default": True},
+            {"code": "classic-blue", "name": "القالب الأزرق", "width_mm": 90, "height_mm": 50, "background_color": "#eaf3fc", "text_color": "#244a70", "layout": {}, "is_default": False},
+            {"code": "compact", "name": "القالب المختصر", "width_mm": 75, "height_mm": 40, "background_color": "#ffffff", "text_color": "#173b2d", "layout": {}, "is_default": False},
+        ],
+    )
 
 def downgrade() -> None:
     op.drop_table("card_templates")
