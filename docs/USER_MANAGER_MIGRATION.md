@@ -101,6 +101,7 @@
 - [x] إضافة endpoint محمي للمالك: POST /api/v1/routers/{router_id}/user-manager/test-connection.
 - [x] إضافة اختبارات mock للاتصال، ورفض v7، وغياب الحزمة، وتنقية أخطاء الاتصال.
 - [x] إضافة زر في صفحة الراوترات لفحص User Manager وعرض أعداد الموارد والتحذيرات بوضع القراءة فقط.
+- [x] إضافة GitHub Actions لبناء الواجهة وفحص TypeScript عند تغييرات frontend؛ نتيجة أول تشغيل ما زالت بانتظار ظهورها.
 - [x] بناء جداول source mapping وsync runs/checkpoints.
 - [ ] التحقق من مسارات ونتائج count-only على جهاز User Manager الذي يحدده المستخدم فعلياً؛ الاختبارات الحالية لا تتصل براوتر.
 - [ ] بناء preview/import/incremental sync APIs.
