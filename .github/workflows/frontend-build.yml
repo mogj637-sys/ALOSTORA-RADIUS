@@ -1,4 +1,4 @@
-name: Frontend build # extended package options validation
+name: Frontend build # package summary table validation
 
 on:
   pull_request:
