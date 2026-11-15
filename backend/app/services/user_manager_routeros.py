@@ -41,10 +41,18 @@ def _first(items: list[dict[str, Any]], key: str) -> str | None:
     return str(value) if value is not None else None
 
 
-def _count_only(api: Any, path: str) -> int:
+def _count_only(
+    api: Any,
+    path: str,
+    query: dict[str, str] | None = None,
+) -> int:
     # RouterOS print count-only returns a scalar count in the 'ret' field.
-    # This avoids loading thousands of records into the API worker.
-    result = api.get_resource(path).call("print", {"count-only": ""})
+    # Query terms are applied by the router before any record body is returned.
+    # This is especially important before an exact-user read: if the router
+    # ignores the filter, the count exposes that without downloading the list.
+    params = dict(query or {})
+    params["count-only"] = ""
+    result = api.get_resource(path).call("print", params)
     if isinstance(result, dict):
         value = result.get("ret")
         if value is not None:
@@ -196,7 +204,20 @@ def inspect_user_manager_user(
                 "هذا الفحص مخصص حالياً لـ RouterOS v6؛ دعم v7 يحتاج موصلاً واختبارات منفصلة."
             )
 
-        rows = api.get_resource("/tool/user-manager/user").call(
+        user_path = "/tool/user-manager/user"
+        exact_count = _count_only(
+            api,
+            user_path,
+            {"?username": target_username},
+        )
+        if exact_count == 0:
+            return None
+        if exact_count != 1:
+            raise UserManagerConnectionError(
+                "لم يثبت أن استعلام اسم المستخدم يعيد سجلاً واحداً فقط؛ أوقف الفحص دون تنزيل تفاصيل القائمة."
+            )
+
+        rows = api.get_resource(user_path).call(
             "print",
             {
                 "?username": target_username,
