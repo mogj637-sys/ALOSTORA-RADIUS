@@ -71,6 +71,30 @@ type UserManagerProbe = {
   read_only: boolean;
 };
 
+type UserManagerPreviewItem = {
+  id: number;
+  external_user_id: string;
+  username: string | null;
+  source_profile_id: string | null;
+  classification: string;
+  credential_mode: string;
+  credential_state: string;
+  matched_card_id: string | null;
+  safe_snapshot: Record<string, unknown>;
+  issues: string[];
+};
+
+type UserManagerPreviewList = {
+  run: { id: string; status: string; discovered_users: number; created_at: string | null } | null;
+  items: UserManagerPreviewItem[];
+  total: number;
+  offset: number;
+  limit: number;
+  read_only: boolean;
+  imported: boolean;
+  credentials_read: boolean;
+};
+
 type UserManagerUserInspect = {
   router_id: number;
   found: boolean;
@@ -299,6 +323,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [inspectRouterId, setInspectRouterId] = useState("");
   const [inspectUsername, setInspectUsername] = useState("");
   const [userManagerUserInspect, setUserManagerUserInspect] = useState<UserManagerUserInspect | null>(null);
+  const [userManagerPreviews, setUserManagerPreviews] = useState<UserManagerPreviewList | null>(null);
+  const [savingUserPreview, setSavingUserPreview] = useState(false);
   const [inspectingUser, setInspectingUser] = useState(false);
   const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
   const [cards, setCards] = useState<Card[]>([]);
@@ -420,6 +446,32 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setError(err instanceof Error ? err.message : "تعذر فحص الكرت");
     } finally {
       setInspectingUser(false);
+    }
+  }
+
+  async function saveUserManagerPreview() {
+    const routerId = Number(inspectRouterId);
+    const targetUsername = inspectUsername.trim();
+    if (!routerId || !targetUsername) return;
+    setSavingUserPreview(true);
+    setError("");
+    setNotice("");
+    try {
+      const created = await apiRequest<{ sync_run_id: string; read_only: boolean; imported: boolean; credentials_read: boolean }>(
+        token,
+        `/api/v1/routers/${routerId}/user-manager/preview-user`,
+        { method: "POST", body: JSON.stringify({ username: targetUsername }) },
+      );
+      const result = await apiRequest<UserManagerPreviewList>(
+        token,
+        `/api/v1/routers/${routerId}/user-manager/previews?run_id=${encodeURIComponent(created.sync_run_id)}&offset=0&limit=50`,
+      );
+      setUserManagerPreviews(result);
+      setNotice("حُفظت معاينة الكرت بنجاح. لم يتم استيراده ولم تُقرأ كلمة المرور.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر حفظ معاينة الكرت");
+    } finally {
+      setSavingUserPreview(false);
     }
   }
 
@@ -1223,9 +1275,36 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 </>
               ) : <strong>لم يتم العثور على الكرت بهذا الاسم.</strong>}
               <small className="field-hint">قراءة فقط · لم تُقرأ كلمة المرور · لم يتم الاستيراد. القيم المعروضة هي كما أعادها المصدر ولا تُحوّل إلى وحدات النظام الجديد بعد.</small>
+              {userManagerUserInspect.found && (
+                <div className="form-actions">
+                  <button type="button" disabled={savingUserPreview || !inspectRouterId || !inspectUsername.trim()} onClick={saveUserManagerPreview}>
+                    {savingUserPreview ? "جارٍ حفظ المعاينة..." : "حفظ معاينة آمنة"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </section>
+        {userManagerPreviews && (
+          <section className="panel um-probe-panel">
+            <div className="section-heading">
+              <div><h2>المعاينة المحفوظة</h2><p>نتائج محفوظة محلياً للمراجعة قبل أي استيراد.</p></div>
+              <span className="count-tag">{userManagerPreviews.total} سجل</span>
+            </div>
+            {userManagerPreviews.items.map((preview) => (
+              <div className="notice" key={preview.id}>
+                <strong>{preview.username || "اسم غير متاح"}</strong>
+                <div>تصنيف السجل: {preview.classification}</div>
+                <div>البروفايل الأصلي: {preview.source_profile_id || "غير متاح"}</div>
+                <div>حالة بيانات الدخول: {preview.credential_state}</div>
+                <div>نوع بيانات الدخول: {preview.credential_mode}</div>
+                <div>معرّف المصدر: {preview.external_user_id}</div>
+                {preview.issues.length > 0 && <div>ملاحظات: {preview.issues.join("، ")}</div>}
+              </div>
+            ))}
+            <small className="field-hint">حالة المعاينة: قراءة فقط · الاستيراد: متوقف · قراءة كلمات المرور: لم تتم.</small>
+          </section>
+        )}
         <div className="section-heading compact-heading"><div><h2>الراوترات المسجلة</h2><p>لا تعرض هذه القائمة أي كلمة مرور أو RADIUS secret.</p></div><span className="count-tag">{routers.length} راوتر</span></div>
         <div className="table-wrap">
           <table><thead><tr><th>الاسم</th><th>NAS Identifier</th><th>عنوان الإدارة</th><th>عنوان RADIUS</th><th>API Port</th><th>الإصدار</th><th>آخر ظهور</th><th>الحالة</th><th>الإجراء</th></tr></thead>
