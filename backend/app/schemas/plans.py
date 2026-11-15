@@ -17,6 +17,7 @@ class PlanCreate(BaseModel):
     session_time_limit_seconds: int | None = Field(default=None, gt=0)
     validity_period_seconds: int | None = Field(default=None, gt=0)
     speed_profile: str | None = Field(default=None, max_length=100)
+    settings: dict = Field(default_factory=dict)
     description: str | None = None
 
     @model_validator(mode="after")
@@ -40,6 +41,7 @@ class PlanUpdate(BaseModel):
     session_time_limit_seconds: int | None = Field(default=None, gt=0)
     validity_period_seconds: int | None = Field(default=None, gt=0)
     speed_profile: str | None = Field(default=None, max_length=100)
+    settings: dict | None = None
     description: str | None = None
     is_active: bool | None = None
 
@@ -67,5 +69,6 @@ class PlanResponse(BaseModel):
     session_time_limit_seconds: int | None
     validity_period_seconds: int | None
     speed_profile: str | None
+    settings: dict
     description: str | None
     is_active: bool
