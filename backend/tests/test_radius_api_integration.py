@@ -696,3 +696,27 @@ def test_radius_chap_hex_accepts_free_radius_prefixed_hex_values(owner_client):
     )
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["control:Auth-Type"] == "Accept"
+
+
+def test_radius_chap_accepts_freeradius_octets_json_envelope(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    card, password = _card(client, headers)
+    challenge = bytes.fromhex("0102030405060708")
+    identifier = bytes([1])
+    chap_packet = identifier + hashlib.md5(
+        identifier + password.encode("utf-8") + challenge
+    ).digest()
+    accepted = client.post(
+        "/internal/radius/authorize",
+        headers=_radius_headers(),
+        json={
+            "NAS-Identifier": {"type": "string", "value": [router["nas_identifier"]]},
+            "User-Name": {"type": "string", "value": [card["username"]]},
+            "User-Password": {"type": "octets", "value": [""]},
+            "CHAP-Password": {"type": "octets", "value": [chap_packet.decode("latin-1")]},
+            "CHAP-Challenge": {"type": "octets", "value": [challenge.decode("latin-1")]},
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["control:Auth-Type"] == "Accept"
