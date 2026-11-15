@@ -39,6 +39,9 @@ def test_preview_is_deterministic_and_does_not_mutate_source():
     assert source == original
     assert first["source_fingerprint"] == second["source_fingerprint"]
     assert "password" not in first["safe_snapshot"]
+    assert first["credential_mode"] == "separate_credentials"
+    assert first["credential_state"] == "plaintext_available"
+    assert "must-not-leak" not in repr(first)
 
 
 def test_preview_strips_nested_secrets_and_detects_batch_duplicates():
@@ -51,6 +54,51 @@ def test_preview_strips_nested_secrets_and_detects_batch_duplicates():
     assert result[0]["classification"] == "new"
     assert result[0]["safe_snapshot"]["auth"] == {"method": "pap"}
     assert result[1]["classification"] == "duplicate_in_batch"
+
+
+def test_preview_detects_all_three_credential_modes_without_exposing_passwords():
+    records = [
+        {"external_id": "1", "username": "only", "password": ""},
+        {"external_id": "2", "username": "same", "password": "same"},
+        {"external_id": "3", "username": "different", "password": "secret-value"},
+    ]
+
+    result = build_user_manager_preview(records)
+
+    assert [row["credential_mode"] for row in result] == [
+        "username_only", "same_credentials", "separate_credentials"
+    ]
+    assert all(row["credential_state"] == "plaintext_available" for row in result)
+    assert "password" not in result[2]["safe_snapshot"]
+    assert "secret-value" not in repr(result)
+
+
+def test_preview_does_not_assume_username_only_when_password_field_is_missing():
+    result = build_user_manager_preview([
+        {"external_id": "1", "username": "unknown"},
+        {"external_id": "2", "username": "hashed", "password-hash": "abc123"},
+    ])
+
+    assert result[0]["credential_mode"] is None
+    assert result[0]["credential_state"] == "unavailable"
+    assert result[1]["credential_mode"] is None
+    assert result[1]["credential_state"] == "verifier_unverified"
+
+
+def test_preview_strips_routeros_secret_aliases():
+    result = build_user_manager_preview([{
+        "external_id": "1",
+        "username": "safe",
+        "api-secret": "router-secret",
+        "user-password": "card-secret",
+        "normal-field": "keep",
+    }])[0]
+
+    assert result["safe_snapshot"] == {
+        "external_id": "1", "username": "safe", "normal-field": "keep"
+    }
+    assert "router-secret" not in repr(result)
+    assert "card-secret" not in repr(result)
 
 
 def test_preview_rejects_non_object_record():
