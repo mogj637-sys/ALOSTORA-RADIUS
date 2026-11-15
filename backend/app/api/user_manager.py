@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_owner
 from app.db.session import get_db
 from app.models.core import Card, Router
-from app.models.user_manager import UserManagerSyncRun
+from app.models.user_manager import UserManagerCardSource, UserManagerSyncRun
 from app.models.user_manager_preview import UserManagerImportPreview
 from app.services.user_manager_preview import build_user_manager_preview
 from app.services.router_secrets import (
