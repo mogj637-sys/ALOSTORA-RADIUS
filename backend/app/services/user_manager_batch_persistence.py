@@ -52,6 +52,10 @@ def persist_user_manager_preview_page(
         not isinstance(cursor, str) or not cursor for cursor in history
     ):
         raise BatchPersistenceError("checkpoint cursor_history is invalid")
+    if checkpoint.get("source_complete") is False:
+        cursor = checkpoint.get("cursor")
+        if not isinstance(cursor, str) or not cursor:
+            raise BatchPersistenceError("non-final checkpoint requires a continuation cursor")
 
     normalized_records: list[dict[str, Any]] = []
     external_ids: set[str] = set()
@@ -93,9 +97,19 @@ def persist_user_manager_preview_page(
         previous_pages = _checkpoint_count(current_checkpoint, "processed_pages")
         if next_records < previous_records or next_pages < previous_pages:
             raise BatchPersistenceError("checkpoint counters cannot move backwards")
-        if next_records == previous_records and next_pages == previous_pages:
-            if current_checkpoint and dict(checkpoint) != current_checkpoint:
-                raise BatchPersistenceError("checkpoint changed without page progress")
+        exact_replay = (
+            next_records == previous_records
+            and next_pages == previous_pages
+            and bool(current_checkpoint)
+            and dict(checkpoint) == current_checkpoint
+        )
+        if not exact_replay and (
+            next_pages != previous_pages + 1
+            or next_records != previous_records + len(normalized_records)
+        ):
+            raise BatchPersistenceError(
+                "checkpoint progress must match exactly one persisted source page"
+            )
 
         existing_previews: dict[str, UserManagerImportPreview] = {}
         if external_ids:
@@ -142,6 +156,12 @@ def persist_user_manager_preview_page(
             external_id = candidate["external_user_id"]
             if not external_id:
                 raise BatchPersistenceError("classified preview has no external ID")
+            if len(external_id) > 160:
+                raise BatchPersistenceError("source external ID exceeds 160 characters")
+            if candidate["username"] and len(candidate["username"]) > 120:
+                raise BatchPersistenceError("source username exceeds 120 characters")
+            if candidate["source_profile_id"] and len(candidate["source_profile_id"]) > 160:
+                raise BatchPersistenceError("source profile ID exceeds 160 characters")
             existing = existing_previews.get(external_id)
             if existing is not None:
                 if existing.source_fingerprint != candidate["source_fingerprint"]:
