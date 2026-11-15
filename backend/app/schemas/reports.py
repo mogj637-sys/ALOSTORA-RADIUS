@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel
@@ -38,3 +38,29 @@ class PosReportResponse(BaseModel):
     point_count: int
     totals: PosReportTotals
     points: list[PosReportRow]
+
+
+class PosStatementEntry(BaseModel):
+    id: int
+    created_at: datetime
+    entry_type: str
+    direction: str
+    amount: Decimal
+    description: str | None
+    reference: str | None
+    created_by: str | None
+    debit: Decimal
+    credit: Decimal
+    running_balance: Decimal
+
+
+class PosStatementResponse(BaseModel):
+    point_of_sale_id: int
+    point_of_sale_name: str
+    date_from: date
+    date_to: date
+    opening_balance: Decimal
+    total_debit: Decimal
+    total_credit: Decimal
+    closing_balance: Decimal
+    entries: list[PosStatementEntry]
