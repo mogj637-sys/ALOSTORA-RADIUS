@@ -71,6 +71,22 @@ type UserManagerProbe = {
   read_only: boolean;
 };
 
+type UserManagerUserInspect = {
+  router_id: number;
+  found: boolean;
+  user: {
+    external_id: string | null;
+    username: string;
+    customer: string | null;
+    disabled: string | null;
+    actual_profile: string | null;
+    shared_users: string | null;
+  } | null;
+  read_only: boolean;
+  credentials_read: boolean;
+  imported: boolean;
+};
+
 type PointOfSale = {
   id: number;
   code: string;
@@ -253,6 +269,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [routers, setRouters] = useState<RouterRecord[]>([]);
   const [userManagerProbe, setUserManagerProbe] = useState<UserManagerProbe | null>(null);
   const [probingRouterId, setProbingRouterId] = useState<number | null>(null);
+  const [inspectRouterId, setInspectRouterId] = useState("");
+  const [inspectUsername, setInspectUsername] = useState("");
+  const [userManagerUserInspect, setUserManagerUserInspect] = useState<UserManagerUserInspect | null>(null);
+  const [inspectingUser, setInspectingUser] = useState(false);
   const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8728", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
   const [cards, setCards] = useState<Card[]>([]);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
@@ -347,6 +367,32 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setError(err instanceof Error ? err.message : "تعذر فحص اتصال User Manager");
     } finally {
       setProbingRouterId(null);
+    }
+  }
+
+  async function inspectRouterUser() {
+    const routerId = Number(inspectRouterId);
+    const targetUsername = inspectUsername.trim();
+    if (!routerId || !targetUsername) return;
+    setInspectingUser(true);
+    setUserManagerUserInspect(null);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiRequest<UserManagerUserInspect>(
+        token,
+        `/api/v1/routers/${routerId}/user-manager/inspect-user`,
+        {
+          method: "POST",
+          body: JSON.stringify({ username: targetUsername }),
+        },
+      );
+      setUserManagerUserInspect(result);
+      setNotice(result.found ? "تم العثور على الكرت في User Manager؛ لم يتم استيراده." : "لم يتم العثور على هذا الاسم في User Manager.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر فحص الكرت");
+    } finally {
+      setInspectingUser(false);
     }
   }
 
@@ -1089,6 +1135,39 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div className="form-actions"><button type="submit" disabled={busy || (!!routerDraft.apiUsername !== !!routerDraft.apiSecret)}>{busy ? "جارٍ الحفظ..." : "حفظ الراوتر"}</button></div>
           {!!routerDraft.apiUsername !== !!routerDraft.apiSecret && <div className="field-hint">أدخل اسم مستخدم API وكلمة مروره معاً، أو اتركهما فارغين.</div>}
         </form>
+        <section className="panel form-grid">
+          <div className="section-heading"><div><h2>فحص كرت واحد من User Manager</h2><p>بحث تشخيصي بالاسم الدقيق؛ لا ينشئ كرتاً ولا يستورده ولا يغيّر بيانات المصدر.</p></div></div>
+          <label>جهاز User Manager
+            <select value={inspectRouterId} onChange={(event) => { setInspectRouterId(event.target.value); setUserManagerUserInspect(null); }}>
+              <option value="">اختر الراوتر المسجل</option>
+              {routers.filter((item) => item.is_active && item.api_username).map((item) => (
+                <option key={item.id} value={item.id}>{item.name} — {item.management_host}:{item.api_port}</option>
+              ))}
+            </select>
+          </label>
+          <label>اسم المستخدم / رقم الكرت
+            <input value={inspectUsername} onChange={(event) => { setInspectUsername(event.target.value); setUserManagerUserInspect(null); }} maxLength={120} placeholder="أدخل اسم كرت واحد كما هو في User Manager" />
+          </label>
+          <div className="form-actions">
+            <button type="button" disabled={inspectingUser || !inspectRouterId || !inspectUsername.trim()} onClick={inspectRouterUser}>{inspectingUser ? "جارٍ فحص الكرت..." : "فحص الكرت"}</button>
+          </div>
+          {userManagerUserInspect && (
+            <div className="notice">
+              {userManagerUserInspect.found && userManagerUserInspect.user ? (
+                <>
+                  <strong>الكرت موجود في User Manager</strong>
+                  <div>اسم المستخدم: {userManagerUserInspect.user.username}</div>
+                  <div>معرّف المصدر: {userManagerUserInspect.user.external_id || "غير متاح"}</div>
+                  <div>العميل: {userManagerUserInspect.user.customer || "غير متاح"}</div>
+                  <div>البروفايل الفعلي: {userManagerUserInspect.user.actual_profile || "غير متاح"}</div>
+                  <div>معطّل: {userManagerUserInspect.user.disabled ?? "غير متاح"}</div>
+                  <div>المستخدمون المشتركون: {userManagerUserInspect.user.shared_users || "غير متاح"}</div>
+                </>
+              ) : <strong>لم يتم العثور على الكرت بهذا الاسم.</strong>}
+              <small className="field-hint">قراءة فقط · لم تُقرأ كلمة المرور · لم يتم الاستيراد.</small>
+            </div>
+          )}
+        </section>
         <div className="section-heading compact-heading"><div><h2>الراوترات المسجلة</h2><p>لا تعرض هذه القائمة أي كلمة مرور أو RADIUS secret.</p></div><span className="count-tag">{routers.length} راوتر</span></div>
         <div className="table-wrap">
           <table><thead><tr><th>الاسم</th><th>NAS Identifier</th><th>عنوان الإدارة</th><th>عنوان RADIUS</th><th>API Port</th><th>الإصدار</th><th>آخر ظهور</th><th>الحالة</th><th>الإجراء</th></tr></thead>
