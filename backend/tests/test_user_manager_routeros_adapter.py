@@ -186,6 +186,14 @@ def test_exact_user_inspection_uses_device_query_and_never_requests_password(mon
         "disabled": "false",
         "actual_profile": "basic",
         "shared_users": "1",
+        "usage": {
+            "uptime_used": None,
+            "download_used_bytes": None,
+            "upload_used_bytes": None,
+            "last_seen": None,
+            "active_sessions": None,
+            "missing_fields_are_unknown": True,
+        },
         "profile": {
             "name": "basic", "validity": "5d", "starts-when": " first-auth",
             "price": "0", "override-shared-users": "1", "comment": "starter",
@@ -199,7 +207,7 @@ def test_exact_user_inspection_uses_device_query_and_never_requests_password(mon
     }
     assert user_resource.last_params == {
         "?username": "voucher-100",
-        ".proplist": ".id,username,customer,disabled,actual-profile,shared-users",
+        ".proplist": ".id,username,customer,disabled,actual-profile,shared-users,uptime-used,download-used,upload-used,last-seen,active-sessions",
     }
     assert "password" not in user_resource.last_params[".proplist"]
     assert FakePool.last.disconnected is True
