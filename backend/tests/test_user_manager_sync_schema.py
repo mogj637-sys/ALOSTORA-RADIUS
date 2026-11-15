@@ -37,3 +37,12 @@ def test_import_preview_is_staged_per_sync_run_and_source_identity():
     assert "issues" in table.c
     assert "source_fingerprint" in table.c
     assert "matched_card_id" in table.c
+
+
+
+def test_preview_and_source_models_track_per_card_credential_metadata():
+    preview = UserManagerImportPreview.__table__
+    source = UserManagerCardSource.__table__
+    assert "credential_mode" in preview.c
+    assert "credential_state" in preview.c
+    assert "credential_mode" in source.c
