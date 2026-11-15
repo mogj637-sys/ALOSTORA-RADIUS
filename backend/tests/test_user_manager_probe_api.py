@@ -89,3 +89,50 @@ def test_user_manager_probe_requires_saved_api_credentials(owner_client):
         headers=headers,
     )
     assert result.status_code == 409
+
+
+
+def test_exact_user_inspection_endpoint_is_read_only_and_does_not_import(owner_client, monkeypatch):
+    client, headers, _ = owner_client
+    router_id = _create_router(client, headers)
+    seen = {}
+
+    def fake_inspect(**kwargs):
+        seen.update(kwargs)
+        return {
+            "external_id": "*A1",
+            "username": "voucher-100",
+            "customer": "admin",
+            "disabled": "false",
+            "actual_profile": "basic",
+            "shared_users": "1",
+        }
+
+    monkeypatch.setattr(user_manager, "inspect_user_manager_user", fake_inspect)
+    response = client.post(
+        f"/api/v1/routers/{router_id}/user-manager/inspect-user",
+        headers=headers,
+        json={"username": "voucher-100"},
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["found"] is True
+    assert data["read_only"] is True
+    assert data["credentials_read"] is False
+    assert data["imported"] is False
+    assert data["user"]["external_id"] == "*A1"
+    assert data["user"]["actual_profile"] == "basic"
+    assert seen["target_username"] == "voucher-100"
+    assert seen["host"] == "192.0.2.55"
+
+
+def test_exact_user_inspection_endpoint_validates_username(owner_client):
+    client, headers, _ = owner_client
+    router_id = _create_router(client, headers)
+    response = client.post(
+        f"/api/v1/routers/{router_id}/user-manager/inspect-user",
+        headers=headers,
+        json={"username": ""},
+    )
+    assert response.status_code == 422
