@@ -10,6 +10,8 @@ from app.services.user_manager_batch_persistence import (
     BatchPersistenceError,
     persist_user_manager_preview_page,
 )
+from app.services.user_manager_batches import BatchPolicy, SourcePage
+from app.services.user_manager_preview_batches import run_user_manager_preview_batches
 
 
 def _create_preview_run(client, headers):
@@ -216,3 +218,65 @@ def test_preview_page_requires_checkpoint_delta_to_match_exact_page(owner_client
             )
     finally:
         db.close()
+
+
+
+def test_preview_batch_runner_persists_pages_and_resumes_from_database_checkpoint(owner_client):
+    client, headers, _ = owner_client
+    run_id = _create_preview_run(client, headers)
+
+    first = run_user_manager_preview_batches(
+        sync_run_id=run_id,
+        fetch_page=lambda cursor, limit: (
+            assert_page_request(cursor, limit, None, 1)
+            or SourcePage(
+                [{"external_id": "*RUN1", "username": "runner-card-1"}],
+                "cursor-2",
+                False,
+            )
+        ),
+        policy=BatchPolicy(page_size=1, max_records=1, max_pages=1, max_seconds=5),
+    )
+    assert first.status == "paused"
+    assert first.checkpoint["cursor"] == "cursor-2"
+
+    requested = []
+
+    def fetch_second(cursor, limit):
+        requested.append((cursor, limit))
+        return SourcePage(
+            [{"external_id": "*RUN2", "username": "runner-card-2"}],
+            None,
+            True,
+        )
+
+    second = run_user_manager_preview_batches(
+        sync_run_id=run_id,
+        fetch_page=fetch_second,
+        policy=BatchPolicy(page_size=2, max_records=10, max_pages=5, max_seconds=5),
+    )
+    assert requested == [("cursor-2", 2)]
+    assert second.status == "completed"
+    assert second.checkpoint["processed_records"] == 2
+    assert second.checkpoint["processed_pages"] == 2
+
+    verify = SessionLocal()
+    try:
+        run = verify.get(UserManagerSyncRun, run_id)
+        previews = (
+            verify.query(UserManagerImportPreview)
+            .filter_by(sync_run_id=run_id)
+            .order_by(UserManagerImportPreview.external_user_id)
+            .all()
+        )
+        assert run.status == "preview_ready"
+        assert run.checkpoint == second.checkpoint
+        assert [row.external_user_id for row in previews] == ["*RUN1", "*RUN2"]
+    finally:
+        verify.close()
+
+
+def assert_page_request(cursor, limit, expected_cursor, expected_limit):
+    assert cursor == expected_cursor
+    assert limit == expected_limit
+    return False
