@@ -140,6 +140,23 @@ def inspect_routeros_user_manager(
                 pass
 
 
+def _query_one(api: Any, path: str, field: str, value: str, properties: str) -> dict[str, Any] | None:
+    rows = api.get_resource(path).call(
+        "print",
+        {f"?{field}": value, ".proplist": properties},
+    )
+    if not isinstance(rows, list):
+        raise UserManagerConnectionError("أعاد User Manager استجابة غير متوقعة أثناء قراءة علاقة البروفايل.")
+    if len(rows) > 1:
+        raise UserManagerConnectionError("أعاد User Manager أكثر من سجل مطابق لاسم محدد؛ أوقف القراءة.")
+    if not rows:
+        return None
+    row = rows[0]
+    if not isinstance(row, dict) or str(row.get(field, "")) != value:
+        raise UserManagerConnectionError("لم تتطابق نتيجة علاقة البروفايل مع القيمة المطلوبة.")
+    return row
+
+
 def inspect_user_manager_user(
     *,
     host: str,
@@ -149,11 +166,10 @@ def inspect_user_manager_user(
     target_username: str,
     timeout_seconds: float = 8.0,
 ) -> dict[str, Any] | None:
-    """Read one exact User Manager username using RouterOS-side query filtering.
+    """Read one exact user and its directly related profile/limitations.
 
-    Passwords and other credential fields are deliberately excluded from
-    .proplist and from the returned object. This is a diagnostic lookup only;
-    it does not create, update, or import a card.
+    All reads are exact RouterOS-side queries with explicit property lists.
+    No password, bulk user list, or write operation is requested.
     """
     if not target_username or len(target_username) > 120:
         raise ValueError("Invalid User Manager username")
@@ -180,8 +196,6 @@ def inspect_user_manager_user(
                 "هذا الفحص مخصص حالياً لـ RouterOS v6؛ دعم v7 يحتاج موصلاً واختبارات منفصلة."
             )
 
-        # RouterOS executes the exact-match query on the device. Keep the
-        # returned property list intentionally small and never request password.
         rows = api.get_resource("/tool/user-manager/user").call(
             "print",
             {
@@ -190,34 +204,78 @@ def inspect_user_manager_user(
             },
         )
         if not isinstance(rows, list):
-            raise UserManagerConnectionError(
-                "أعاد User Manager استجابة غير متوقعة عند فحص المستخدم."
-            )
+            raise UserManagerConnectionError("أعاد User Manager استجابة غير متوقعة عند فحص المستخدم.")
         if len(rows) > 1:
-            raise UserManagerConnectionError(
-                "أعاد البحث أكثر من سجل مطابق؛ أوقف الفحص لتجنب اختيار سجل غير صحيح."
-            )
+            raise UserManagerConnectionError("أعاد البحث أكثر من سجل مطابق؛ أوقف الفحص لتجنب اختيار سجل غير صحيح.")
         if not rows:
             return None
 
         row = rows[0]
         if not isinstance(row, dict) or str(row.get("username", "")) != target_username:
-            raise UserManagerConnectionError(
-                "لم تتطابق نتيجة البحث مع اسم المستخدم المطلوب؛ أوقف الفحص."
+            raise UserManagerConnectionError("لم تتطابق نتيجة البحث مع اسم المستخدم المطلوب؛ أوقف الفحص.")
+
+        profile_name = str(row.get("actual-profile") or "").strip()
+        profile: dict[str, Any] | None = None
+        limitations: list[dict[str, Any]] = []
+        relation_warnings: list[str] = []
+        if profile_name:
+            profile = _query_one(
+                api,
+                "/tool/user-manager/profile",
+                "name",
+                profile_name,
+                "name,validity,starts-when,price,override-shared-users,comment",
             )
+            if profile is None:
+                relation_warnings.append("لم يُعثر على البروفايل الفعلي المشار إليه في سجل الكرت.")
+
+            relation_rows = api.get_resource(
+                "/tool/user-manager/profile/profile-limitation"
+            ).call(
+                "print",
+                {
+                    "?profile": profile_name,
+                    ".proplist": "profile,limitation",
+                },
+            )
+            if not isinstance(relation_rows, list):
+                raise UserManagerConnectionError("تعذر قراءة قيود البروفايل المرتبط بالكرت.")
+            if len(relation_rows) > 100:
+                raise UserManagerConnectionError("عدد قيود البروفايل تجاوز حد القراءة التشخيصية الآمن.")
+            for relation in relation_rows:
+                if not isinstance(relation, dict) or str(relation.get("profile", "")) != profile_name:
+                    raise UserManagerConnectionError("نتيجة ربط القيود لا تطابق البروفايل المطلوب.")
+                limitation_name = str(relation.get("limitation") or "").strip()
+                if not limitation_name:
+                    continue
+                limitation = _query_one(
+                    api,
+                    "/tool/user-manager/limitation",
+                    "name",
+                    limitation_name,
+                    "name,uptime-limit,download-limit,upload-limit,transfer-limit,rate-limit-rx,rate-limit-tx,group",
+                )
+                if limitation is None:
+                    relation_warnings.append(f"القيد المرتبط غير موجود أو غير متاح: {limitation_name}")
+                else:
+                    limitations.append(limitation)
+
         return {
             "external_id": str(row.get(".id")) if row.get(".id") is not None else None,
             "username": target_username,
             "customer": row.get("customer"),
             "disabled": row.get("disabled"),
-            "actual_profile": row.get("actual-profile"),
+            "actual_profile": profile_name or None,
             "shared_users": row.get("shared-users"),
+            "profile": profile,
+            "limitations": limitations,
+            "warnings": relation_warnings,
         }
     except UserManagerConnectionError:
         raise
     except Exception as exc:
         raise UserManagerConnectionError(
-            "تعذر قراءة سجل المستخدم المحدد من User Manager. تحقق من صلاحيات القراءة وإصدار الجهاز."
+            "تعذر قراءة سجل المستخدم أو علاقات البروفايل من User Manager. تحقق من صلاحيات القراءة وحقول الإصدار."
         ) from exc
     finally:
         if api is not None or getattr(pool, "connected", False):
