@@ -4,7 +4,7 @@ from uuid import UUID
 from app.api import user_manager
 from app.db.session import SessionLocal
 from app.models.core import Router
-from app.models.user_manager import UserManagerSyncRun
+from app.models.user_manager import UserManagerCardSource, UserManagerSyncRun
 from app.models.user_manager_preview import UserManagerImportPreview
 from app.services.user_manager_routeros import RouterProbe
 
@@ -199,3 +199,43 @@ def test_single_user_preview_is_persisted_without_credentials_or_import(owner_cl
         assert preview.classification == "new"
     finally:
         db.close()
+
+
+
+def test_single_user_preview_recognizes_source_link_without_card(owner_client, monkeypatch):
+    client, headers, _ = owner_client
+    router_id = _create_router(client, headers)
+    db = SessionLocal()
+    try:
+        db.add(UserManagerCardSource(
+            router_id=router_id,
+            external_user_id="*ORPHAN1",
+            username="orphan-voucher",
+            card_id=None,
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    def fake_inspect(**kwargs):
+        return {
+            "external_id": "*ORPHAN1",
+            "username": "orphan-voucher",
+            "actual_profile": "basic",
+            "usage": {},
+            "profile": None,
+            "limitations": [],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(user_manager, "inspect_user_manager_user", fake_inspect)
+    response = client.post(
+        f"/api/v1/routers/{router_id}/user-manager/preview-user",
+        headers=headers,
+        json={"username": "orphan-voucher"},
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["classification"] == "already_linked"
+    assert data["credential_state"] == "unavailable"
