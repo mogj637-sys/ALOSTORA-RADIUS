@@ -40,7 +40,15 @@ def update_plan(plan_id: int, payload: PlanUpdate, db: Session = Depends(get_db)
     if plan is None:
         raise HTTPException(status_code=404, detail="الباقة غير موجودة")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    next_price = updates.get("price", plan.price)
+    next_type = updates.get("commission_type", plan.commission_type)
+    next_value = updates.get("commission_value", plan.commission_value)
+    if next_type == "fixed" and next_value > next_price:
+        raise HTTPException(status_code=422, detail="العمولة الثابتة لا يمكن أن تتجاوز سعر الباقة")
+    if next_type == "none":
+        updates["commission_value"] = 0
+    for field, value in updates.items():
         setattr(plan, field, value)
 
     try:
