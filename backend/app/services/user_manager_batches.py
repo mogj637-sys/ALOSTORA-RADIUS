@@ -92,14 +92,17 @@ def run_bounded_batches(
     if not isinstance(history, list) or any(not isinstance(item, str) or not item for item in history):
         raise BatchSafetyError("checkpoint cursor_history must be a list of non-empty strings")
     seen_cursors.update(history)
-    if cursor is not None:
-        if cursor in seen_cursors:
-            raise BatchSafetyError("checkpoint cursor was already processed")
-        seen_cursors.add(cursor)
-
     while processed_pages < limits.max_pages and processed_records < limits.max_records:
         if clock() - started >= limits.max_seconds:
             break
+
+        # Mark the cursor for the page being fetched as consumed. The pending
+        # next_cursor is intentionally added only when its page is fetched,
+        # which makes cycle detection survive a persisted/resumed checkpoint.
+        if cursor is not None:
+            if cursor in seen_cursors:
+                raise BatchSafetyError("checkpoint cursor was already processed")
+            seen_cursors.add(cursor)
 
         remaining = limits.max_records - processed_records
         requested = min(limits.page_size, remaining)
