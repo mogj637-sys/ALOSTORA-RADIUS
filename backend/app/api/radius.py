@@ -1,3 +1,4 @@
+import logging
 import os
 import secrets
 from datetime import datetime, timezone
@@ -5,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Response
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -19,6 +21,7 @@ from app.services.router_secrets import RouterSecretEncryptionNotConfigured, dec
 from app.services.radius_service import authorize_card, process_accounting
 
 router = APIRouter(prefix="/internal/radius", tags=["radius-internal"])
+logger = logging.getLogger(__name__)
 
 
 def require_radius_internal_key(
@@ -148,8 +151,16 @@ def _normalize_accounting(payload: dict[str, Any]) -> RadiusAccountingRequest:
     response_model=dict[str, str | int],
     dependencies=[Depends(require_radius_internal_key)],
 )
-def radius_authorize(payload: dict[str, Any] = Body(...), db: Session = Depends(get_db)):
-    request = _normalize_authorize(payload)
+def radius_authorize(payload: Any = Body(...), db: Session = Depends(get_db)):
+    if not isinstance(payload, dict):
+        logger.warning("RADIUS authorize payload must be a JSON object; received %s", type(payload).__name__)
+        raise HTTPException(status_code=422, detail="RADIUS authorize payload must be a JSON object")
+    try:
+        request = _normalize_authorize(payload)
+    except ValidationError as exc:
+        errors = exc.errors(include_input=False)
+        logger.warning("RADIUS authorize payload validation failed: %s", errors)
+        raise HTTPException(status_code=422, detail={"message": "Invalid RADIUS authorize payload", "fields": errors}) from exc
     try:
         result = authorize_card(
             db,
