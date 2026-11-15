@@ -7,6 +7,7 @@ from app.models.core import (
     PrintJob,
     PrintJobItem,
     PosInventoryMovement,
+    PosAccountEntry,
     RadiusSession,
     Router,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "PrintJob",
     "PrintJobItem",
     "PosInventoryMovement",
+    "PosAccountEntry",
     "RadiusSession",
     "Router",
 ]
