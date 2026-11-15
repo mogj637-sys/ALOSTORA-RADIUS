@@ -11,10 +11,10 @@ NAS_IDENTIFIER = "alostora-e2e"
 USERNAME = "E2E-RADIUS-USER"
 PASSWORD = "e2e-card-password-2026"
 SESSION_ID = "alostora-e2e-session-001"
-RADIUS_SECRET = os.environ["RADIUS_SHARED_SECRET"]
 
 
 def seed() -> None:
+    radius_secret = os.environ["RADIUS_SHARED_SECRET"]
     db = SessionLocal()
     try:
         if db.query(Router).filter_by(nas_identifier=NAS_IDENTIFIER).first():
@@ -37,7 +37,7 @@ def seed() -> None:
             management_host="127.0.0.1",
             radius_client_address="127.0.0.1/32",
             api_port=8728,
-            radius_secret_encrypted=encrypt_router_secret(RADIUS_SECRET),
+            radius_secret_encrypted=encrypt_router_secret(radius_secret),
             is_active=True,
         )
         db.add(router)
