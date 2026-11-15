@@ -876,7 +876,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderReports() {
-    const totals = posReport?.totals;
+    const totals = posReport?.totals ?? {
+      opening_balance: 0, delivered_value: 0, other_debits: 0, commissions: 0,
+      payments: 0, returns: 0, other_credits: 0, period_debit: 0, period_credit: 0, closing_balance: 0,
+    };
     const money = (value: number | undefined) => Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return (
       <>
