@@ -126,6 +126,14 @@ def test_print_allocation_is_idempotent_and_reprint_does_not_duplicate_stock(own
     assert inventory.json()["allocated_cards"] == 2
     assert Decimal(inventory.json()["commercial_printed_value"]) == Decimal("50.00")
 
+    account = client.get(
+        f"/api/v1/points-of-sale/{point['id']}/account", headers=headers
+    )
+    assert account.status_code == 200, account.text
+    assert Decimal(account.json()["total_debit"]) == Decimal("50.00")
+    assert Decimal(account.json()["total_credit"]) == Decimal("0.00")
+    assert Decimal(account.json()["balance_due"]) == Decimal("50.00")
+
 
 def test_free_card_print_is_recorded_but_not_allocated_or_charged(owner_client):
     client, headers, _ = owner_client
@@ -177,6 +185,13 @@ def test_free_card_print_is_recorded_but_not_allocated_or_charged(owner_client):
     assert inventory.status_code == 200, inventory.text
     assert inventory.json()["free_cards_printed"] == 1
     assert inventory.json()["allocated_cards"] == 0
+
+    account = client.get(
+        f"/api/v1/points-of-sale/{point['id']}/account", headers=headers
+    )
+    assert account.status_code == 200, account.text
+    assert Decimal(account.json()["total_debit"]) == Decimal("0.00")
+    assert Decimal(account.json()["balance_due"]) == Decimal("0.00")
 
 
 def test_card_cannot_be_allocated_to_two_points_of_sale(owner_client):
