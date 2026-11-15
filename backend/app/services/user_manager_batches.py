@@ -115,6 +115,8 @@ def run_bounded_batches(
             raise BatchSafetyError("empty non-final page would prevent safe progress")
 
         next_cursor = page.next_cursor
+        if not page.exhausted and next_cursor is None:
+            raise BatchSafetyError("non-final page did not provide a continuation cursor")
         if next_cursor is not None:
             if not isinstance(next_cursor, str) or not next_cursor:
                 raise BatchSafetyError("source adapter returned an invalid continuation cursor")
@@ -141,7 +143,5 @@ def run_bounded_batches(
 
         if page.exhausted:
             return BatchResult("completed", processed_records, processed_pages, state)
-        if cursor is None:
-            raise BatchSafetyError("non-final page did not provide a continuation cursor")
 
     return BatchResult("paused", processed_records, processed_pages, state)
