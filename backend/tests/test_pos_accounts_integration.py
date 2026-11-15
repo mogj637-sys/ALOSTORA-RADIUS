@@ -124,7 +124,9 @@ def test_point_of_sale_report_summarizes_period_movements(owner_client):
     assert Decimal(row["period_debit"]) == Decimal("100.00")
     assert Decimal(row["period_credit"]) == Decimal("30.00")
     assert Decimal(row["closing_balance"]) == Decimal("70.00")
-    assert Decimal(data["totals"]["closing_balance"]) == sum(\n        (Decimal(item["closing_balance"]) for item in data["points"]), Decimal("0.00")\n    )
+    assert Decimal(data["totals"]["closing_balance"]) == sum(
+        (Decimal(item["closing_balance"]) for item in data["points"]), Decimal("0.00")
+    )
 
 
 def test_point_of_sale_report_rejects_reversed_date_range(owner_client):
