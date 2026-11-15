@@ -680,7 +680,7 @@ def test_radius_chap_hex_accepts_free_radius_prefixed_hex_values(owner_client):
     router = _router(client, headers)
     card, password = _card(client, headers)
     challenge = bytes.fromhex("0102030405060708")
-    identifier = b"\\x01"
+    identifier = bytes([1])
     response = hashlib.md5(identifier + password.encode("utf-8") + challenge).digest()
     chap_packet = (identifier + response).hex()
     accepted = client.post(
