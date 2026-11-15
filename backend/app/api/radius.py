@@ -127,13 +127,13 @@ def _hex_attribute(payload: dict[str, Any], *names: str) -> str | None:
             text = text[2:]
             if len(text) % 2 == 0 and all(char in "0123456789abcdefABCDEF" for char in text):
                 return text.lower()
+        if len(text) % 2 == 0 and all(char in "0123456789abcdefABCDEF" for char in text):
+            return text.lower()
         if attribute_type == "octets":
             try:
                 return text.encode("latin-1").hex()
             except UnicodeEncodeError:
                 return text.encode("utf-8").hex()
-        if len(text) % 2 == 0 and all(char in "0123456789abcdefABCDEF" for char in text):
-            return text.lower()
         return text.encode("utf-8").hex()
     return None
 
