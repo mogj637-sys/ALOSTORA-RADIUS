@@ -156,6 +156,18 @@ def test_exact_user_inspection_uses_device_query_and_never_requests_password(mon
         "shared-users": "1",
     }])
     resources["/tool/user-manager/user"] = user_resource
+    resources["/tool/user-manager/profile"] = FakeResource(rows=[{
+        "name": "basic", "validity": "5d", "starts-when": " first-auth",
+        "price": "0", "override-shared-users": "1", "comment": "starter",
+    }])
+    resources["/tool/user-manager/profile/profile-limitation"] = FakeResource(rows=[
+        {"profile": "basic", "limitation": "basic-limit"},
+    ])
+    resources["/tool/user-manager/limitation"] = FakeResource(rows=[{
+        "name": "basic-limit", "uptime-limit": "1d", "download-limit": "800M",
+        "upload-limit": "100M", "transfer-limit": "900M",
+        "rate-limit-rx": "2M", "rate-limit-tx": "512k", "group": "default",
+    }])
     api = FakeApi(resources)
     monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
 
@@ -174,6 +186,16 @@ def test_exact_user_inspection_uses_device_query_and_never_requests_password(mon
         "disabled": "false",
         "actual_profile": "basic",
         "shared_users": "1",
+        "profile": {
+            "name": "basic", "validity": "5d", "starts-when": " first-auth",
+            "price": "0", "override-shared-users": "1", "comment": "starter",
+        },
+        "limitations": [{
+            "name": "basic-limit", "uptime-limit": "1d", "download-limit": "800M",
+            "upload-limit": "100M", "transfer-limit": "900M",
+            "rate-limit-rx": "2M", "rate-limit-tx": "512k", "group": "default",
+        }],
+        "warnings": [],
     }
     assert user_resource.last_params == {
         "?username": "voucher-100",
