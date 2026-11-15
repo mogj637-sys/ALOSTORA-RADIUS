@@ -160,7 +160,11 @@ def preview_user_manager_user_endpoint(
     # The diagnostic adapter does not read credentials. Missing password data is
     # therefore explicitly marked unavailable, never guessed as username-only.
     source_record = dict(source_user)
-    source_record["external_id"] = source_user.get("external_id")
+    if not source_record.get("external_id"):
+        raise HTTPException(
+            status_code=422,
+            detail="معرّف المستخدم الأصلي غير متاح؛ لم يتم حفظ المعاينة لتجنب إنشاء هوية مصدر وهمية",
+        )
     source_record["username"] = source_user.get("username") or payload.username
     existing_card = (
         db.query(Card.id)
@@ -203,13 +207,16 @@ def preview_user_manager_user_endpoint(
     )
     preview = UserManagerImportPreview(
         sync_run_id=run.id,
-        external_user_id=classified["external_user_id"] or "missing-external-id",
+        external_user_id=classified["external_user_id"],
         username=classified["username"] or payload.username,
         source_profile_id=classified["source_profile_id"],
         classification=classified["classification"],
         credential_mode=classified["credential_mode"],
         credential_state=classified["credential_state"],
-        matched_card_id=existing_card[0] if existing_card is not None else None,
+        matched_card_id=(
+            source_link[0] if source_link is not None and source_link[0] is not None
+            else existing_card[0] if existing_card is not None else None
+        ),
         safe_snapshot=classified["safe_snapshot"],
         issues=classified["issues"],
         source_fingerprint=classified["source_fingerprint"],
