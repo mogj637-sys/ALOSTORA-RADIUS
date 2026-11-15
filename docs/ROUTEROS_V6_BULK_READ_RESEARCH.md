@@ -22,6 +22,19 @@ The official RouterOS API documentation establishes that:
 
 The `routeros-api 0.17.0` resource implementation exposes command arguments and query dictionaries; it does not add a generic page/offset abstraction. The library's documented count-only example reads the count from the final `ret` value. A count-only request is useful for preflight, but it does not make a later full `print` response bounded.
 
+### Additional library finding: comparison queries can be encoded
+
+The pinned library does have a lower-level escape hatch for query words beyond its simple equality-query dictionary:
+
+- `RouterOsResource.call(..., additional_queries=...)` forwards query objects to the API communicator.
+- `routeros_api.query.IsGreaterQuery`, `IsLessQuery`, and `AndQuery` encode query words such as `?>username=value`, `?<username=value`, and `?#&`.
+- A focused backend unit test now verifies this exact serialization using the pinned dependency.
+
+This is a useful implementation capability, but it is **not** evidence that the User Manager v6 `user` menu correctly applies lexical comparisons to `username`, nor that such ranges provide complete, stable, bounded partitions. The current official API manual surfaced during this investigation is for RouterOS 7.26; its query grammar must not be treated as a substitute for testing the user's exact v6 release and User Manager package.
+
+The next safe technical step is therefore a disposable-lab test of the actual User Manager resource. Do not connect this query builder to production batch fetching until the resource-specific tests pass.
+
+
 References:
 - MikroTik RouterOS API: https://manual.mikrotik.com/docs/developer-guides/api/
 - RouterOS API library 0.17.0 resource implementation: https://github.com/socialwifi/RouterOS-api/blob/0.17.0/routeros_api/resource.py
