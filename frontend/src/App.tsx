@@ -793,10 +793,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     if (page === "pos" || page === "templates") {
       loadCardTemplates().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل قوالب الطباعة"));
     }
-    if (page === "templates") {
-      setError("");
-      loadCardTemplates().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل القوالب"));
-    }
+    if (page === "templates") setError("");
     if (page === "reports") {
       setError("");
       loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقارير المالية"));
@@ -1105,7 +1102,6 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <label>اختر نقطة البيع
             <select value={selectedPosId} onChange={(e) => {
               const id = e.target.value;
-              setSelectedPrintCardIds([]);
               setPrintPreviewCards([]);
               setSelectedPosId(id);
               Promise.all([loadPosInventory(id), loadPrintHistory(id), loadPosAccount(id)]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل بيانات نقطة البيع"));
