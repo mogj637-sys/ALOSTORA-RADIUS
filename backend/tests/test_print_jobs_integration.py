@@ -3,16 +3,18 @@ from decimal import Decimal
 from uuid import UUID
 
 from app.db.session import SessionLocal
-from app.models.core import Card, PosInventoryMovement, PrintJobItem
+from app.models.core import Card, PosAccountEntry, PosInventoryMovement, PrintJobItem
 
-def _plan(client, headers):
+def _plan(client, headers, *, commission_type="none", commission_value="0.00", price="25.00"):
     response = client.post(
         "/api/v1/plans",
         headers=headers,
         json={
             "code": "PRINT-" + secrets.token_hex(4).upper(),
             "name": "Print integration plan",
-            "price": "25.00",
+            "price": price,
+            "commission_type": commission_type,
+            "commission_value": commission_value,
         },
     )
     assert response.status_code == 201, response.text
@@ -318,3 +320,96 @@ def test_free_card_lifecycle_and_protect_pos_allocated_card_from_cancellation(ow
         json={"action": "cancel"},
     )
     assert allocated_cancel.status_code == 409
+
+
+def test_plan_commissions_are_credited_once_on_original_commercial_delivery(owner_client):
+    client, headers, _ = owner_client
+    percentage_plan = _plan(
+        client, headers, commission_type="percentage", commission_value="10.00"
+    )
+    fixed_plan = _plan(
+        client, headers, commission_type="fixed", commission_value="3.00"
+    )
+    point = _point(client, headers)
+    percentage_cards = [_card(client, headers, percentage_plan) for _ in range(2)]
+    fixed_card = _card(client, headers, fixed_plan)
+    free_card = _card(client, headers, percentage_plan, free=True)
+    cards = percentage_cards + [fixed_card, free_card]
+
+    payload = {
+        "idempotency_key": "commission-" + secrets.token_hex(12),
+        "point_of_sale_id": point["id"],
+        "card_ids": [card["id"] for card in cards],
+        "template_code": "classic-green",
+    }
+    printed = client.post("/api/v1/print-jobs", headers=headers, json=payload)
+    assert printed.status_code == 201, printed.text
+    assert Decimal(printed.json()["total_amount"]) == Decimal("75.00")
+
+    # Two 10% commissions (2.50 each) plus one fixed commission (3.00).
+    account = client.get(
+        f"/api/v1/points-of-sale/{point['id']}/account", headers=headers
+    )
+    assert account.status_code == 200, account.text
+    assert Decimal(account.json()["total_debit"]) == Decimal("75.00")
+    assert Decimal(account.json()["total_credit"]) == Decimal("8.00")
+    assert Decimal(account.json()["balance_due"]) == Decimal("67.00")
+
+    db = SessionLocal()
+    entries = db.query(PosAccountEntry).filter(
+        PosAccountEntry.point_of_sale_id == point["id"]
+    ).all()
+    commission_entries = [entry for entry in entries if entry.entry_type == "commission"]
+    assert len(commission_entries) == 2
+    assert sum((entry.amount for entry in commission_entries), Decimal("0.00")) == Decimal("8.00")
+    db.close()
+
+    retry = client.post("/api/v1/print-jobs", headers=headers, json=payload)
+    assert retry.status_code == 201, retry.text
+    assert retry.json()["id"] == printed.json()["id"]
+
+    reprint = client.post(
+        "/api/v1/print-jobs",
+        headers=headers,
+        json={
+            **payload,
+            "idempotency_key": "commission-reprint-" + secrets.token_hex(12),
+            "is_reprint": True,
+        },
+    )
+    assert reprint.status_code == 201, reprint.text
+
+    account_after = client.get(
+        f"/api/v1/points-of-sale/{point['id']}/account", headers=headers
+    )
+    assert account_after.status_code == 200, account_after.text
+    assert Decimal(account_after.json()["total_credit"]) == Decimal("8.00")
+
+
+def test_plan_commission_validation_rejects_invalid_values(owner_client):
+    client, headers, _ = owner_client
+    invalid_percentage = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "code": "BADPCT-" + secrets.token_hex(3),
+            "name": "Invalid percentage",
+            "price": "20.00",
+            "commission_type": "percentage",
+            "commission_value": "100.01",
+        },
+    )
+    assert invalid_percentage.status_code == 422
+
+    invalid_fixed = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "code": "BADFIX-" + secrets.token_hex(3),
+            "name": "Invalid fixed",
+            "price": "20.00",
+            "commission_type": "fixed",
+            "commission_value": "20.01",
+        },
+    )
+    assert invalid_fixed.status_code == 422
