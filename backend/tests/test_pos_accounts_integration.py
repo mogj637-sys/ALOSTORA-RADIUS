@@ -134,3 +134,68 @@ def test_point_of_sale_report_rejects_reversed_date_range(owner_client):
         headers=headers,
     )
     assert response.status_code == 422
+
+
+
+def test_point_of_sale_statement_and_excel_exports(owner_client):
+    from datetime import date
+
+    client, headers, _ = owner_client
+    point = _point(client, headers)
+    base = f"/api/v1/points-of-sale/{point['id']}/account/entries"
+    for payload in [
+        {
+            "idempotency_key": "statement-debit-" + secrets.token_hex(8),
+            "entry_type": "adjustment", "direction": "debit", "amount": "80.00",
+            "description": "توريد كروت", "reference": "INV-01",
+        },
+        {
+            "idempotency_key": "statement-credit-" + secrets.token_hex(8),
+            "entry_type": "payment", "direction": "credit", "amount": "30.00",
+            "description": "سداد نقدي", "reference": "PAY-01",
+        },
+    ]:
+        response = client.post(base, headers=headers, json=payload)
+        assert response.status_code == 201, response.text
+
+    today = date.today().isoformat()
+    query = f"date_from={today}&date_to={today}"
+    statement = client.get(
+        f"/api/v1/reports/points-of-sale/{point['id']}/statement?{query}",
+        headers=headers,
+    )
+    assert statement.status_code == 200, statement.text
+    data = statement.json()
+    assert data["point_of_sale_name"] == point["name"]
+    assert len(data["entries"]) == 2
+    assert Decimal(data["opening_balance"]) == Decimal("0.00")
+    assert Decimal(data["total_debit"]) == Decimal("80.00")
+    assert Decimal(data["total_credit"]) == Decimal("30.00")
+    assert Decimal(data["closing_balance"]) == Decimal("50.00")
+    assert Decimal(data["entries"][0]["running_balance"]) == Decimal("80.00")
+    assert Decimal(data["entries"][1]["running_balance"]) == Decimal("50.00")
+
+    report_file = client.get(
+        f"/api/v1/reports/points-of-sale/export.xlsx?{query}",
+        headers=headers,
+    )
+    assert report_file.status_code == 200, report_file.text
+    assert "spreadsheetml" in report_file.headers["content-type"]
+    assert report_file.content[:2] == b"PK"
+
+    statement_file = client.get(
+        f"/api/v1/reports/points-of-sale/{point['id']}/statement/export.xlsx?{query}",
+        headers=headers,
+    )
+    assert statement_file.status_code == 200, statement_file.text
+    assert "spreadsheetml" in statement_file.headers["content-type"]
+    assert statement_file.content[:2] == b"PK"
+
+
+def test_point_of_sale_statement_requires_existing_point(owner_client):
+    client, headers, _ = owner_client
+    response = client.get(
+        "/api/v1/reports/points-of-sale/999999/statement?date_from=2026-11-15&date_to=2026-11-15",
+        headers=headers,
+    )
+    assert response.status_code == 404
