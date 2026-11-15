@@ -327,7 +327,7 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
 }
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
-  const [page, setPage] = useState<"overview" | "plans" | "cards" | "pos" | "routers" | "reports" | "templates">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "routers" | "reports" | "templates">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [routers, setRouters] = useState<RouterRecord[]>([]);
   const [userManagerProbe, setUserManagerProbe] = useState<UserManagerProbe | null>(null);
@@ -798,11 +798,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setError("");
       loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقارير المالية"));
     }
-    if (page === "plans" || page === "cards" || page === "pos" || page === "routers") {
+    if (page === "plans" || page === "cards" || page === "card-create" || page === "pos" || page === "routers") {
       setError("");
       Promise.all([
         loadPlans(),
-        page === "cards" || page === "pos" ? loadCards() : Promise.resolve(),
+        page === "cards" || page === "card-create" || page === "pos" ? loadCards() : Promise.resolve(),
         page === "pos" ? loadPointsOfSale() : Promise.resolve(),
         page === "routers" ? loadRouters() : Promise.resolve(),
       ]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل البيانات"));
@@ -1034,51 +1034,54 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     </>;
   }
 
+  function renderCardCreate() {
+    return <>
+      <div className="section-heading"><div><h2>إضافة كروت اليوزرمنجر</h2><p>أنشئ كرتاً منفرداً أو دفعة كروت وحدد الباقة وبيانات الدخول.</p></div></div>
+      <div className="mode-tabs">
+        <button type="button" className={cardMode === "single" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("single"); setGeneratedCards([]); }}>كرت منفرد</button>
+        <button type="button" className={cardMode === "batch" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("batch"); setGeneratedCards([]); }}>دفعة كروت</button>
+      </div>
+      {plans.filter((plan) => plan.is_active).length === 0 ? <div className="empty-state">لا توجد باقات مفعلة. فعّل باقة من قسم الباقات أولاً.</div> : cardMode === "single" ? (
+        <form className="panel form-grid" onSubmit={createSingle}>
+          <label>الباقة<select value={singleDraft.planId || (plans[0] ? String(plans[0].id) : "")} onChange={(e) => setSingleDraft({ ...singleDraft, planId: e.target.value })}>{plans.filter((plan) => plan.is_active).map((plan) => <option value={plan.id} key={plan.id}>{plan.name} — {plan.code}</option>)}</select></label>
+          <label>اسم المستخدم<input value={singleDraft.username} onChange={(e) => setSingleDraft({ ...singleDraft, username: e.target.value })} minLength={3} maxLength={32} required /></label>
+          <label>نوع بيانات الدخول<select value={singleDraft.cardType} onChange={(e) => setSingleDraft({ ...singleDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
+          {singleDraft.cardType === "separate_credentials" && <label>كلمة المرور<input type="text" value={singleDraft.password} onChange={(e) => setSingleDraft({ ...singleDraft, password: e.target.value })} minLength={4} maxLength={32} required /></label>}
+          <label className="checkbox-label"><input type="checkbox" checked={singleDraft.isFree} onChange={(e) => setSingleDraft({ ...singleDraft, isFree: e.target.checked })} /> كرت مجاني / خاص بمالك الشبكة</label>
+          <div className="form-actions"><button type="submit" disabled={busy || !singleDraft.planId}>{busy ? "جارٍ الإنشاء..." : "إنشاء الكرت"}</button></div>
+        </form>
+      ) : (
+        <form className="panel form-grid" onSubmit={createBatch}>
+          <label>الباقة<select value={batchDraft.planId} onChange={(e) => setBatchDraft({ ...batchDraft, planId: e.target.value })}>{plans.filter((plan) => plan.is_active).map((plan) => <option value={plan.id} key={plan.id}>{plan.name} — {plan.code}</option>)}</select></label>
+          <label>عدد الكروت<input type="number" min="1" max="5000" value={batchDraft.quantity} onChange={(e) => setBatchDraft({ ...batchDraft, quantity: e.target.value })} required /></label>
+          <label>نوع بيانات الدخول<select value={batchDraft.cardType} onChange={(e) => setBatchDraft({ ...batchDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
+          <label>طريقة توليد اسم المستخدم<select value={batchDraft.generationMode} onChange={(e) => setBatchDraft({ ...batchDraft, generationMode: e.target.value })}><option value="digits">أرقام فقط</option><option value="letters">حروف فقط</option><option value="alphanumeric">أرقام وحروف</option></select></label>
+          <label>طول اسم المستخدم<input type="number" min="3" max="32" value={batchDraft.usernameLength} onChange={(e) => setBatchDraft({ ...batchDraft, usernameLength: e.target.value })} /></label>
+          <label>طول كلمة المرور<input type="number" min="4" max="32" value={batchDraft.passwordLength} onChange={(e) => setBatchDraft({ ...batchDraft, passwordLength: e.target.value })} disabled={batchDraft.cardType !== "separate_credentials"} /></label>
+          <label>بادئة اختيارية<input value={batchDraft.prefix} onChange={(e) => setBatchDraft({ ...batchDraft, prefix: e.target.value })} placeholder="مثال: 777" /></label>
+          <div className="form-actions"><button type="submit" disabled={busy || !batchDraft.planId}>{busy ? "جارٍ إنشاء الكروت..." : "إنشاء الدفعة"}</button></div>
+        </form>
+      )}
+      {generatedCards.length > 0 && <section className="generated-panel">
+        <div className="section-heading compact-heading"><div><h2>بيانات الدفعة الجديدة</h2><p>كلمات المرور تظهر الآن فقط. احفظ الجدول أو اطبعه قبل مغادرة الصفحة.</p></div><button type="button" className="secondary-button" onClick={() => window.print()}>طباعة الصفحة</button></div>
+        <div className="table-wrap"><table><thead><tr><th>التسلسل</th><th>اسم المستخدم</th><th>كلمة المرور</th></tr></thead><tbody>{generatedCards.map((card) => <tr key={card.serial_number}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.password || "بدون كلمة مرور"}</td></tr>)}</tbody></table></div>
+      </section>}
+    </>;
+  }
+
   function renderCards() {
-    return (
-      <>
-        <div className="section-heading"><div><h2>إدارة الكروت</h2><p>أنشئ كرتاً منفرداً أو دفعة كروت وفق نوع بيانات الدخول.</p></div></div>
-        <div className="mode-tabs">
-          <button type="button" className={cardMode === "single" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("single"); setGeneratedCards([]); }}>كرت منفرد</button>
-          <button type="button" className={cardMode === "batch" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("batch"); setGeneratedCards([]); }}>دفعة كروت</button>
-        </div>
-        {plans.filter((plan) => plan.is_active).length === 0 ? <div className="empty-state">لا توجد باقات مفعلة. فعّل باقة من قسم الباقات أولاً.</div> : cardMode === "single" ? (
-          <form className="panel form-grid" onSubmit={createSingle}>
-            <label>الباقة<select value={singleDraft.planId || (plans[0] ? String(plans[0].id) : "")} onChange={(e) => setSingleDraft({ ...singleDraft, planId: e.target.value })}>{plans.filter((plan) => plan.is_active).map((plan) => <option value={plan.id} key={plan.id}>{plan.name} — {plan.code}</option>)}</select></label>
-            <label>اسم المستخدم<input value={singleDraft.username} onChange={(e) => setSingleDraft({ ...singleDraft, username: e.target.value })} minLength={3} maxLength={32} required /></label>
-            <label>نوع بيانات الدخول<select value={singleDraft.cardType} onChange={(e) => setSingleDraft({ ...singleDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
-            {singleDraft.cardType === "separate_credentials" && <label>كلمة المرور<input type="text" value={singleDraft.password} onChange={(e) => setSingleDraft({ ...singleDraft, password: e.target.value })} minLength={4} maxLength={32} required /></label>}
-            <label className="checkbox-label"><input type="checkbox" checked={singleDraft.isFree} onChange={(e) => setSingleDraft({ ...singleDraft, isFree: e.target.checked })} /> كرت مجاني / خاص بمالك الشبكة</label>
-            <div className="form-actions"><button type="submit" disabled={busy || !singleDraft.planId}>{busy ? "جارٍ الإنشاء..." : "إنشاء الكرت"}</button></div>
-          </form>
-        ) : (
-          <form className="panel form-grid" onSubmit={createBatch}>
-            <label>الباقة<select value={batchDraft.planId} onChange={(e) => setBatchDraft({ ...batchDraft, planId: e.target.value })}>{plans.filter((plan) => plan.is_active).map((plan) => <option value={plan.id} key={plan.id}>{plan.name} — {plan.code}</option>)}</select></label>
-            <label>عدد الكروت<input type="number" min="1" max="5000" value={batchDraft.quantity} onChange={(e) => setBatchDraft({ ...batchDraft, quantity: e.target.value })} required /></label>
-            <label>نوع بيانات الدخول<select value={batchDraft.cardType} onChange={(e) => setBatchDraft({ ...batchDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
-            <label>طريقة توليد اسم المستخدم<select value={batchDraft.generationMode} onChange={(e) => setBatchDraft({ ...batchDraft, generationMode: e.target.value })}><option value="digits">أرقام فقط</option><option value="letters">حروف فقط</option><option value="alphanumeric">أرقام وحروف</option></select></label>
-            <label>طول اسم المستخدم<input type="number" min="3" max="32" value={batchDraft.usernameLength} onChange={(e) => setBatchDraft({ ...batchDraft, usernameLength: e.target.value })} /></label>
-            <label>طول كلمة المرور<input type="number" min="4" max="32" value={batchDraft.passwordLength} onChange={(e) => setBatchDraft({ ...batchDraft, passwordLength: e.target.value })} disabled={batchDraft.cardType !== "separate_credentials"} /></label>
-            <label>بادئة اختيارية<input value={batchDraft.prefix} onChange={(e) => setBatchDraft({ ...batchDraft, prefix: e.target.value })} placeholder="مثال: 777" /></label>
-            <div className="form-actions"><button type="submit" disabled={busy || !batchDraft.planId}>{busy ? "جارٍ إنشاء الكروت..." : "إنشاء الدفعة"}</button></div>
-          </form>
-        )}
-        {generatedCards.length > 0 && (
-          <section className="generated-panel">
-            <div className="section-heading compact-heading"><div><h2>بيانات الدفعة الجديدة</h2><p>كلمات المرور تظهر الآن فقط. احفظ الجدول أو اطبعه قبل مغادرة الصفحة.</p></div><button type="button" className="secondary-button" onClick={() => window.print()}>طباعة الصفحة</button></div>
-            <div className="table-wrap"><table><thead><tr><th>التسلسل</th><th>اسم المستخدم</th><th>كلمة المرور</th></tr></thead><tbody>{generatedCards.map((card) => <tr key={card.serial_number}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.password || "بدون كلمة مرور"}</td></tr>)}</tbody></table></div>
-          </section>
-        )}
-        <div className="section-heading compact-heading"><div><h2>سجل الكروت</h2><p>ابحث وحدد الكروت ثم جهّزها للطباعة أو أدر حالتها.</p></div><span className="count-tag">200 كرت لكل صفحة</span></div><div className="card-selection-toolbar"><label><input type="checkbox" checked={cards.length > 0 && cards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? [...new Set([...selectedCardIds, ...cards.map((card) => card.id)])] : selectedCardIds.filter((id) => !cards.some((card) => card.id === id)))} /> تحديد كروت الصفحة الحالية</label><span>تم تحديد {selectedCardIds.length} كرت</span><button type="button" disabled={!selectedCardIds.length} onClick={prepareSelectedCardsForPrinting}>تجهيز المحدد للطباعة</button></div>
-        <div className="card-search"><label htmlFor="card-search">بحث في الكروت</label><input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" /></div>
-        <div className="table-wrap"><table><thead><tr><th>تحديد</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>{cards.map((card) => <tr key={card.id}><td><input type="checkbox" aria-label={`تحديد ${card.username}`} checked={selectedCardIds.includes(card.id)} onChange={() => toggleSelectedCard(card.id)} /></td><td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td><td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td><td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td><td>{card.is_free ? "نعم" : "لا"}</td><td className="actions-cell">{card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null}{["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button>}</td></tr>)}</tbody></table>{cards.length === 0 && <div className="empty-state">لا توجد كروت تطابق البحث في هذه الصفحة.</div>}</div>
-        <div className="pagination-controls">
-          <button type="button" className="table-action" disabled={cardOffset === 0 || busy} onClick={() => changeCardPage(cardOffset - 200)}>السابق</button>
-          <span>الصفحة {Math.floor(cardOffset / 200) + 1}</span>
-          <button type="button" className="table-action" disabled={!hasMoreCards || busy} onClick={() => changeCardPage(cardOffset + 200)}>التالي</button>
-        </div>
-      </>
-    );
+    return <>
+      <div className="section-heading"><div><h2>إدارة الكروت</h2><p>ابحث في السجل وحدد الكروت ثم جهّز الكروت الجديدة للطباعة أو أدر حالتها.</p></div><span className="count-tag">200 كرت لكل صفحة</span></div>
+      <div className="card-selection-toolbar">
+        <label><input type="checkbox" checked={cards.length > 0 && cards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? [...new Set([...selectedCardIds, ...cards.map((card) => card.id)])] : selectedCardIds.filter((id) => !cards.some((card) => card.id === id)))} /> تحديد كروت الصفحة الحالية</label>
+        <span>تم تحديد {selectedCardIds.length} كرت</span><button type="button" disabled={!selectedCardIds.length} onClick={prepareSelectedCardsForPrinting}>تجهيز المحدد للطباعة</button>
+      </div>
+      <div className="card-search"><label htmlFor="card-search">بحث في الكروت</label><input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" /></div>
+      <div className="table-wrap"><table><thead><tr><th>تحديد</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>
+        {cards.map((card) => <tr key={card.id}><td><input type="checkbox" aria-label={`تحديد ${card.username}`} checked={selectedCardIds.includes(card.id)} onChange={() => toggleSelectedCard(card.id)} /></td><td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td><td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td><td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td><td>{card.is_free ? "نعم" : "لا"}</td><td className="actions-cell">{card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null}{["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button>}</td></tr>)}
+      </tbody></table>{cards.length === 0 && <div className="empty-state">لا توجد كروت تطابق البحث في هذه الصفحة.</div>}</div>
+      <div className="pagination-controls"><button type="button" className="table-action" disabled={cardOffset === 0 || busy} onClick={() => changeCardPage(cardOffset - 200)}>السابق</button><span>الصفحة {Math.floor(cardOffset / 200) + 1}</span><button type="button" className="table-action" disabled={!hasMoreCards || busy} onClick={() => changeCardPage(cardOffset + 200)}>التالي</button></div>
+    </>;
   }
 
   function renderPos() {
@@ -1480,7 +1483,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <nav>
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
           <div className="nav-group"><span>نظام اليوزرمنجر</span>
-            <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إضافة / إدارة الكروت</button>
+            <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>
+            <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>
             <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>
             <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات ومزامنة اليوزرمنجر</button>
             <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>تقارير اليوزرمنجر / المالية</button>
@@ -1493,12 +1497,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "pos" ? "نقاط البيع والطباعة" : page === "reports" ? "تقارير اليوزرمنجر والمالية" : page === "templates" ? "استديو تصميم الكروت" : "إدارة أجهزة MikroTik"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "نقاط البيع والطباعة" : page === "reports" ? "تقارير اليوزرمنجر والمالية" : page === "templates" ? "استديو تصميم الكروت" : "إدارة أجهزة MikroTik"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "pos" ? renderPos() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
+        {page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "card-create" ? renderCardCreate() : page === "pos" ? renderPos() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
