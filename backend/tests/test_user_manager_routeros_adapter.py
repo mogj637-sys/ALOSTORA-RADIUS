@@ -154,6 +154,11 @@ def test_exact_user_inspection_uses_device_query_and_never_requests_password(mon
         "disabled": "false",
         "actual-profile": "basic",
         "shared-users": "1",
+        "uptime-used": "2h30m",
+        "download-used": "1048576",
+        "upload-used": "2048",
+        "last-seen": "nov/15/2026 10:00:00",
+        "active-sessions": "0",
     }])
     resources["/tool/user-manager/user"] = user_resource
     resources["/tool/user-manager/profile"] = FakeResource(rows=[{
@@ -187,11 +192,11 @@ def test_exact_user_inspection_uses_device_query_and_never_requests_password(mon
         "actual_profile": "basic",
         "shared_users": "1",
         "usage": {
-            "uptime_used": None,
-            "download_used_bytes": None,
-            "upload_used_bytes": None,
-            "last_seen": None,
-            "active_sessions": None,
+            "uptime_used": "2h30m",
+            "download_used_bytes": "1048576",
+            "upload_used_bytes": "2048",
+            "last_seen": "nov/15/2026 10:00:00",
+            "active_sessions": "0",
             "missing_fields_are_unknown": True,
         },
         "profile": {
