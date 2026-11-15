@@ -9,6 +9,7 @@ on:
     branches:
       - main
       - feature/user-manager-sync
+      - feature/admin-dashboard-parity
     paths:
       - "frontend/**"
       - ".github/workflows/frontend-build.yml"
