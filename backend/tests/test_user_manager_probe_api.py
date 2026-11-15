@@ -3,6 +3,8 @@ import secrets
 from app.api import user_manager
 from app.db.session import SessionLocal
 from app.models.core import Router
+from app.models.user_manager import UserManagerSyncRun
+from app.models.user_manager_preview import UserManagerImportPreview
 from app.services.user_manager_routeros import RouterProbe
 
 
@@ -149,3 +151,50 @@ def test_exact_user_inspection_endpoint_validates_username(owner_client):
         json={"username": ""},
     )
     assert response.status_code == 422
+
+
+
+def test_single_user_preview_is_persisted_without_credentials_or_import(owner_client, monkeypatch):
+    client, headers, _ = owner_client
+    router_id = _create_router(client, headers)
+
+    def fake_inspect(**kwargs):
+        return {
+            "external_id": "*PREVIEW1",
+            "username": "preview-voucher",
+            "actual_profile": "basic",
+            "usage": {"uptime_used": "1h", "download_used_bytes": "1024"},
+            "profile": {"name": "basic"},
+            "limitations": [],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(user_manager, "inspect_user_manager_user", fake_inspect)
+    response = client.post(
+        f"/api/v1/routers/{router_id}/user-manager/preview-user",
+        headers=headers,
+        json={"username": "preview-voucher"},
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["read_only"] is True
+    assert data["imported"] is False
+    assert data["credentials_read"] is False
+    assert data["classification"] == "new"
+    assert data["credential_mode"] is None
+    assert data["credential_state"] == "unavailable"
+    assert "password" not in response.text.lower()
+
+    db = SessionLocal()
+    try:
+        run = db.get(UserManagerSyncRun, data["sync_run_id"])
+        preview = db.get(UserManagerImportPreview, data["preview_id"])
+        assert run is not None
+        assert preview is not None
+        assert preview.username == "preview-voucher"
+        assert preview.safe_snapshot["usage"]["download_used_bytes"] == "1024"
+        assert preview.credential_state == "unavailable"
+        assert preview.classification == "new"
+    finally:
+        db.close()
