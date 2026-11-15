@@ -84,7 +84,7 @@
 2. هل password field قابل للقراءة؟ وما الصيغة التي يعيدها؟
 3. الحقول التي تميز الجلسات وتربطها براوتر NAS عند مشاركة User Manager.
 4. معنى عدادات bytes/time وهل هي تراكميّة أم per-session أم per-user.
-5. طريقة pagination/print وقيود حجم النتائج على جهاز 128MB RAM.
+5. طريقة pagination/print وقيود حجم النتائج على جهاز 128MB RAM. توثيق RouterOS API يشرح `.proplist` وquery words و`count-only`، لكنه لا يوثق معاملي offset/limit عامّين لأمر print؛ لذلك لا يجوز افتراض أن `from/count` يحققان صفحات محدودة عبر API. يجب اختبار أي أسلوب تقسيم على RouterOS v6.49.23، وإلا يظل جلب سجلات المستخدمين متوقفاً ولا يستخدم get() غير المحدود.
 6. اختلافات RouterOS v7 ونسخ User Manager.
 
 ## معايير إيقاف آمنة
