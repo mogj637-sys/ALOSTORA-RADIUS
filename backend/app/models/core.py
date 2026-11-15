@@ -37,6 +37,9 @@ class Plan(TimestampMixin, Base):
     __tablename__ = "plans"
     __table_args__ = (
         CheckConstraint("price >= 0", name="ck_plans_price_nonnegative"),
+        CheckConstraint("commission_value >= 0", name="ck_plans_commission_nonnegative"),
+        CheckConstraint("commission_type != 'percentage' OR commission_value <= 100", name="ck_plans_commission_percentage_max"),
+        CheckConstraint("commission_type != 'fixed' OR commission_value <= price", name="ck_plans_fixed_commission_not_above_price"),
         CheckConstraint(
             "data_limit_bytes IS NULL OR data_limit_bytes > 0",
             name="ck_plans_data_limit_positive_or_unlimited",
@@ -55,6 +58,8 @@ class Plan(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    commission_type: Mapped[str] = mapped_column(String(20), nullable=False, default="none")
+    commission_value: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     # NULL means unlimited. Zero is deliberately not used for unlimited limits.
     data_limit_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     session_time_limit_seconds: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
