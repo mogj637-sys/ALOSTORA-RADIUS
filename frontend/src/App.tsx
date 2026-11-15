@@ -1036,7 +1036,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   function renderCardCreate() {
     return <>
-      <div className="section-heading"><div><h2>إضافة كروت اليوزرمنجر</h2><p>أنشئ كرتاً منفرداً أو دفعة كروت وحدد الباقة وبيانات الدخول.</p></div></div>
+      <div className="section-heading"><div><h2>إضافة الكروت</h2><p>أنشئ كرتاً منفرداً أو دفعة كروت وحدد الباقة وبيانات الدخول.</p></div></div><div className="notice">تنبيه: الكروت التي تنشئها هنا تُحفظ في قاعدة ALOSTORA-RADIUS. إنشاء الكروت مباشرة داخل User Manager القديم غير مفعّل بعد.</div>
       <div className="mode-tabs">
         <button type="button" className={cardMode === "single" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("single"); setGeneratedCards([]); }}>كرت منفرد</button>
         <button type="button" className={cardMode === "batch" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("batch"); setGeneratedCards([]); }}>دفعة كروت</button>
