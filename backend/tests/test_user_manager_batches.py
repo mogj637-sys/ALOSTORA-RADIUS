@@ -9,7 +9,7 @@ from app.services.user_manager_batches import (
 def test_bounded_batches_respect_record_and_page_budgets_and_checkpoint_each_page():
     pages = {
         None: SourcePage([{"id": "a"}, {"id": "b"}], "c2", False),
-        "c2": SourcePage([{"id": "c"}, {"id": "d"}], "c3", False),
+        "c2": SourcePage([{"id": "c"}], "c3", False),
     }
     requested_limits = []
     processed = []
@@ -17,7 +17,9 @@ def test_bounded_batches_respect_record_and_page_budgets_and_checkpoint_each_pag
 
     def fetch(cursor, limit):
         requested_limits.append(limit)
-        return pages[cursor]
+        page = pages[cursor]
+        assert len(page.records) <= limit
+        return page
 
     result = run_bounded_batches(
         fetch_page=fetch,
@@ -29,7 +31,7 @@ def test_bounded_batches_respect_record_and_page_budgets_and_checkpoint_each_pag
     assert result.status == "paused"
     assert result.processed_records == 3
     assert result.processed_pages == 2
-    assert processed == ["a", "b", "c", "d"][:3] if False else ["a", "b", "c", "d"]
+    assert processed == ["a", "b", "c"]
     assert requested_limits == [2, 1]
     assert len(checkpoints) == 2
     assert checkpoints[-1]["cursor"] == "c3"
@@ -57,12 +59,13 @@ def test_bounded_batches_do_not_checkpoint_a_failed_page():
 
 
 def test_bounded_batches_reject_source_that_ignores_page_limit():
+    processed = []
     try:
         run_bounded_batches(
             fetch_page=lambda _cursor, _limit: SourcePage(
                 [{"id": "1"}, {"id": "2"}], "next", False
             ),
-            process_page=lambda _rows: None,
+            process_page=lambda rows: processed.extend(rows),
             save_checkpoint=lambda _value: None,
             policy=BatchPolicy(page_size=1, max_records=1, max_pages=1, max_seconds=5),
         )
@@ -71,20 +74,27 @@ def test_bounded_batches_reject_source_that_ignores_page_limit():
     else:
         raise AssertionError("Expected bounded-page contract failure")
 
+    assert processed == []
 
-def test_bounded_batches_reject_repeated_cursor():
+
+def test_bounded_batches_reject_repeated_cursor_before_processing_or_checkpointing():
     calls = iter([
         SourcePage([{"id": "1"}], "same", False),
         SourcePage([{"id": "2"}], "same", False),
     ])
+    processed = []
+    saved = []
     try:
         run_bounded_batches(
             fetch_page=lambda _cursor, _limit: next(calls),
-            process_page=lambda _rows: None,
-            save_checkpoint=lambda _value: None,
+            process_page=lambda rows: processed.extend(rows),
+            save_checkpoint=lambda value: saved.append(value),
             policy=BatchPolicy(page_size=1, max_records=2, max_pages=2, max_seconds=5),
         )
     except BatchSafetyError as exc:
         assert "repeated" in str(exc)
     else:
         raise AssertionError("Expected repeated cursor failure")
+
+    assert processed == [{"id": "1"}]
+    assert len(saved) == 1
