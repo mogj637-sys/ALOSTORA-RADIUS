@@ -106,6 +106,17 @@ def test_exact_user_inspection_endpoint_is_read_only_and_does_not_import(owner_c
             "disabled": "false",
             "actual_profile": "basic",
             "shared_users": "1",
+            "usage": {
+                "uptime_used": "2h",
+                "download_used_bytes": "12345",
+                "upload_used_bytes": "678",
+                "last_seen": None,
+                "active_sessions": "0",
+                "missing_fields_are_unknown": True,
+            },
+            "profile": None,
+            "limitations": [],
+            "warnings": [],
         }
 
     monkeypatch.setattr(user_manager, "inspect_user_manager_user", fake_inspect)
@@ -123,6 +134,8 @@ def test_exact_user_inspection_endpoint_is_read_only_and_does_not_import(owner_c
     assert data["imported"] is False
     assert data["user"]["external_id"] == "*A1"
     assert data["user"]["actual_profile"] == "basic"
+    assert data["user"]["usage"]["download_used_bytes"] == "12345"
+    assert data["user"]["usage"]["missing_fields_are_unknown"] is True
     assert seen["target_username"] == "voucher-100"
     assert seen["host"] == "192.0.2.55"
 
