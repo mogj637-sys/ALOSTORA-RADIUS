@@ -84,7 +84,10 @@
 2. هل password field قابل للقراءة؟ وما الصيغة التي يعيدها؟
 3. الحقول التي تميز الجلسات وتربطها براوتر NAS عند مشاركة User Manager.
 4. معنى عدادات bytes/time وهل هي تراكميّة أم per-session أم per-user.
-5. طريقة pagination/print وقيود حجم النتائج على جهاز 128MB RAM. توثيق RouterOS API يشرح `.proplist` وquery words و`count-only`، لكنه لا يوثق معاملي offset/limit عامّين لأمر print؛ لذلك لا يجوز افتراض أن `from/count` يحققان صفحات محدودة عبر API. يجب اختبار أي أسلوب تقسيم على RouterOS v6.49.23، وإلا يظل جلب سجلات المستخدمين متوقفاً ولا يستخدم get() غير المحدود.
+5. طريقة pagination/print وقيود حجم النتائج على جهاز 128MB RAM. توثيق MikroTik الرسمي لـ RouterOS API يثبت أن أمر print يقبل query words للمطابقة والتصفية، ويدعم .proplist لتحديد الحقول، كما يوضح أن Regular Expressions غير مدعومة في API. لكنه لا يوثق معاملي offset/limit عامّين لأمر print؛ لذلك لا يجوز افتراض أن from/count يحققان صفحات محدودة عبر API. يمكن دراسة تقسيم النتائج إلى نطاقات باستخدام مقارنات query (مثل < و>)، لكن ذلك ليس pagination مثبتاً ولا ضماناً لحد أعلى لحجم كل رد؛ يجب اختبار صياغة الاستعلام، ترتيب المقارنة النصية، وعدم التداخل/الفقد على جهاز RouterOS v6.49.23 وببيانات اختبار قبل السماح بالتنزيل. إلى أن ينجح هذا الاختبار، يظل جلب سجلات المستخدمين متوقفاً ولا يستخدم get() غير المحدود.
+   - مرجع API: https://help.mikrotik.com/docs/spaces/ROS/pages/47579160/API
+   - مرجع User Manager: https://help.mikrotik.com/docs/spaces/ROS/pages/2555940/User%2BManager
+   - تنبيه توافق: مسارات User Manager تختلف بين الإصدارات؛ مسارات RouterOS v6 القديمة تبدأ بـ /tool/user-manager، بينما الوثائق الحالية تعرض /user-manager. لا يتم تبديل المسارات أو إعلان دعم v7 دون موصل واختبارات مستقلة.
 6. اختلافات RouterOS v7 ونسخ User Manager.
 
 ## معايير إيقاف آمنة
@@ -101,9 +104,9 @@
 - [x] إضافة endpoint محمي للمالك: POST /api/v1/routers/{router_id}/user-manager/test-connection.
 - [x] إضافة اختبارات mock للاتصال، ورفض v7، وغياب الحزمة، وتنقية أخطاء الاتصال.
 - [x] إضافة زر في صفحة الراوترات لفحص User Manager وعرض أعداد الموارد والتحذيرات بوضع القراءة فقط.
-- [x] إضافة GitHub Actions لبناء الواجهة وفحص TypeScript عند تغييرات frontend؛ نتيجة أول تشغيل ما زالت بانتظار ظهورها.
+- [x] إضافة GitHub Actions لبناء الواجهة وفحص TypeScript؛ نجح تشغيل Frontend build على الالتزام 246a717.
 - [x] بناء جداول source mapping وsync runs/checkpoints.
-- [ ] التحقق من مسارات ونتائج count-only على جهاز User Manager الذي يحدده المستخدم فعلياً؛ الاختبارات الحالية لا تتصل براوتر.
+- [ ] التحقق من مسارات ونتائج count-only واستعلامات النطاق المحدود على جهاز User Manager الذي يحدده المستخدم فعلياً؛ الاختبارات الحالية لا تتصل براوتر.
 - [ ] بناء preview/import/incremental sync APIs.
 - [ ] واجهة معاينة واعتماد وسجل مزامنة.
 - [ ] اختبارات idempotency والانقطاع والاستئناف والتعارضات.
