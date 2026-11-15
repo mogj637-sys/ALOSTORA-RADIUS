@@ -11,6 +11,7 @@ from app.api.points_of_sale import router as points_of_sale_router
 from app.api.pos_accounts import router as pos_accounts_router
 from app.api.print_jobs import router as print_jobs_router
 from app.api.routers import router as routers_router
+from app.api.user_manager import router as user_manager_router
 from app.api.radius import router as radius_router
 from app.api.reports import router as reports_router
 from app.db.session import engine
@@ -37,6 +38,7 @@ app.include_router(points_of_sale_router)
 app.include_router(pos_accounts_router)
 app.include_router(print_jobs_router)
 app.include_router(routers_router)
+app.include_router(user_manager_router)
 app.include_router(radius_router)
 app.include_router(reports_router)
 
