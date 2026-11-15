@@ -293,7 +293,7 @@ tbody tr:hover { background: #fbfdfc; }
 }
 @media print {
   @page { size: A4; margin: 10mm; }
-  body * { visibility: hidden !important; }
+  body:has(.voucher-print-preview) * { visibility: hidden !important; }
   .voucher-print-preview, .voucher-print-preview * { visibility: visible !important; }
   .voucher-print-preview { position: absolute; inset: 0; width: 100%; padding: 0; margin: 0; border: 0; background: #fff; }
   .voucher-toolbar { display: none !important; }
