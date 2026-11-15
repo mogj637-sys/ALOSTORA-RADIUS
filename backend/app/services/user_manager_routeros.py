@@ -200,7 +200,7 @@ def inspect_user_manager_user(
             "print",
             {
                 "?username": target_username,
-                ".proplist": ".id,username,customer,disabled,actual-profile,shared-users",
+                ".proplist": ".id,username,customer,disabled,actual-profile,shared-users,uptime-used,download-used,upload-used,last-seen,active-sessions",
             },
         )
         if not isinstance(rows, list):
@@ -267,6 +267,14 @@ def inspect_user_manager_user(
             "disabled": row.get("disabled"),
             "actual_profile": profile_name or None,
             "shared_users": row.get("shared-users"),
+            "usage": {
+                "uptime_used": row.get("uptime-used"),
+                "download_used_bytes": row.get("download-used"),
+                "upload_used_bytes": row.get("upload-used"),
+                "last_seen": row.get("last-seen"),
+                "active_sessions": row.get("active-sessions"),
+                "missing_fields_are_unknown": True,
+            },
             "profile": profile,
             "limitations": limitations,
             "warnings": relation_warnings,
