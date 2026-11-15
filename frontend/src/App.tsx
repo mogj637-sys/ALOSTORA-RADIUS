@@ -957,7 +957,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div><h2>تقارير نقاط البيع</h2><p>ملخص التسليمات والعمولات والسدادات والأرصدة خلال الفترة المحددة.</p></div>
           <span className="count-tag">{posReport?.point_count ?? 0} نقطة بيع</span>
         </div>
-        <form className="panel form-grid" onSubmit={(event) => { event.preventDefault(); setBusy(true); setError(""); loadPosReport().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقرير")).finally(() => setBusy(false)); }}>
+        <form className="panel form-grid" onSubmit={(event) => { event.preventDefault(); setBusy(true); setError(""); loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقرير")).finally(() => setBusy(false)); }}>
           <label>من تاريخ<input type="date" value={reportFrom} max={reportTo} onChange={(event) => setReportFrom(event.target.value)} required /></label>
           <label>إلى تاريخ<input type="date" value={reportTo} min={reportFrom} onChange={(event) => setReportTo(event.target.value)} required /></label>
           <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ إعداد التقرير..." : "عرض التقرير"}</button></div>
