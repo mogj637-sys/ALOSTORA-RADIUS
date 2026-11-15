@@ -3,7 +3,7 @@ FROM freeradius/freeradius-server:3.2.10
 USER root
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl python3 \
+    && apt-get install -y --no-install-recommends curl python3 freeradius-utils \
     && rm -rf /var/lib/apt/lists/*
 
 COPY clients.conf /etc/freeradius/clients.conf
