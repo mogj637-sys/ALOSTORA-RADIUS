@@ -331,9 +331,10 @@ def test_preview_run_history_is_limited_read_only_and_scoped_to_router(owner_cli
     db = SessionLocal()
     try:
         run_ids = []
+        ordered_uuid_base = __import__("uuid").uuid4().int
         for index in range(3):
             run = UserManagerSyncRun(
-                id=__import__("uuid").uuid4(),
+                id=UUID(int=ordered_uuid_base + index),
                 router_id=router_id,
                 run_type="preview",
                 status="completed",
