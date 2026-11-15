@@ -75,6 +75,7 @@ class UserManagerCardSource(Base):
     )
     source_profile_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
     source_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    credential_mode: Mapped[str | None] = mapped_column(String(30), nullable=True)
     credential_state: Mapped[str] = mapped_column(
         String(30), nullable=False, default="unknown"
     )
