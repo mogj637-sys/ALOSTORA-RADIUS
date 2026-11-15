@@ -384,3 +384,29 @@ tbody tr:hover { background: #fbfdfc; }
   .table-wrap th, .table-wrap td { padding: 5px 4px !important; white-space: normal !important; }
   .statement-heading { margin-top: 0; }
 }
+
+
+/* Reference-style navigation and card selection */
+.nav-group { display: grid; gap: 5px; padding: 10px 8px; border: 1px solid #26364d; border-radius: 10px; background: #15243a; }
+.nav-group > span { color: #9fb0c5; font-size: 11px; font-weight: 700; padding: 2px 7px 5px; }
+.nav-sub { border: 0; border-radius: 7px; padding: 9px 10px; text-align: right; background: transparent; color: #c6cfdd; font: inherit; font-size: 11px; cursor: pointer; }
+.nav-sub.active, .nav-sub:hover { background: #1b8d70; color: #fff; }
+.nav-group.muted { background: #101c2e; }
+.nav-group.muted small { color: #78879d; font-size: 10px; line-height: 1.9; padding: 0 7px; }
+.card-selection-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; padding: 11px 13px; margin: 0 0 12px; border: 1px solid #dfe7e3; border-radius: 9px; background: #fff; color: #526075; font-size: 11px; }
+.card-selection-toolbar label { display: flex; align-items: center; gap: 8px; }
+.card-selection-toolbar input { width: 16px; height: 16px; accent-color: #168767; }
+.card-selection-toolbar span { margin-right: auto; }
+.card-selection-toolbar button { border: 0; border-radius: 7px; background: #168767; color: #fff; padding: 9px 13px; font: inherit; cursor: pointer; }
+.card-selection-toolbar button:disabled { opacity: .45; cursor: not-allowed; }
+.template-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 13px; margin-top: 18px; }
+.template-item h3 { font-size: 13px; margin: 12px 0 5px; }
+.template-item small { color: #788397; font-size: 10px; }
+.template-sample { display: flex; min-height: 105px; flex-direction: column; justify-content: center; align-items: center; gap: 12px; border: 1px dashed currentColor; border-radius: 7px; padding: 10px; }
+.template-sample strong { font-size: 15px; }
+.template-sample span { font-size: 10px; }
+@media (max-width: 620px) {
+  .card-selection-toolbar { align-items: stretch; flex-direction: column; }
+  .card-selection-toolbar span { margin-right: 0; }
+  .card-selection-toolbar button { width: 100%; }
+}
