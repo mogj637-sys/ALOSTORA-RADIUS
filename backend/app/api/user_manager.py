@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -246,6 +246,81 @@ def preview_user_manager_user_endpoint(
         "issues": preview.issues,
         "safe_snapshot": preview.safe_snapshot,
         "source_fingerprint": preview.source_fingerprint,
+        "read_only": True,
+        "imported": False,
+        "credentials_read": False,
+    }
+
+
+
+@router.get("/{router_id}/user-manager/previews")
+def list_user_manager_previews(
+    router_id: int,
+    run_id: UUID | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """List safe, persisted preview rows for one router; never reads RouterOS."""
+    item = db.get(Router, router_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="الراوتر غير موجود")
+
+    runs_query = db.query(UserManagerSyncRun).filter(
+        UserManagerSyncRun.router_id == router_id,
+        UserManagerSyncRun.run_type == "preview",
+    )
+    if run_id is not None:
+        run = runs_query.filter(UserManagerSyncRun.id == run_id).first()
+        if run is None:
+            raise HTTPException(status_code=404, detail="عملية المعاينة غير موجودة لهذا الراوتر")
+    else:
+        run = runs_query.order_by(
+            UserManagerSyncRun.created_at.desc(),
+            UserManagerSyncRun.id.desc(),
+        ).first()
+
+    if run is None:
+        return {"run": None, "items": [], "total": 0, "offset": offset, "limit": limit}
+
+    previews_query = db.query(UserManagerImportPreview).filter(
+        UserManagerImportPreview.sync_run_id == run.id
+    )
+    total = previews_query.count()
+    rows = (
+        previews_query
+        .order_by(UserManagerImportPreview.id.asc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "run": {
+            "id": str(run.id),
+            "status": run.status,
+            "discovered_users": run.discovered_users,
+            "created_at": run.created_at.isoformat() if run.created_at else None,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        },
+        "items": [
+            {
+                "id": row.id,
+                "external_user_id": row.external_user_id,
+                "username": row.username,
+                "source_profile_id": row.source_profile_id,
+                "classification": row.classification,
+                "credential_mode": row.credential_mode,
+                "credential_state": row.credential_state,
+                "matched_card_id": str(row.matched_card_id) if row.matched_card_id else None,
+                "safe_snapshot": row.safe_snapshot,
+                "issues": row.issues,
+            }
+            for row in rows
+        ],
+        "total": total,
+        "offset": offset,
+        "limit": limit,
         "read_only": True,
         "imported": False,
         "credentials_read": False,
