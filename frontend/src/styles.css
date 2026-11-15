@@ -324,3 +324,32 @@ tbody tr:hover { background: #fbfdfc; }
 }
 .pagination-controls button { min-width: 72px; }
 .pagination-controls button:disabled { opacity: .45; cursor: not-allowed; }
+
+
+/* Financial reports */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 13px;
+  margin: 20px 0 28px;
+}
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 98px;
+  padding: 17px 18px;
+  background: #fff;
+  border: 1px solid #e7ebf1;
+  border-radius: 12px;
+}
+.stat-card span { color: #778397; font-size: 12px; }
+.stat-card strong { color: #142438; font-size: 18px; }
+.table-wrap tfoot th {
+  padding: 13px 11px;
+  background: #eef4f2;
+  color: #173c32;
+  border-top: 2px solid #cbded7;
+  text-align: right;
+  white-space: nowrap;
+}
