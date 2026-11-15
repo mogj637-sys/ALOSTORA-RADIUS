@@ -81,6 +81,14 @@ type UserManagerUserInspect = {
     disabled: string | null;
     actual_profile: string | null;
     shared_users: string | null;
+    usage: {
+      uptime_used: string | null;
+      download_used_bytes: string | null;
+      upload_used_bytes: string | null;
+      last_seen: string | null;
+      active_sessions: string | null;
+      missing_fields_are_unknown: boolean;
+    };
     profile: {
       name: string;
       validity: string | null;
@@ -1181,6 +1189,15 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   <div>البروفايل الفعلي: {userManagerUserInspect.user.actual_profile || "غير متاح"}</div>
                   <div>معطّل: {userManagerUserInspect.user.disabled ?? "غير متاح"}</div>
                   <div>المستخدمون المشتركون: {userManagerUserInspect.user.shared_users || "غير متاح"}</div>
+                  <div className="notice">
+                    <strong>استخدام الكرت حتى الآن</strong>
+                    <div>وقت الاستخدام: {userManagerUserInspect.user.usage.uptime_used ?? "لم يعرضه المصدر"}</div>
+                    <div>التنزيل: {userManagerUserInspect.user.usage.download_used_bytes === null ? "لم يعرضه المصدر" : `${userManagerUserInspect.user.usage.download_used_bytes} بايت`}</div>
+                    <div>الرفع: {userManagerUserInspect.user.usage.upload_used_bytes === null ? "لم يعرضه المصدر" : `${userManagerUserInspect.user.usage.upload_used_bytes} بايت`}</div>
+                    <div>آخر ظهور: {userManagerUserInspect.user.usage.last_seen || "لم يعرضه المصدر"}</div>
+                    <div>الجلسات النشطة: {userManagerUserInspect.user.usage.active_sessions ?? "لم يعرضه المصدر"}</div>
+                    <small className="field-hint">القيم غير الظاهرة تبقى مجهولة ولا نفترض أنها صفر؛ العدادات بوحدات المصدر الأصلية.</small>
+                  </div>
                   {userManagerUserInspect.user.profile && (
                     <div className="notice">
                       <strong>تفاصيل البروفايل: {userManagerUserInspect.user.profile.name}</strong>
