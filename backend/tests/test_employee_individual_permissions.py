@@ -180,6 +180,7 @@ def test_employee_card_visibility_and_direct_permission_overrides(owner_client):
                 "permission_overrides": [
                     {"permission_code": "cards.view", "allowed": True},
                     {"permission_code": "printing.manage", "allowed": True},
+                    {"permission_code": "printing.credentials", "allowed": True},
                 ]
             },
         )
@@ -218,6 +219,7 @@ def test_employee_card_visibility_and_direct_permission_overrides(owner_client):
                 "permission_overrides": [
                     {"permission_code": "cards.view", "allowed": True},
                     {"permission_code": "printing.manage", "allowed": False},
+                    {"permission_code": "printing.credentials", "allowed": True},
                 ]
             },
         )
