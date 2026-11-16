@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -60,7 +61,12 @@ def test_router_connection(router_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=503, detail="تعذر فك تشفير بيانات API المحفوظة") from exc
     except RouterConnectionError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return {"router_id": item.id, "router_name": item.name, **result, "read_only": True}
+    item.last_seen_at = datetime.now(timezone.utc)
+    if result.get("version"):
+        item.routeros_version = result["version"][:30]
+    db.commit()
+    db.refresh(item)
+    return {"router_id": item.id, "router_name": item.name, "last_seen_at": item.last_seen_at, **result, "read_only": True}
 
 
 @router.post("", response_model=RouterResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("routers.create"))])
