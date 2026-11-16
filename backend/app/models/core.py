@@ -125,6 +125,8 @@ class CardBatch(TimestampMixin, Base):
     password_length: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
     prefix: Mapped[str] = mapped_column(String(20), nullable=False, default="")
     requested_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    is_online_sale: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Router(TimestampMixin, Base):
