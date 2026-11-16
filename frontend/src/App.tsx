@@ -610,6 +610,19 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
   }
 
+  async function disconnectRadiusSession(sessionId: number) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<{ session_id: number; disconnect_acknowledged: boolean }>(
+        token, `/api/v1/cards/sessions/${sessionId}/disconnect`, { method: "POST" }
+      );
+      setNotice("أكد الراوتر استلام طلب فصل الجلسة. سيظهر انتهاء الجلسة بعد وصول سجل المحاسبة.");
+      await loadRadiusSessions();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر فصل الجلسة");
+    } finally { setBusy(false); }
+  }
+
   async function loadRadiusSessions() {
     const result = await apiRequest<RadiusSessionsResponse>(token, "/api/v1/cards/sessions?limit=200");
     setRadiusSessions(result);
@@ -1740,12 +1753,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       </div>
       <p className="card-source-note">المصدر: سجل المحاسبة في قاعدة بيانات RADIUS. العدد النشط يعتمد على الجلسات التي لم يصل لها حدث إيقاف (Stop) بعد.</p>
       <div className="table-wrap radius-sessions-table-wrap">
-        <table className="radius-sessions-table"><thead><tr><th>اسم المستخدم</th><th>الرقم التسلسلي</th><th>الراوتر</th><th>NAS Identifier</th><th>عنوان IP</th><th>MAC / الجهاز</th><th>بداية الجلسة</th><th>آخر تحديث</th><th>مدة الاتصال</th><th>رفع</th><th>تنزيل</th></tr></thead>
+        <table className="radius-sessions-table"><thead><tr><th>اسم المستخدم</th><th>الرقم التسلسلي</th><th>الراوتر</th><th>NAS Identifier</th><th>عنوان IP</th><th>MAC / الجهاز</th><th>بداية الجلسة</th><th>آخر تحديث</th><th>مدة الاتصال</th><th>رفع</th><th>تنزيل</th>{can("sessions.disconnect") && <th>الإجراء</th>}</tr></thead>
           <tbody>{radiusSessions.items.map((session) => <tr key={session.id}>
             <td>{session.username}</td><td>{session.serial_number}</td><td>{session.router_name}</td><td>{session.nas_identifier}</td>
             <td>{session.framed_ip_address || "—"}</td><td>{session.calling_station_id || "—"}</td>
             <td>{formatDateTime(session.started_at)}</td><td>{formatDateTime(session.last_update_at)}</td>
-            <td>{formatDuration(session.session_time_seconds)}</td><td>{formatBytes(session.upload_bytes)}</td><td>{formatBytes(session.download_bytes)}</td>
+            <td>{formatDuration(session.session_time_seconds)}</td><td>{formatBytes(session.upload_bytes)}</td><td>{formatBytes(session.download_bytes)}</td>{can("sessions.disconnect") && <td><button type="button" className="table-action danger-action" disabled={busy} onClick={() => disconnectRadiusSession(session.id)}>فصل الجلسة</button></td>}
           </tr>)}</tbody>
         </table>
         {radiusSessions.items.length === 0 && <div className="empty-state">لا توجد جلسات مستخدمين نشطة مسجلة حالياً.</div>}
