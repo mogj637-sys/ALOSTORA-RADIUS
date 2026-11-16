@@ -115,6 +115,7 @@ type UserManagerPreviewList = {
   run: { id: string; status: string; discovered_users: number; created_at: string | null } | null;
   items: UserManagerPreviewItem[];
   total: number;
+  classification_counts: Record<string, number>;
   offset: number;
   limit: number;
   read_only: boolean;
@@ -557,6 +558,23 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تحميل المعاينة المختارة");
+    }
+  }
+
+  async function changeUserManagerPreviewPage(nextOffset: number) {
+    if (!inspectRouterId || !selectedPreviewRunId || !userManagerPreviews) return;
+    setLoadingPreviewRuns(true);
+    try {
+      const result = await apiRequest<UserManagerPreviewList>(
+        token,
+        `/api/v1/routers/${Number(inspectRouterId)}/user-manager/previews?run_id=${encodeURIComponent(selectedPreviewRunId)}&offset=${Math.max(0, nextOffset)}&limit=${userManagerPreviews.limit || 50}`,
+      );
+      setUserManagerPreviews(result);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تحميل صفحة المعاينة");
+    } finally {
+      setLoadingPreviewRuns(false);
     }
   }
 
@@ -1642,17 +1660,42 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <div><h2>المعاينة المحفوظة</h2><p>{userManagerPreviews.run?.created_at ? new Date(userManagerPreviews.run.created_at).toLocaleString("ar") : "نتائج محفوظة للمراجعة قبل أي استيراد."}</p></div>
               <span className="count-tag">{userManagerPreviews.total} سجل</span>
             </div>
+            <div className="um-preview-counts">
+              {[
+                { key: "new", label: "جديد" },
+                { key: "already_linked", label: "مرتبط مسبقاً" },
+                { key: "username_conflict", label: "تعارض اسم المستخدم" },
+                { key: "duplicate_in_batch", label: "مكرر في المعاينة" },
+                { key: "invalid", label: "بيانات غير مكتملة" },
+              ].map((entry) => (
+                <div className="um-preview-count" key={entry.key}>
+                  <strong>{userManagerPreviews.classification_counts?.[entry.key] ?? 0}</strong>
+                  <span>{entry.label}</span>
+                </div>
+              ))}
+            </div>
             {userManagerPreviews.items.map((preview) => (
               <div className="notice" key={preview.id}>
                 <strong>{preview.username || "اسم غير متاح"}</strong>
-                <div>تصنيف السجل: {preview.classification}</div>
+                <div>تصنيف السجل: {{
+                  new: "جديد",
+                  already_linked: "مرتبط مسبقاً",
+                  username_conflict: "تعارض اسم المستخدم",
+                  duplicate_in_batch: "مكرر داخل المعاينة",
+                  invalid: "بيانات غير مكتملة",
+                }[preview.classification] || preview.classification}</div>
                 <div>البروفايل الأصلي: {preview.source_profile_id || "غير متاح"}</div>
                 <div>حالة بيانات الدخول: {preview.credential_state}</div>
-                <div>نوع بيانات الدخول: {preview.credential_mode}</div>
+                <div>نوع بيانات الدخول: {preview.credential_mode || "غير محدد"}</div>
                 <div>معرّف المصدر: {preview.external_user_id}</div>
                 {preview.issues.length > 0 && <div>ملاحظات: {preview.issues.join("، ")}</div>}
               </div>
             ))}
+            <div className="form-actions">
+              <button type="button" className="secondary-button" disabled={loadingPreviewRuns || userManagerPreviews.offset <= 0} onClick={() => changeUserManagerPreviewPage(userManagerPreviews.offset - userManagerPreviews.limit)}>السابق</button>
+              <span className="field-hint">عرض {userManagerPreviews.total === 0 ? 0 : userManagerPreviews.offset + 1}–{Math.min(userManagerPreviews.offset + userManagerPreviews.items.length, userManagerPreviews.total)} من {userManagerPreviews.total}</span>
+              <button type="button" className="secondary-button" disabled={loadingPreviewRuns || userManagerPreviews.offset + userManagerPreviews.items.length >= userManagerPreviews.total} onClick={() => changeUserManagerPreviewPage(userManagerPreviews.offset + userManagerPreviews.limit)}>التالي</button>
+            </div>
             <small className="field-hint">حالة المعاينة: قراءة فقط · الاستيراد: متوقف · قراءة كلمات المرور: لم تتم.</small>
           </section>
         )}
