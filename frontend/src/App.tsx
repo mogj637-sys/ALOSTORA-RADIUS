@@ -521,6 +521,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [savingUserPreview, setSavingUserPreview] = useState(false);
   const [inspectingUser, setInspectingUser] = useState(false);
   const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
+  const [editingRouterId, setEditingRouterId] = useState<number | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
   const [cardBatches, setCardBatches] = useState<CardBatchRecord[]>([]);
   const [radiusSessions, setRadiusSessions] = useState<RadiusSessionsResponse>({ active_count: 0, active_users_count: 0, total_count: 0, items: [] });
@@ -916,10 +917,38 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setRouters(result);
   }
 
+  function resetRouterDraft() {
+    setEditingRouterId(null);
+    setRouterDraft({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
+  }
+
+  function beginEditRouter(item: RouterRecord) {
+    setEditingRouterId(item.id);
+    setRouterDraft({ name: item.name, nasIdentifier: item.nas_identifier, managementHost: item.management_host, radiusClientAddress: item.radius_client_address || "", apiPort: String(item.api_port), apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: item.routeros_version || "" });
+    setError("");
+    setNotice("تعديل بيانات الراوتر: " + item.name);
+  }
+
   async function createRouter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true); setError(""); setNotice("");
     try {
+      if (editingRouterId !== null) {
+        await apiRequest<RouterRecord>(token, `/api/v1/routers/${editingRouterId}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            name: routerDraft.name,
+            management_host: routerDraft.managementHost,
+            radius_client_address: routerDraft.radiusClientAddress || null,
+            api_port: Number(routerDraft.apiPort),
+            routeros_version: routerDraft.routerosVersion || null,
+          }),
+        });
+        resetRouterDraft();
+        await loadRouters();
+        setNotice("تم تحديث بيانات الراوتر. لم يتم تغيير بيانات الدخول السرية.");
+        return;
+      }
       await apiRequest<RouterRecord>(token, "/api/v1/routers", {
         method: "POST",
         body: JSON.stringify({
@@ -934,7 +963,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           routeros_version: routerDraft.routerosVersion || null,
         }),
       });
-      setRouterDraft({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
+      resetRouterDraft();
       await loadRouters();
       setNotice("تم تسجيل الراوتر وحفظ أسراره مشفرة.");
     } catch (err) {
@@ -2702,17 +2731,20 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </div>
         <div className="notice">أدخل عنوان مصدر RADIUS الذي سيظهر به الراوتر أمام خادم RADIUS. بيانات العملاء النشطة متاحة داخلياً لخدمة FreeRADIUS؛ لم يتم بعد تشغيل خادم FreeRADIUS أو الاتصال بإدارة RouterOS.</div>
         <form className="panel form-grid" onSubmit={createRouter}>
+          <div className="section-heading"><div><h3>{editingRouterId !== null ? "تعديل بيانات الراوتر" : "إضافة راوتر جديد"}</h3><p>{editingRouterId !== null ? "تعديل بيانات الاتصال والعنوان دون إعادة إدخال الأسرار." : "سجّل بيانات الراوتر ومعرّف NAS."}</p></div></div>
           <label>اسم الراوتر<input value={routerDraft.name} onChange={(e) => setRouterDraft({ ...routerDraft, name: e.target.value })} required minLength={2} maxLength={120} /></label>
-          <label>NAS Identifier<input value={routerDraft.nasIdentifier} onChange={(e) => setRouterDraft({ ...routerDraft, nasIdentifier: e.target.value })} required maxLength={150} placeholder="مثال: router-aden-01" /><small className="field-hint">يجب أن يطابق اسم الهوية في MikroTik: /system identity.</small></label>
+          <label>NAS Identifier<input value={routerDraft.nasIdentifier} onChange={(e) => setRouterDraft({ ...routerDraft, nasIdentifier: e.target.value })} required maxLength={150} readOnly={editingRouterId !== null} placeholder="مثال: router-aden-01" /><small className="field-hint">يجب أن يطابق اسم الهوية في MikroTik: /system identity. لا يتغير أثناء التعديل الحالي.</small></label>
           <label>عنوان الإدارة / IP<input value={routerDraft.managementHost} onChange={(e) => setRouterDraft({ ...routerDraft, managementHost: e.target.value })} required maxLength={255} placeholder="مثال: 192.168.88.1" /></label>
           <label>عنوان RADIUS للراوتر أو CIDR<input value={routerDraft.radiusClientAddress} onChange={(e) => setRouterDraft({ ...routerDraft, radiusClientAddress: e.target.value })} maxLength={255} placeholder="مثال: 192.168.88.1 أو 192.168.88.0/24" /><small className="field-hint">عنوان مصدر حزم RADIUS كما يراه الخادم، وقد يختلف عن عنوان إدارة API. إذا تركته فارغاً فلن يُحمّل الراوتر كعميل RADIUS.</small></label>
           <label>منفذ MikroTik API<input type="number" min="1" max="65535" value={routerDraft.apiPort} onChange={(e) => setRouterDraft({ ...routerDraft, apiPort: e.target.value })} required /><small className="field-hint">الافتراضي 8729 لاتصال API المشفر TLS. استخدم 8728 فقط داخل شبكة إدارة موثوقة ومعزولة.</small></label>
-          <label>اسم مستخدم API (اختياري)<input value={routerDraft.apiUsername} onChange={(e) => setRouterDraft({ ...routerDraft, apiUsername: e.target.value })} maxLength={120} /></label>
-          <label>كلمة مرور API (اختياري)<input type="password" autoComplete="new-password" value={routerDraft.apiSecret} onChange={(e) => setRouterDraft({ ...routerDraft, apiSecret: e.target.value })} minLength={8} maxLength={500} /></label>
-          <label>RADIUS Shared Secret<input type="password" autoComplete="new-password" value={routerDraft.radiusSecret} onChange={(e) => setRouterDraft({ ...routerDraft, radiusSecret: e.target.value })} required minLength={8} maxLength={500} /><small className="field-hint">استخدم القيمة نفسها في إعداد /radius على MikroTik؛ لن تظهر مرة أخرى بعد الحفظ.</small></label>
+          {editingRouterId === null && <>
+            <label>اسم مستخدم API (اختياري)<input value={routerDraft.apiUsername} onChange={(e) => setRouterDraft({ ...routerDraft, apiUsername: e.target.value })} maxLength={120} /></label>
+            <label>كلمة مرور API (اختياري)<input type="password" autoComplete="new-password" value={routerDraft.apiSecret} onChange={(e) => setRouterDraft({ ...routerDraft, apiSecret: e.target.value })} minLength={8} maxLength={500} /></label>
+            <label>RADIUS Shared Secret<input type="password" autoComplete="new-password" value={routerDraft.radiusSecret} onChange={(e) => setRouterDraft({ ...routerDraft, radiusSecret: e.target.value })} required minLength={8} maxLength={500} /><small className="field-hint">استخدم القيمة نفسها في إعداد /radius على MikroTik؛ لن تظهر مرة أخرى بعد الحفظ.</small></label>
+          </>}
           <label>إصدار RouterOS<input value={routerDraft.routerosVersion} onChange={(e) => setRouterDraft({ ...routerDraft, routerosVersion: e.target.value })} maxLength={30} placeholder="مثال: 7.x أو 6.x" /></label>
-          <div className="form-actions"><button type="submit" disabled={busy || (!!routerDraft.apiUsername !== !!routerDraft.apiSecret)}>{busy ? "جارٍ الحفظ..." : "حفظ الراوتر"}</button></div>
-          {!!routerDraft.apiUsername !== !!routerDraft.apiSecret && <div className="field-hint">أدخل اسم مستخدم API وكلمة مروره معاً، أو اتركهما فارغين.</div>}
+          <div className="form-actions"><button type="submit" disabled={busy || (editingRouterId === null && !!routerDraft.apiUsername !== !!routerDraft.apiSecret)}>{busy ? "جارٍ الحفظ..." : editingRouterId !== null ? "حفظ التعديلات" : "حفظ الراوتر"}</button>{editingRouterId !== null && <button type="button" className="secondary-button" disabled={busy} onClick={resetRouterDraft}>إلغاء التعديل</button>}</div>
+          {editingRouterId === null && !!routerDraft.apiUsername !== !!routerDraft.apiSecret && <div className="field-hint">أدخل اسم مستخدم API وكلمة مروره معاً، أو اتركهما فارغين.</div>}
         </form>
         <section className="panel form-grid">
           <div className="section-heading"><div><h2>فحص كرت واحد من User Manager</h2><p>بحث تشخيصي بالاسم الدقيق؛ لا ينشئ كرتاً ولا يستورده ولا يغيّر بيانات المصدر.</p></div></div>
@@ -2857,6 +2889,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <td>{router.routeros_version || "غير محدد"}</td><td>{router.last_seen_at ? new Date(router.last_seen_at).toLocaleString("ar") : "لم يتصل بعد"}</td>
               <td>{router.is_active ? "مفعل" : "متوقف"}</td>
               <td className="actions-cell">
+                <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => beginEditRouter(router)}>تعديل</button>
                 <button type="button" className="table-action" disabled={busy || probingRouterId !== null || !router.api_username} onClick={() => testRouterUserManager(router)}>{probingRouterId === router.id ? "جارٍ الفحص..." : "فحص User Manager"}</button>
                 <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => toggleRouter(router)}>{router.is_active ? "تعطيل" : "تفعيل"}</button>
               </td>
