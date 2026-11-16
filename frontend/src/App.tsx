@@ -255,6 +255,9 @@ type PointOfSale = {
   contact_name: string | null;
   phone: string | null;
   is_active: boolean;
+  debt_limit: number | null;
+  allow_card_creation: boolean;
+  allow_printing: boolean;
 };
 
 type PosInventory = {
@@ -534,7 +537,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [reportTo, setReportTo] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
   const [accountDraft, setAccountDraft] = useState({ amount: "", entryType: "payment", direction: "credit" as "debit" | "credit", description: "", reference: "" });
   const [printHistory, setPrintHistory] = useState<PrintJobHistory[]>([]);
-  const [posDraft, setPosDraft] = useState({ code: "", name: "", contactName: "", phone: "" });
+  const [posDraft, setPosDraft] = useState({ code: "", name: "", contactName: "", phone: "", debtLimit: "", allowCardCreation: true, allowPrinting: true });
   const [editingPosId, setEditingPosId] = useState<number | null>(null);
   const [selectedPrintCardIds, setSelectedPrintCardIds] = useState<string[]>([]);
   const [printPreviewCards, setPrintPreviewCards] = useState<PrintJobResult["items"]>([]);
@@ -1212,16 +1215,21 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     event.preventDefault();
     setBusy(true); setError(""); setNotice("");
     try {
+      const pointSettings = {
+        debt_limit: posDraft.debtLimit.trim() ? Number(posDraft.debtLimit) : null,
+        allow_card_creation: posDraft.allowCardCreation,
+        allow_printing: posDraft.allowPrinting,
+      };
       const point = editingPosId
         ? await apiRequest<PointOfSale>(token, `/api/v1/points-of-sale/${editingPosId}`, {
             method: "PATCH",
-            body: JSON.stringify({ name: posDraft.name, contact_name: posDraft.contactName || null, phone: posDraft.phone || null }),
+            body: JSON.stringify({ name: posDraft.name, contact_name: posDraft.contactName || null, phone: posDraft.phone || null, ...pointSettings }),
           })
         : await apiRequest<PointOfSale>(token, "/api/v1/points-of-sale", {
             method: "POST",
-            body: JSON.stringify({ code: posDraft.code, name: posDraft.name, contact_name: posDraft.contactName || null, phone: posDraft.phone || null }),
+            body: JSON.stringify({ code: posDraft.code, name: posDraft.name, contact_name: posDraft.contactName || null, phone: posDraft.phone || null, ...pointSettings }),
           });
-      setPosDraft({ code: "", name: "", contactName: "", phone: "" });
+      setPosDraft({ code: "", name: "", contactName: "", phone: "", debtLimit: "", allowCardCreation: true, allowPrinting: true });
       setEditingPosId(null);
       await loadPointsOfSale();
       setSelectedPosId(String(point.id));
@@ -1243,6 +1251,22 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setNotice(point.is_active ? "تم إيقاف نقطة البيع." : "تم تفعيل نقطة البيع.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تغيير حالة نقطة البيع");
+    } finally { setBusy(false); }
+  }
+
+  async function togglePointOperation(point: PointOfSale, field: "allow_card_creation" | "allow_printing") {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<PointOfSale>(token, `/api/v1/points-of-sale/${point.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ [field]: !point[field] }),
+      });
+      await loadPointsOfSale();
+      setNotice(field === "allow_card_creation"
+        ? (!point.allow_card_creation ? "تم السماح بإنشاء الكروت لهذه النقطة." : "تم إيقاف إنشاء الكروت لهذه النقطة.")
+        : (!point.allow_printing ? "تم السماح بالطباعة لهذه النقطة." : "تم إيقاف الطباعة لهذه النقطة."));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تحديث صلاحية نقطة البيع");
     } finally { setBusy(false); }
   }
 
@@ -2149,10 +2173,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <label>اسم نقطة البيع<input value={posDraft.name} onChange={(e) => setPosDraft({ ...posDraft, name: e.target.value })} required minLength={2} maxLength={150} placeholder="اسم المحل أو الموزع" /></label>
               <label>اسم المسؤول<input value={posDraft.contactName} onChange={(e) => setPosDraft({ ...posDraft, contactName: e.target.value })} maxLength={150} placeholder="اسم المسؤول (اختياري)" /></label>
               <label>رقم الهاتف<input value={posDraft.phone} onChange={(e) => setPosDraft({ ...posDraft, phone: e.target.value })} maxLength={40} placeholder="رقم التواصل (اختياري)" /></label>
+              <label>سقف المديونية بالريال<input type="number" min="0" step="0.01" value={posDraft.debtLimit} onChange={(e) => setPosDraft({ ...posDraft, debtLimit: e.target.value })} placeholder="اتركه فارغاً بلا سقف" /><span className="field-hint">عند بلوغ السقف تتوقف العمليات الجديدة حتى تسجيل سداد.</span></label>
+              <label className="day-selector"><input type="checkbox" checked={posDraft.allowCardCreation} onChange={(e) => setPosDraft({ ...posDraft, allowCardCreation: e.target.checked })} /> السماح بإنشاء الكروت</label>
+              <label className="day-selector"><input type="checkbox" checked={posDraft.allowPrinting} onChange={(e) => setPosDraft({ ...posDraft, allowPrinting: e.target.checked })} /> السماح بالطباعة</label>
             </div>
             <div className="pos-editor-actions">
               <button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPosId !== null ? "حفظ التعديلات" : "إضافة نقطة البيع"}</button>
-              {editingPosId !== null && <button type="button" className="secondary-button" onClick={() => { setEditingPosId(null); setPosDraft({ code: "", name: "", contactName: "", phone: "" }); }}>إلغاء التعديل</button>}
+              {editingPosId !== null && <button type="button" className="secondary-button" onClick={() => { setEditingPosId(null); setPosDraft({ code: "", name: "", contactName: "", phone: "", debtLimit: "", allowCardCreation: true, allowPrinting: true }); }}>إلغاء التعديل</button>}
             </div>
           </form>}
 
@@ -2162,17 +2189,24 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <span className="count-tag">{points.length.toLocaleString("ar")} سجل</span>
             </div>
             <div className="table-wrap pos-directory-table">
-              <table><thead><tr><th>الرمز</th><th>اسم نقطة البيع</th><th>المسؤول</th><th>رقم الهاتف</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+              <table><thead><tr><th>الرمز</th><th>اسم نقطة البيع</th><th>المسؤول</th><th>رقم الهاتف</th><th>سقف المديونية</th><th>إنشاء الكروت</th><th>الطباعة</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
                 <tbody>{points.map((point) => (
                   <tr key={point.id}>
                     <td><span className="pos-code">{point.code}</span></td>
                     <td><strong>{point.name}</strong></td>
                     <td>{point.contact_name || "—"}</td>
                     <td>{point.phone || "—"}</td>
+                    <td>{point.debt_limit === null ? "بلا سقف" : Number(point.debt_limit).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " ريال"}</td>
+                    <td><span className={point.allow_card_creation ? "pos-status active" : "pos-status inactive"}>{point.allow_card_creation ? "مسموح" : "موقوف"}</span></td>
+                    <td><span className={point.allow_printing ? "pos-status active" : "pos-status inactive"}>{point.allow_printing ? "مسموح" : "موقوف"}</span></td>
                     <td><span className={point.is_active ? "pos-status active" : "pos-status inactive"}>{point.is_active ? "مفعّلة" : "متوقفة"}</span></td>
                     <td className="actions-cell">
-                      {can("pos.manage") ? <><button type="button" className="table-action" disabled={busy} onClick={() => { setEditingPosId(point.id); setPosDraft({ code: point.code, name: point.name, contactName: point.contact_name || "", phone: point.phone || "" }); }}>تعديل</button>
-                      <button type="button" className={point.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف" : "تفعيل"}</button></> : <span className="field-hint">عرض فقط</span>}
+                      {can("pos.manage") ? <>
+                        <button type="button" className="table-action" disabled={busy} onClick={() => { setEditingPosId(point.id); setPosDraft({ code: point.code, name: point.name, contactName: point.contact_name || "", phone: point.phone || "", debtLimit: point.debt_limit === null ? "" : String(point.debt_limit), allowCardCreation: point.allow_card_creation, allowPrinting: point.allow_printing }); }}>تعديل</button>
+                        <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOperation(point, "allow_card_creation")}>{point.allow_card_creation ? "إيقاف الإنشاء" : "السماح بالإنشاء"}</button>
+                        <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOperation(point, "allow_printing")}>{point.allow_printing ? "إيقاف الطباعة" : "السماح بالطباعة"}</button>
+                        <button type="button" className={point.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف الحساب" : "تفعيل الحساب"}</button>
+                      </> : <span className="field-hint">عرض فقط</span>}
                     </td>
                   </tr>
                 ))}</tbody>
