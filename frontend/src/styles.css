@@ -699,3 +699,36 @@ tbody tr:hover { background: #fbfdfc; }
   .card-management-filters { grid-template-columns: 1fr; }
   .card-management-filters > button { width: 100%; }
 }
+
+/* Card management table: keep every column accessible on narrow screens */
+.card-management-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.card-management-table {
+  width: max-content;
+  min-width: 1240px;
+  table-layout: auto;
+}
+.card-management-table th,
+.card-management-table td {
+  white-space: nowrap;
+}
+.card-management-table .actions-cell {
+  min-width: 150px;
+}
+@media (max-width: 700px) {
+  .card-management-table-wrap {
+    border-radius: 9px;
+    touch-action: pan-x pan-y;
+  }
+  .card-management-table th,
+  .card-management-table td {
+    padding: 9px 10px;
+    font-size: 10px;
+  }
+}
