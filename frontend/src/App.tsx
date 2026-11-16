@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 const API_BASE = "http://localhost:8000";
 
@@ -414,6 +414,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [printPreviewCards, setPrintPreviewCards] = useState<PrintJobResult["items"]>([]);
   const [printTemplate, setPrintTemplate] = useState("classic-green");
   const [printOptions, setPrintOptions] = useState<PrintOptions>({ show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true, show_limits: true, sequential: false });
+  const [printMode, setPrintMode] = useState<"default" | "sequential" | "file" | "single">("default");
+  const [printImportSummary, setPrintImportSummary] = useState("");
   const [cardMode, setCardMode] = useState<"batch" | "single">("batch");
   const [singleDraft, setSingleDraft] = useState({ planId: "", username: "", cardType: "username_only", password: "", isFree: false });
   const [notice, setNotice] = useState("");
@@ -821,12 +823,40 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   function togglePrintCard(cardId: string) {
     setSelectedPrintCardIds((current) => {
       if (current.includes(cardId)) return current.filter((id) => id !== cardId);
+      if (printMode === "single") return [cardId];
       if (current.length >= 5000) {
         setError("الحد الأقصى لعملية الطباعة الواحدة هو 5000 كرت.");
         return current;
       }
       return [...current, cardId];
     });
+  }
+
+  async function importPrintSelection(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError(""); setNotice(""); setPrintImportSummary("");
+    try {
+      const content = await file.text();
+      const values = content.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean)
+        .map((line) => line.split(/[;,\\t]/)[0].trim().replace(/^["']|["']$/g, ""))
+        .filter((value) => value && !["username", "user", "serial", "serial_number", "اسم المستخدم", "الرقم التسلسلي"].includes(value.toLowerCase()));
+      const available = new Map<string, string>();
+      cards.forEach((card) => {
+        available.set(card.username.toLowerCase(), card.id);
+        available.set(card.serial_number.toLowerCase(), card.id);
+      });
+      const matched = Array.from(new Set(values.map((value) => available.get(value.toLowerCase())).filter((id): id is string => !!id))).slice(0, 5000);
+      const unmatched = Math.max(0, values.length - matched.length);
+      setSelectedPrintCardIds(matched);
+      setPrintImportSummary(`تم العثور على ${matched.length} كرت من أصل ${values.length} قيمة في الملف. غير المطابق: ${unmatched}. تتم المطابقة مع نتائج الكروت المحمّلة حالياً فقط.`);
+      setPrintMode("file");
+      if (matched.length === 0) setError("لم يتم العثور على كروت مطابقة في النتائج المحمّلة. ابحث عن الكروت أولاً ثم أعد استيراد الملف.");
+    } catch {
+      setError("تعذر قراءة الملف. استخدم CSV أو TXT يحتوي اسم مستخدم أو رقماً تسلسلياً في العمود الأول.");
+    } finally {
+      event.target.value = "";
+    }
   }
 
   async function reprintJob(job: PrintJobHistory) {
@@ -1608,6 +1638,18 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <button type="button" className="table-action" disabled={!hasMoreCards || busy} onClick={() => changeCardPage(cardOffset + 200)}>التالي</button>
             </div>
             <div className="panel pos-print-panel">
+              <div className="print-mode-section">
+                <h3>طريقة الطباعة</h3>
+                <div className="print-mode-grid">
+                  <button type="button" className={printMode === "default" ? "print-mode-option active" : "print-mode-option"} onClick={() => { setPrintMode("default"); setPrintOptions((current) => ({ ...current, sequential: false })); setPrintImportSummary(""); }}>الطباعة الافتراضية<small>طباعة الكروت المحددة بالشكل المعتاد</small></button>
+                  <button type="button" className={printMode === "sequential" ? "print-mode-option active" : "print-mode-option"} onClick={() => { setPrintMode("sequential"); setPrintOptions((current) => ({ ...current, sequential: true })); setPrintImportSummary(""); }}>الطباعة المتسلسلة<small>ترتيب القسائم حسب تسلسل الاختيار</small></button>
+                  <button type="button" className={printMode === "file" ? "print-mode-option active" : "print-mode-option"} onClick={() => setPrintMode("file")}>من ملف استيراد<small>تحديد الكروت من ملف CSV أو TXT</small></button>
+                  <button type="button" className={printMode === "single" ? "print-mode-option active" : "print-mode-option"} onClick={() => { setPrintMode("single"); setSelectedPrintCardIds((current) => current.slice(0, 1)); setPrintOptions((current) => ({ ...current, sequential: false })); setPrintImportSummary(""); }}>طباعة كرت واحد<small>يسمح بتحديد كرت واحد فقط</small></button>
+                </div>
+                {printMode === "file" && <label className="print-file-picker">استيراد قائمة أسماء المستخدمين أو الأرقام التسلسلية<input type="file" accept=".csv,.txt,text/csv,text/plain" onChange={importPrintSelection} /><small>العمود الأول فقط، وتتم المطابقة مع الكروت الظاهرة في نتائج الصفحة المحمّلة.</small></label>}
+                {printImportSummary && <div className="notice print-import-summary">{printImportSummary}</div>}
+                <div className="print-selection-tools"><span>المحدد: {selectedPrintCardIds.length} كرت</span><button type="button" className="table-action" onClick={() => setSelectedPrintCardIds([])} disabled={!selectedPrintCardIds.length}>إلغاء التحديد</button></div>
+              </div>
               <label>قالب الطباعة
                 <select value={printTemplate} onChange={(e) => setPrintTemplate(e.target.value)}>
                   {cardTemplates.map((item) => <option key={item.id} value={item.code}>{item.name}</option>)}
