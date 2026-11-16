@@ -2113,7 +2113,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           </tr>)}
         </tbody></table>{cardSessionHistory.items.length === 0 && <div className="empty-state">لا توجد جلسات مسجلة لهذا الكرت.</div>}</div>
       </section>}
-      {user.roles.includes("owner") && <div className="pagination-controls"><button type="button" className="table-action" disabled={cardOffset === 0 || busy} onClick={() => changeCardPage(cardOffset - 200)}>السابق</button><span>الصفحة {Math.floor(cardOffset / 200) + 1}</span><button type="button" className="table-action" disabled={!hasMoreCards || busy} onClick={() => changeCardPage(cardOffset + 200)}>التالي</button></div>
+      {user.roles.includes("owner") && <div className="pagination-controls"><button type="button" className="table-action" disabled={cardOffset === 0 || busy} onClick={() => changeCardPage(cardOffset - 200)}>السابق</button><span>الصفحة {Math.floor(cardOffset / 200) + 1}</span><button type="button" className="table-action" disabled={!hasMoreCards || busy} onClick={() => changeCardPage(cardOffset + 200)}>التالي</button></div>}
       </>}
     </>;
   }
