@@ -2,7 +2,7 @@ import secrets
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -604,7 +604,9 @@ def update_card_status(
 
 
 @router.post("/single", response_model=CardCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.create")), Depends(require_permission("cards.credentials"))])
-def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.create"))):
+def create_single_card(payload: CardSingleCreate, response: Response, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.create"))):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    response.headers["Pragma"] = "no-cache"
     plan = db.get(Plan, payload.plan_id)
     if plan is None or not plan.is_active:
         raise HTTPException(status_code=404, detail="الباقة غير موجودة أو غير مفعلة")
@@ -681,7 +683,9 @@ def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db),
 
 
 @router.post("/batch", response_model=CardBatchResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.create")), Depends(require_permission("cards.credentials"))])
-def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.create"))):
+def create_card_batch(payload: CardBatchCreate, response: Response, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.create"))):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    response.headers["Pragma"] = "no-cache"
     plan = db.get(Plan, payload.plan_id)
     if plan is None or not plan.is_active:
         raise HTTPException(status_code=404, detail="الباقة غير موجودة أو غير مفعلة")
