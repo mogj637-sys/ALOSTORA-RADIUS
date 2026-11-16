@@ -58,7 +58,7 @@ def _count_only(
     }
     result = api.get_resource(path).call(
         "print",
-        {"count-only": None},
+        {"count-only": ""},
         query_words,
     )
     done_message = getattr(result, "done_message", None)
