@@ -700,6 +700,43 @@ tbody tr:hover { background: #fbfdfc; }
   .card-management-filters > button { width: 100%; }
 }
 
+/* Card management category tabs */
+.card-management-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e8eee9;
+}
+.card-management-tabs button {
+  min-height: 38px;
+  padding: 8px 15px;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  background: #fff;
+  color: #557263;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.card-management-tabs button.active {
+  border-color: #75b596;
+  background: #eaf7f0;
+  color: #176b51;
+  font-weight: 700;
+}
+.card-source-note {
+  margin: 0 0 12px;
+  color: #7c8b82;
+  font-size: 10px;
+  line-height: 1.7;
+}
+@media (max-width: 520px) {
+  .card-management-tabs { display: grid; grid-template-columns: 1fr 1fr; }
+  .card-management-tabs button { padding-inline: 8px; }
+}
+
 /* Card management table: keep every column accessible on narrow screens */
 .card-management-table-wrap {
   width: 100%;
