@@ -2686,8 +2686,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
         {can("finance.view") && selectedPosId && posAccount && (
           <section className="pos-account-section">
-            <div className="section-heading compact-heading"><div><h2>الحساب المالي لنقطة البيع</h2><p>الرصيد يُحدّث تلقائياً عند تخصيص الكروت التجارية، ولا تُحتسب إعادة الطباعة أو الكروت المجانية.</p></div></div>
-            <div className="pos-stats account-stats">
+            <div className="section-heading compact-heading pos-account-heading"><div><span className="eyebrow">المتابعة المالية</span><h2>الحساب المالي لنقطة البيع</h2><p>الرصيد يُحدّث تلقائياً عند تخصيص الكروت التجارية، ولا تُحتسب إعادة الطباعة أو الكروت المجانية.</p></div><span className="pos-account-point">{selectedPoint?.name ?? "نقطة البيع المحددة"}</span></div>
+            <div className="pos-stats account-stats pos-finance-summary">
               <div><span>إجمالي المديونية</span><strong>{Number(posAccount.total_debit).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</strong></div>
               <div><span>إجمالي السداد والخصومات</span><strong>{Number(posAccount.total_credit).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</strong></div>
               <div><span>الرصيد المستحق</span><strong>{Number(posAccount.balance_due).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</strong></div>
@@ -2705,8 +2705,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <div className="form-actions"><button type="submit" disabled={busy || !accountDraft.amount || Number(accountDraft.amount) <= 0}>{busy ? "جارٍ التسجيل..." : "تسجيل الحركة"}</button></div>
             </form>}
             <div className="section-heading compact-heading"><div><h2>كشف الحساب</h2><p>آخر 100 حركة مالية، مرتبة من الأحدث إلى الأقدم.</p></div><span className="count-tag">{posEntries.length} حركة</span></div>
-            <div className="table-wrap"><table><thead><tr><th>التاريخ</th><th>نوع الحركة</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الموظف</th><th>المرجع</th></tr></thead><tbody>
-              {posEntries.map((entry) => <tr key={entry.id}><td>{new Date(entry.created_at).toLocaleString("ar")}</td><td>{({ card_delivery: "تسليم كروت", payment: "سداد", commission: "عمولة", return: "مرتجع", adjustment: "تسوية" } as Record<string, string>)[entry.entry_type] ?? entry.entry_type}</td><td>{entry.description || "—"}</td><td>{entry.direction === "debit" ? Number(entry.amount).toFixed(2) : "—"}</td><td>{entry.direction === "credit" ? Number(entry.amount).toFixed(2) : "—"}</td><td>{entry.created_by || "—"}</td><td>{entry.reference || "—"}</td></tr>)}
+            <div className="table-wrap pos-account-table"><table><thead><tr><th>التاريخ</th><th>نوع الحركة</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الموظف</th><th>المرجع</th></tr></thead><tbody>
+              {posEntries.map((entry) => <tr key={entry.id}><td>{new Date(entry.created_at).toLocaleString("ar")}</td><td>{({ card_delivery: "تسليم كروت", payment: "سداد", commission: "عمولة", return: "مرتجع", adjustment: "تسوية" } as Record<string, string>)[entry.entry_type] ?? entry.entry_type}</td><td>{entry.description || "—"}</td><td className={entry.direction === "debit" ? "finance-amount debit" : "finance-amount"}>{entry.direction === "debit" ? Number(entry.amount).toFixed(2) : "—"}</td><td className={entry.direction === "credit" ? "finance-amount credit" : "finance-amount"}>{entry.direction === "credit" ? Number(entry.amount).toFixed(2) : "—"}</td><td>{entry.created_by || "—"}</td><td>{entry.reference || "—"}</td></tr>)}
             </tbody></table>{posEntries.length === 0 && <div className="empty-state">لا توجد حركات مالية مسجلة لهذه النقطة.</div>}</div>
           </section>
         )}
