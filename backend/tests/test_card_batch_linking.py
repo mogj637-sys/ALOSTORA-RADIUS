@@ -61,7 +61,7 @@ def test_card_batch_can_extend_compatible_previous_batch(owner_client):
         json={
             **common,
             "quantity": 3,
-            "existing_batch_id": batch_id,
+            "existing_batch_number": first.json()["batch_number"],
             "is_online_sale": True,
             "note": "إضافة كمية جديدة",
         },
