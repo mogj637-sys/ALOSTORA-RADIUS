@@ -101,3 +101,54 @@ def test_probe_routeros_system_hides_connection_exception(monkeypatch):
         assert "sensitive connection detail" not in str(exc)
     else:
         raise AssertionError("Expected a safe RouterConnectionError")
+
+
+def test_router_connection_endpoint_uses_saved_credentials_read_only(owner_client, monkeypatch):
+    client, headers, _ = owner_client
+    created = client.post(
+        "/api/v1/routers",
+        headers=headers,
+        json={
+            "name": "CI Router Probe",
+            "nas_identifier": "ci-probe-" + __import__("secrets").token_hex(4),
+            "management_host": "192.0.2.10",
+            "radius_client_address": "192.0.2.10",
+            "api_port": 8729,
+            "api_username": "readonly",
+            "api_secret": "test-router-api-password",
+            "radius_secret": "test-radius-shared-secret",
+        },
+    )
+    assert created.status_code == 201, created.text
+    router_id = created.json()["id"]
+    observed = {}
+
+    def fake_probe(**kwargs):
+        observed.update(kwargs)
+        return {
+            "identity": "ci-edge",
+            "version": "7.16.2",
+            "board_name": "hAP ax3",
+            "architecture_name": "arm64",
+            "uptime": "1d",
+            "cpu_load": "3",
+            "connected": True,
+            "secure": True,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr("app.api.routers.probe_routeros_system", fake_probe)
+    response = client.post(
+        f"/api/v1/routers/{router_id}/test-connection",
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["connected"] is True
+    assert payload["read_only"] is True
+    assert payload["identity"] == "ci-edge"
+    assert observed["host"] == "192.0.2.10"
+    assert observed["port"] == 8729
+    assert observed["username"] == "readonly"
+    assert observed["password"] == "test-router-api-password"
