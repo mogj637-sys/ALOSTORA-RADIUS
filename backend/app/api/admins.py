@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_owner
 from app.db.session import get_db
-from app.models.auth import AdminUser, Role
+from app.models.auth import AdminUser, Role, Permission
 from app.schemas.admins import AdminRoleResponse, AdminUserCreate, AdminUserResponse, AdminUserUpdate
 from app.security import hash_password
 
@@ -128,3 +128,50 @@ def update_admin(
     db.commit()
     db.refresh(user)
     return _user_response(user)
+
+
+
+@router.get("/permissions")
+def list_permissions(
+    db: Session = Depends(get_db),
+    _: AdminUser = Depends(get_current_owner),
+):
+    return [
+        {"code": item.code, "name": item.name, "module": item.module, "description": item.description}
+        for item in db.query(Permission).order_by(Permission.module, Permission.id).all()
+    ]
+
+
+@router.get("/roles/{role_code}/permissions")
+def get_role_permissions(
+    role_code: str,
+    db: Session = Depends(get_db),
+    _: AdminUser = Depends(get_current_owner),
+):
+    role = db.query(Role).filter(Role.code == role_code).first()
+    if role is None:
+        raise HTTPException(status_code=404, detail="الدور الإداري غير موجود")
+    return {"role_code": role.code, "permission_codes": sorted(item.code for item in role.permissions)}
+
+
+@router.put("/roles/{role_code}/permissions")
+def update_role_permissions(
+    role_code: str,
+    permission_codes: list[str] = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    _: AdminUser = Depends(get_current_owner),
+):
+    role = db.query(Role).filter(Role.code == role_code).first()
+    if role is None:
+        raise HTTPException(status_code=404, detail="الدور الإداري غير موجود")
+    if role.code == "owner":
+        raise HTTPException(status_code=400, detail="صلاحيات مدير النظام ثابتة ولا يمكن تقليصها")
+    normalized = list(dict.fromkeys(code.strip() for code in permission_codes if code.strip()))
+    permissions = db.query(Permission).filter(Permission.code.in_(normalized)).all() if normalized else []
+    found = {item.code for item in permissions}
+    missing = sorted(set(normalized) - found)
+    if missing:
+        raise HTTPException(status_code=422, detail=f"صلاحيات غير معروفة: {', '.join(missing)}")
+    role.permissions = permissions
+    db.commit()
+    return {"role_code": role.code, "permission_codes": sorted(item.code for item in permissions)}
