@@ -777,6 +777,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       "pos.updated": "تعديل نقطة بيع",
       "router.created": "إضافة راوتر",
       "router.updated": "تعديل راوتر",
+      "router.connection_tested": "فحص اتصال الراوتر",
     };
     return (
       <section className="panel audit-log-panel">
