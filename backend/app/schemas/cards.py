@@ -102,3 +102,4 @@ class CardListItem(BaseModel):
     upload_bytes: int
     download_bytes: int
     plan_snapshot: dict
+    active_sessions_count: int = 0
