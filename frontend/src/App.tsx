@@ -70,6 +70,19 @@ type CardBatchRecord = {
   printed_count: number;
 };
 
+type RadiusOverview = {
+  database_status: string;
+  cards_total: number;
+  cards_by_status: Record<string, number>;
+  active_sessions: number;
+  active_users: number;
+  sessions_total: number;
+  routers_total: number;
+  routers_enabled: number;
+  plans_total: number;
+  plans_enabled: number;
+};
+
 type RadiusSessionRecord = {
   id: number;
   username: string;
@@ -414,6 +427,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [cards, setCards] = useState<Card[]>([]);
   const [cardBatches, setCardBatches] = useState<CardBatchRecord[]>([]);
   const [radiusSessions, setRadiusSessions] = useState<RadiusSessionsResponse>({ active_count: 0, active_users_count: 0, total_count: 0, items: [] });
+  const [radiusOverview, setRadiusOverview] = useState<RadiusOverview | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
   const [cardBatchFilter, setCardBatchFilter] = useState("");
   const [cardTemplates, setCardTemplates] = useState<CardTemplate[]>([]);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
@@ -487,6 +502,16 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   async function loadCardBatches() {
     const result = await apiRequest<CardBatchRecord[]>(token, "/api/v1/cards/batches?limit=200");
     setCardBatches(result);
+  }
+
+  async function loadRadiusOverview() {
+    setOverviewLoading(true);
+    try {
+      const result = await apiRequest<RadiusOverview>(token, "/api/v1/cards/overview");
+      setRadiusOverview(result);
+    } finally {
+      setOverviewLoading(false);
+    }
   }
 
   async function loadRadiusSessions() {
@@ -955,6 +980,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   useEffect(() => {
     if (page !== "pos") setPrintPreviewCards([]);
+    if (page === "overview") {
+      setError("");
+      loadRadiusOverview().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل لوحة المعلومات"));
+    }
     if (page === "pos" || page === "pos-management" || page === "templates" || page === "card-create") {
       loadCardTemplates().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل قوالب الطباعة"));
     }
@@ -1151,29 +1180,51 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderOverview() {
+    const statusCount = (status: string) => radiusOverview?.cards_by_status[status] ?? 0;
     return (
       <>
         <section className="welcome-card" id="overview">
           <div>
             <span className="welcome-kicker">مرحباً بك، {user.display_name}</span>
             <h2>نظام الأسطورة لإدارة RADIUS</h2>
-            <p>منصة موحدة لإدارة الكروت والباقات والراوترات ونقاط البيع.</p>
+            <p>ملخص مباشر للمستخدمين والجلسات والكروت وأجهزة الشبكة.</p>
           </div>
           <div className="welcome-symbol">A</div>
         </section>
-        <div className="section-heading">
-          <div><h2>وحدات النظام</h2><p>اختر إحدى الوحدات التي بدأ تشغيلها.</p></div>
-          <span className="phase-tag">مرحلة التأسيس</span>
+        <div className="overview-toolbar">
+          <div><span className="overview-live-dot" /> {radiusOverview ? "تم جلب الإحصائيات من قاعدة البيانات" : "بانتظار تحميل الإحصائيات"}</div>
+          <button type="button" className="table-action" disabled={overviewLoading} onClick={() => loadRadiusOverview().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث لوحة المعلومات"))}>{overviewLoading ? "جارٍ التحديث..." : "تحديث الإحصائيات"}</button>
         </div>
+        <div className="section-heading"><div><h2>ملخص الشبكة والنظام</h2><p>الأعداد الفعلية المسجلة في قاعدة بيانات RADIUS.</p></div><span className="phase-tag">لوحة معلومات مباشرة</span></div>
+        <div className="overview-stat-grid">
+          <article><span>إجمالي المستخدمين / الكروت</span><strong>{(radiusOverview?.cards_total ?? 0).toLocaleString("ar")}</strong><small>كل سجلات الكروت في النظام</small></article>
+          <article><span>المستخدمون المتصلون (اكتف)</span><strong>{(radiusOverview?.active_users ?? 0).toLocaleString("ar")}</strong><small>مستخدمون فريدون لديهم جلسة نشطة</small></article>
+          <article><span>جلسات الاتصال النشطة</span><strong>{(radiusOverview?.active_sessions ?? 0).toLocaleString("ar")}</strong><small>جلسات لم يصلها حدث إيقاف</small></article>
+          <article><span>إجمالي الجلسات المسجلة</span><strong>{(radiusOverview?.sessions_total ?? 0).toLocaleString("ar")}</strong><small>سجل المحاسبة الكامل</small></article>
+          <article><span>أجهزة الراوتر المسجلة</span><strong>{(radiusOverview?.routers_total ?? 0).toLocaleString("ar")}</strong><small>{(radiusOverview?.routers_enabled ?? 0).toLocaleString("ar")} مفعّلة إدارياً</small></article>
+          <article><span>الباقات</span><strong>{(radiusOverview?.plans_total ?? 0).toLocaleString("ar")}</strong><small>{(radiusOverview?.plans_enabled ?? 0).toLocaleString("ar")} باقات مفعّلة</small></article>
+        </div>
+        <div className="overview-lower-grid">
+          <section className="panel overview-status-panel">
+            <h3>حالة خدمات النظام</h3>
+            <div className="overview-status-row"><span>واجهة API</span><strong className="status-ok">تستجيب للطلب</strong></div>
+            <div className="overview-status-row"><span>قاعدة البيانات</span><strong className={radiusOverview?.database_status === "connected" ? "status-ok" : "status-unknown"}>{radiusOverview?.database_status === "connected" ? "متصلة" : radiusOverview ? "غير متاحة" : "لم يتم الفحص"}</strong></div>
+            <p className="overview-disclaimer">هذه الحالة تؤكد استجابة API واتصال قاعدة البيانات وقت جلب الملخص، ولا تعني أن جميع أجهزة الراوتر متصلة فعلياً أو أن خدمة FreeRADIUS تم فحصها تشغيلياً.</p>
+          </section>
+          <section className="panel overview-status-panel">
+            <h3>حالة الكروت</h3>
+            <div className="overview-status-row"><span>منشأة</span><strong>{statusCount("generated").toLocaleString("ar")}</strong></div>
+            <div className="overview-status-row"><span>نشطة</span><strong>{statusCount("active").toLocaleString("ar")}</strong></div>
+            <div className="overview-status-row"><span>منتهية</span><strong>{statusCount("expired").toLocaleString("ar")}</strong></div>
+            <div className="overview-status-row"><span>موقوفة</span><strong>{statusCount("suspended").toLocaleString("ar")}</strong></div>
+          </section>
+        </div>
+        <div className="section-heading"><div><h2>الوصول السريع</h2><p>انتقل مباشرة إلى أقسام إدارة النظام.</p></div></div>
         <div className="module-grid">
           {modules.map((item) => (
             <button className="module-card module-card-button" key={item.title} onClick={() => setPage(item.page)}>
-              <div className="module-icon">{item.icon}</div>
-              <h3>{item.title}</h3>
-              <p>{item.detail}</p>
-              <span className={item.page === "overview" ? "module-state" : "module-state active-state"}>
-                {item.page === "overview" ? "قيد التطوير" : "متاح الآن"}
-              </span>
+              <div className="module-icon">{item.icon}</div><h3>{item.title}</h3><p>{item.detail}</p>
+              <span className={item.page === "overview" ? "module-state" : "module-state active-state"}>{item.page === "overview" ? "قيد التطوير" : "متاح الآن"}</span>
             </button>
           ))}
         </div>
