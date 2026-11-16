@@ -19,7 +19,6 @@ from app.schemas.pos_accounts import (
 router = APIRouter(
     prefix="/api/v1/points-of-sale/{point_id}/account",
     tags=["point-of-sale-accounting"],
-    dependencies=[Depends(require_permission("finance.view"))],
 )
 
 
