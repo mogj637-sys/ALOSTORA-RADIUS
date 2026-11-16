@@ -1246,11 +1246,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     event.preventDefault();
     setBusy(true); setError(""); setNotice("");
     try {
-      const pointSettings = {
+      const pointSettings = user.roles.includes("owner") ? {
         debt_limit: posDraft.debtLimit.trim() ? Number(posDraft.debtLimit) : null,
         allow_card_creation: posDraft.allowCardCreation,
         allow_printing: posDraft.allowPrinting,
-      };
+      } : {};
       const point = editingPosId
         ? await apiRequest<PointOfSale>(token, `/api/v1/points-of-sale/${editingPosId}`, {
             method: "PATCH",
@@ -2249,7 +2249,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </div>
 
         <div className="pos-management-layout">
-          {can("pos.manage") && <form className="panel pos-editor-panel" onSubmit={createPointOfSale}>
+          {can("pos.manage") && (user.roles.includes("owner") || editingPosId !== null) && <form className="panel pos-editor-panel" onSubmit={createPointOfSale}>
             <div className="pos-editor-heading">
               <div><span className="eyebrow">{editingPosId !== null ? "تحديث البيانات" : "نقطة بيع جديدة"}</span><h3>{editingPosId !== null ? "تعديل نقطة البيع" : "إضافة نقطة بيع"}</h3></div>
               <span className="pos-editor-icon">＋</span>
@@ -2259,9 +2259,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <label>اسم نقطة البيع<input value={posDraft.name} onChange={(e) => setPosDraft({ ...posDraft, name: e.target.value })} required minLength={2} maxLength={150} placeholder="اسم المحل أو الموزع" /></label>
               <label>اسم المسؤول<input value={posDraft.contactName} onChange={(e) => setPosDraft({ ...posDraft, contactName: e.target.value })} maxLength={150} placeholder="اسم المسؤول (اختياري)" /></label>
               <label>رقم الهاتف<input value={posDraft.phone} onChange={(e) => setPosDraft({ ...posDraft, phone: e.target.value })} maxLength={40} placeholder="رقم التواصل (اختياري)" /></label>
-              <label>سقف المديونية بالريال<input type="number" min="0" step="0.01" value={posDraft.debtLimit} onChange={(e) => setPosDraft({ ...posDraft, debtLimit: e.target.value })} placeholder="اتركه فارغاً بلا سقف" /><span className="field-hint">عند بلوغ السقف تتوقف العمليات الجديدة حتى تسجيل سداد.</span></label>
-              <label className="day-selector"><input type="checkbox" checked={posDraft.allowCardCreation} onChange={(e) => setPosDraft({ ...posDraft, allowCardCreation: e.target.checked })} /> السماح بإنشاء الكروت</label>
-              <label className="day-selector"><input type="checkbox" checked={posDraft.allowPrinting} onChange={(e) => setPosDraft({ ...posDraft, allowPrinting: e.target.checked })} /> السماح بالطباعة</label>
+              {user.roles.includes("owner") && <>
+                <label>سقف المديونية بالريال<input type="number" min="0" step="0.01" value={posDraft.debtLimit} onChange={(e) => setPosDraft({ ...posDraft, debtLimit: e.target.value })} placeholder="اتركه فارغاً بلا سقف" /><span className="field-hint">عند بلوغ السقف تتوقف العمليات الجديدة حتى تسجيل سداد.</span></label>
+                <label className="day-selector"><input type="checkbox" checked={posDraft.allowCardCreation} onChange={(e) => setPosDraft({ ...posDraft, allowCardCreation: e.target.checked })} /> السماح بإنشاء الكروت</label>
+                <label className="day-selector"><input type="checkbox" checked={posDraft.allowPrinting} onChange={(e) => setPosDraft({ ...posDraft, allowPrinting: e.target.checked })} /> السماح بالطباعة</label>
+              </>}
             </div>
             <div className="pos-editor-actions">
               <button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPosId !== null ? "حفظ التعديلات" : "إضافة نقطة البيع"}</button>
@@ -2289,9 +2291,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                     <td className="actions-cell">
                       {can("pos.manage") ? <>
                         <button type="button" className="table-action" disabled={busy} onClick={() => { setEditingPosId(point.id); setPosDraft({ code: point.code, name: point.name, contactName: point.contact_name || "", phone: point.phone || "", debtLimit: point.debt_limit === null ? "" : String(point.debt_limit), allowCardCreation: point.allow_card_creation, allowPrinting: point.allow_printing }); }}>تعديل</button>
-                        <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOperation(point, "allow_card_creation")}>{point.allow_card_creation ? "إيقاف الإنشاء" : "السماح بالإنشاء"}</button>
-                        <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOperation(point, "allow_printing")}>{point.allow_printing ? "إيقاف الطباعة" : "السماح بالطباعة"}</button>
-                        <button type="button" className={point.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف الحساب" : "تفعيل الحساب"}</button>
+                        {user.roles.includes("owner") && <>
+                          <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOperation(point, "allow_card_creation")}>{point.allow_card_creation ? "إيقاف الإنشاء" : "السماح بالإنشاء"}</button>
+                          <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOperation(point, "allow_printing")}>{point.allow_printing ? "إيقاف الطباعة" : "السماح بالطباعة"}</button>
+                          <button type="button" className={point.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف الحساب" : "تفعيل الحساب"}</button>
+                        </>}
                       </> : <span className="field-hint">عرض فقط</span>}
                     </td>
                   </tr>
