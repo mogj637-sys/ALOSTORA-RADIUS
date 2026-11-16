@@ -240,22 +240,31 @@ def list_cards(
     batch_id: UUID | None = Query(default=None),
     is_free: bool | None = None,
     db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("cards.view")),
 ):
+    is_owner = any(role.code == "owner" for role in user.roles)
+    assigned_pos_ids = [point.id for point in user.point_of_sales]
     query = db.query(Card)
+    if not is_owner:
+        if assigned_pos_ids:
+            query = query.filter(Card.assigned_pos_id.in_(assigned_pos_ids))
+        else:
+            if not search or search.strip() != search:
+                raise HTTPException(status_code=403, detail="الموظف لا يملك قائمة كروت عامة؛ ابحث باسم المستخدم أو الرقم التسلسلي كاملاً")
+            exact_term = search.strip()
+            query = query.filter(or_(func.lower(Card.username) == exact_term.lower(), func.lower(Card.serial_number) == exact_term.lower()))
     if status_filter:
         query = query.filter(Card.status == status_filter)
-    if search:
+    if search and (is_owner or assigned_pos_ids):
         term = f"%{search.strip()}%"
-        query = query.filter(
-            or_(Card.username.ilike(term), Card.serial_number.ilike(term))
-        )
+        query = query.filter(or_(Card.username.ilike(term), Card.serial_number.ilike(term)))
     if plan_id is not None:
         query = query.filter(Card.plan_id == plan_id)
     if batch_id is not None:
         query = query.filter(Card.batch_id == batch_id)
     if is_free is not None:
         query = query.filter(Card.is_free.is_(is_free))
-    cards = query.order_by(Card.created_at.desc()).offset(offset).limit(limit).all()
+    cards = query.order_by(Card.created_at.desc()).offset(offset if (is_owner or assigned_pos_ids) else 0).limit(1 if not is_owner and not assigned_pos_ids else limit).all()
     if not cards:
         return cards
     session_counts = dict(
@@ -289,6 +298,10 @@ def update_card_status(
     card = db.query(Card).filter(Card.id == card_uuid).with_for_update().first()
     if card is None:
         raise HTTPException(status_code=404, detail="الكرت غير موجود")
+    if not any(role.code == "owner" for role in user.roles):
+        allowed_pos_ids = {point.id for point in user.point_of_sales}
+        if not allowed_pos_ids or card.assigned_pos_id not in allowed_pos_ids:
+            raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الكرت")
 
     previous_status = card.status
     if payload.action == "suspend":
