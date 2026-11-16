@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
-from sqlalchemy import case, func
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_permission
@@ -282,7 +282,16 @@ def cards_report(
     pos_ids = [point.id for point in user.point_of_sales]
     card_scope = (
         True if visibility == "all"
-        else (Card.assigned_pos_id.in_(pos_ids) if pos_ids else Card.id.is_(None))
+        else (
+            Card.id.in_(
+                db.query(Card.id).filter(
+                    or_(
+                        Card.assigned_pos_id.in_(pos_ids),
+                        Card.batch_id.in_(db.query(CardBatch.id).filter(CardBatch.point_of_sale_id.in_(pos_ids))),
+                    )
+                )
+            ) if pos_ids else Card.id.is_(None)
+        )
         if visibility == "assigned"
         else Card.id.is_(None)
     )
