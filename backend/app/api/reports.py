@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_permission
 from app.db.session import get_db
-from app.models.core import Card, CardBatch, Plan, PointOfSale, PosAccountEntry, PrintJob, PrintJobItem, RadiusSession, Router
+from app.models.core import Card, CardBatch, Plan, PointOfSale, PosAccountEntry, PrintJob, RadiusSession, Router
 from app.schemas.reports import (
     PosReportResponse, PosReportRow, PosReportTotals,
     PosStatementEntry, PosStatementResponse,
