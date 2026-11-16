@@ -3086,6 +3086,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <small className="field-hint">حالة المعاينة: قراءة فقط · الاستيراد: متوقف · قراءة كلمات المرور: لم تتم.</small>
           </section>
         )}
+        <div className="router-summary-grid" aria-label="ملخص الراوترات">
+          <div className="router-summary-card"><span>إجمالي الراوترات</span><strong>{routers.length.toLocaleString("ar")}</strong><small>كل الأجهزة المسجلة</small></div>
+          <div className="router-summary-card"><span>أجهزة مفعّلة</span><strong>{routers.filter((router) => router.is_active).length.toLocaleString("ar")}</strong><small>حالتها مفعّلة في النظام</small></div>
+          <div className="router-summary-card"><span>أجهزة متوقفة</span><strong>{routers.filter((router) => !router.is_active).length.toLocaleString("ar")}</strong><small>يمكن مراجعتها من الجدول</small></div>
+          <div className="router-summary-card"><span>عملاء RADIUS محددون</span><strong>{routers.filter((router) => !!router.radius_client_address).length.toLocaleString("ar")}</strong><small>لديها عنوان مصدر RADIUS</small></div>
+        </div>
         <div className="section-heading compact-heading"><div><h2>الراوترات المسجلة</h2><p>لا تعرض هذه القائمة أي كلمة مرور أو RADIUS secret.</p></div><span className="count-tag">{routers.length} راوتر</span></div>
         <div className="table-wrap">
           <table><thead><tr><th>الاسم</th><th>NAS Identifier</th><th>عنوان الإدارة</th><th>عنوان RADIUS</th><th>API Port</th><th>الإصدار</th><th>آخر ظهور</th><th>الحالة</th><th>الإجراء</th></tr></thead>
