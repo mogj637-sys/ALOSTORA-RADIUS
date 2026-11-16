@@ -128,6 +128,8 @@ def list_card_batches(
             card_type=batch.card_type,
             created_at=batch.created_at,
             printed_count=printed,
+            is_online_sale=batch.is_online_sale,
+            note=batch.note,
         ))
     return results
 
@@ -605,6 +607,32 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
         if template.plan_id is not None and template.plan_id != plan.id:
             raise HTTPException(status_code=422, detail="الباقة لا تطابق الباقة المرتبطة بقالب الطباعة")
 
+    batch = None
+    if payload.existing_batch_id is not None:
+        batch = (
+            db.query(CardBatch)
+            .filter(CardBatch.id == payload.existing_batch_id)
+            .with_for_update()
+            .first()
+        )
+        if batch is None:
+            raise HTTPException(status_code=404, detail="الدفعة السابقة غير موجودة")
+        compatible = (
+            batch.plan_id == plan.id
+            and batch.point_of_sale_id == payload.point_of_sale_id
+            and batch.template_code == payload.template_code
+            and batch.card_type == payload.card_type
+            and batch.generation_mode == payload.generation_mode
+            and batch.username_length == payload.username_length
+            and batch.password_length == payload.password_length
+            and batch.prefix == payload.prefix
+        )
+        if not compatible:
+            raise HTTPException(
+                status_code=409,
+                detail="لا يمكن ربط الكروت بهذه الدفعة؛ يجب تطابق الباقة والقالب ونقطة البيع ونوع الدخول وإعدادات التوليد",
+            )
+
     _ensure_encryption_ready()
     existing: set[str] = set()
     credentials: list[tuple[str, str]] = []
@@ -633,22 +661,32 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
     cards: list[Card] = []
     response_cards: list[CardCreatedSecret] = []
     generated_passwords: list[str] = []
-    batch = CardBatch(
-        batch_number="BAT" + secrets.token_hex(5).upper(),
-        plan_id=plan.id,
-        point_of_sale_id=point.id if point else None,
-        template_code=payload.template_code,
-        quantity=payload.quantity,
-        card_type=payload.card_type,
-        generation_mode=payload.generation_mode,
-        username_length=payload.username_length,
-        password_length=payload.password_length,
-        prefix=payload.prefix,
-        requested_by=user.username,
-    )
+    is_new_batch = batch is None
+    if is_new_batch:
+        batch = CardBatch(
+            batch_number="BAT" + secrets.token_hex(5).upper(),
+            plan_id=plan.id,
+            point_of_sale_id=point.id if point else None,
+            template_code=payload.template_code,
+            quantity=payload.quantity,
+            card_type=payload.card_type,
+            generation_mode=payload.generation_mode,
+            username_length=payload.username_length,
+            password_length=payload.password_length,
+            prefix=payload.prefix,
+            requested_by=user.username,
+            is_online_sale=payload.is_online_sale,
+            note=payload.note.strip() if payload.note else None,
+        )
+    else:
+        batch.quantity += payload.quantity
+        batch.is_online_sale = batch.is_online_sale or payload.is_online_sale
+        if payload.note and payload.note.strip():
+            batch.note = "\n".join(filter(None, [batch.note, payload.note.strip()]))
     try:
-        db.add(batch)
-        db.flush()
+        if is_new_batch:
+            db.add(batch)
+            db.flush()
         for username, _ in credentials:
             if payload.card_type == "username_only":
                 password = ""
@@ -680,10 +718,37 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
             )
             for card in cards
         ])
-        record_audit(db, user, "cards.batch_created", "card_batch", f"إنشاء دفعة كروت {batch.batch_number}", entity_id=batch.id, details={"quantity": len(cards), "plan_id": plan.id, "point_of_sale_id": batch.point_of_sale_id, "template_code": batch.template_code})
+        record_audit(
+            db,
+            user,
+            "cards.batch_created" if is_new_batch else "cards.batch_extended",
+            "card_batch",
+            f"{'إنشاء' if is_new_batch else 'إضافة كروت إلى'} دفعة {batch.batch_number}",
+            entity_id=batch.id,
+            details={
+                "quantity_added": len(cards),
+                "batch_quantity_total": batch.quantity,
+                "plan_id": plan.id,
+                "point_of_sale_id": batch.point_of_sale_id,
+                "template_code": batch.template_code,
+                "is_online_sale": batch.is_online_sale,
+                "note": payload.note,
+                "linked_existing_batch": not is_new_batch,
+            },
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="حدث تعارض أثناء إنشاء الدفعة؛ لم يتم حفظ أي كرت")
 
-    return CardBatchResponse(batch_id=batch.id, batch_number=batch.batch_number, plan_id=plan.id, template_code=batch.template_code, point_of_sale_id=batch.point_of_sale_id, created_count=len(response_cards), cards=response_cards)
+    return CardBatchResponse(
+        batch_id=batch.id,
+        batch_number=batch.batch_number,
+        plan_id=plan.id,
+        template_code=batch.template_code,
+        point_of_sale_id=batch.point_of_sale_id,
+        is_online_sale=batch.is_online_sale,
+        note=batch.note,
+        created_count=len(response_cards),
+        cards=response_cards,
+    )
