@@ -1898,7 +1898,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <article><span>باقات متوقفة</span><strong>{inactivePlans.toLocaleString("ar")}</strong><small>محفوظة ويمكن إعادة تفعيلها</small></article>
         </div>
 
-        {can("plans.create") || (editingPlanId !== null && can("plans.update")) && (
+        {(can("plans.create") || (editingPlanId !== null && can("plans.update"))) && (
 <form className="panel plan-editor plans-editor-panel" onSubmit={createPlan}>
           <div className="plans-editor-title">
             <div><span className="eyebrow">{editingPlanId !== null ? "تحديث باقة محفوظة" : "إعداد باقة جديدة"}</span><h3>{editingPlanId !== null ? "تعديل بيانات الباقة" : "إضافة باقة جديدة"}</h3><p>الحقول الاختيارية التي تتركها فارغة تعني أن الحد مفتوح.</p></div>
@@ -2012,7 +2012,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </div>
 
         <div className="template-studio-grid">
-          {can("templates.create") || (editingTemplateId !== null && can("templates.update")) && (
+          {(can("templates.create") || (editingTemplateId !== null && can("templates.update"))) && (
 <form className="panel template-editor-panel" onSubmit={saveCardTemplate}>
             <div className="template-editor-heading"><div><span className="eyebrow">{editingTemplateId ? "تعديل تصميم محفوظ" : "تصميم جديد"}</span><h3>{editingTemplateId ? "تحرير القالب" : "إنشاء قالب طباعة"}</h3></div><span className="template-editor-mark">✎</span></div>
 
@@ -2766,7 +2766,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div><h2>إدارة أجهزة MikroTik</h2><p>سجل الراوترات ومعرّفات NAS. تُحفظ كلمات المرور والأسرار مشفرة ولا تظهر في قائمة الراوترات.</p></div>
         </div>
         <div className="notice">أدخل عنوان مصدر RADIUS الذي سيظهر به الراوتر أمام خادم RADIUS. بيانات العملاء النشطة متاحة داخلياً لخدمة FreeRADIUS؛ لم يتم بعد تشغيل خادم FreeRADIUS أو الاتصال بإدارة RouterOS.</div>
-        {can("routers.create") || (editingRouterId !== null && can("routers.update")) && (
+        {(can("routers.create") || (editingRouterId !== null && can("routers.update"))) && (
 <form className="panel form-grid" onSubmit={createRouter}>
           <div className="section-heading"><div><h3>{editingRouterId !== null ? "تعديل بيانات الراوتر" : "إضافة راوتر جديد"}</h3><p>{editingRouterId !== null ? "تعديل بيانات الاتصال والعنوان دون إعادة إدخال الأسرار." : "سجّل بيانات الراوتر ومعرّف NAS."}</p></div></div>
           <label>اسم الراوتر<input value={routerDraft.name} onChange={(e) => setRouterDraft({ ...routerDraft, name: e.target.value })} required minLength={2} maxLength={120} /></label>
@@ -2929,9 +2929,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <td>{router.routeros_version || "غير محدد"}</td><td>{router.last_seen_at ? new Date(router.last_seen_at).toLocaleString("ar") : "لم يتصل بعد"}</td>
               <td>{router.is_active ? "مفعل" : "متوقف"}</td>
               <td className="actions-cell">
-                {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => beginEditRouter(router)}>تعديل</button>}
-                {user.roles.includes("owner") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || !router.api_username} onClick={() => testRouterUserManager(router)}>{probingRouterId === router.id ? "جارٍ الفحص..." : "فحص User Manager"}</button>
-                {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => toggleRouter(router)}>{router.is_active ? "تعطيل" : "تفعيل"}</button>
+                {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => beginEditRouter(router)}>تعديل</button>}}
+                {user.roles.includes("owner") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || !router.api_username} onClick={() => testRouterUserManager(router)}>{probingRouterId === router.id ? "جارٍ الفحص..." : "فحص User Manager"}</button>}
+                {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => toggleRouter(router)}>{router.is_active ? "تعطيل" : "تفعيل"}</button>}
               </td>
             </tr>)}</tbody>
           </table>
