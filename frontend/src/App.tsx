@@ -1728,7 +1728,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       const result = await apiRequest<{ id: string; batch_id: string; batch_number: string; serial_number: string; username: string; password: string }> (token, "/api/v1/cards/single", {
         method: "POST",
         body: JSON.stringify({
-          plan_id: Number(singleDraft.planId || plans[0]?.id),
+          plan_id: linkedPlan.id,
           username: singleDraft.username,
           card_type: singleDraft.cardType,
           password: singleDraft.cardType === "separate_credentials" ? singleDraft.password : null,
@@ -1760,7 +1760,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       const result = await apiRequest<{ batch_id: string; batch_number: string; plan_id: number; template_code: string | null; point_of_sale_id: number | null; created_count: number; cards: GeneratedCard[] }>(token, "/api/v1/cards/batch", {
         method: "POST",
         body: JSON.stringify({
-          plan_id: Number(batchDraft.planId),
+          plan_id: linkedPlan.id,
           quantity: Number(batchDraft.quantity),
           card_type: batchDraft.cardType,
           generation_mode: batchDraft.generationMode,
