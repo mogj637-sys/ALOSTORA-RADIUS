@@ -18,6 +18,7 @@ type CurrentUser = {
   display_name: string;
   roles: string[];
   permissions: string[];
+  point_of_sale_ids: number[];
 };
 type AdminRole = { code: string; name: string; description: string | null };
 type AdminPermission = { code: string; name: string; module: string; description: string | null };
@@ -1996,7 +1997,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   function renderCards() {
     return <>
-      <div className="section-heading"><div><h2>إدارة الكروت</h2><p>ابحث في السجل وحدد الكروت ثم جهّز الكروت الجديدة للطباعة أو أدر حالتها.</p></div><span className="count-tag">200 كرت لكل صفحة</span></div>
+      <div className="section-heading"><div><h2>إدارة الكروت</h2><p>{user.roles.includes("owner") ? "عرض وإدارة جميع الكروت." : user.point_of_sale_ids.length ? "تظهر هنا كروت نقاط البيع المرتبطة بحسابك فقط." : "ابحث عن كرت محدد باسم المستخدم أو الرقم التسلسلي كاملاً؛ لا توجد قائمة عامة للكروت."}</p></div><span className="count-tag">200 كرت لكل صفحة</span></div>
       {cardBatchFilter && <div className="notice">تُعرض كروت الدفعة المحددة فقط. <button type="button" className="table-action" onClick={() => { setCardBatchFilter(""); loadCards(cardSearch, 0, "").catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت")); }}>إلغاء فلتر الدفعة</button></div>}
       <div className="card-management-tabs" role="tablist" aria-label="تصنيفات إدارة الكروت">
         <button type="button" role="tab" aria-selected={cardManagementTab === "all"} className={cardManagementTab === "all" ? "active" : ""} onClick={() => { setCardManagementTab("all"); setCardStatusFilter(""); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جميع الكروت")); }}>جميع كروت النظام</button>
@@ -2011,7 +2012,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <span>تم تحديد {selectedCardIds.length} كرت</span><button type="button" disabled={!selectedCardIds.length} onClick={prepareSelectedCardsForPrinting}>تجهيز المحدد للطباعة</button>
       </div>
       <div className="card-management-filters">
-        <label htmlFor="card-search">بحث في الكروت<input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0, cardBatchFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" /></label>
+        <label htmlFor="card-search">بحث في الكروت<input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0, cardBatchFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder={user.roles.includes("owner") || user.point_of_sale_ids.length > 0 ? "اسم المستخدم أو الرقم التسلسلي" : "أدخل اسم المستخدم أو الرقم التسلسلي كاملاً"} /></label>
         <label htmlFor="card-status-filter">الحالة<select id="card-status-filter" value={cardStatusFilter} onChange={(e) => { setCardStatusFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, e.target.value, cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الحالة")); }}><option value="">كل الحالات</option><option value="generated">منشأ</option><option value="allocated">مخصص لنقطة بيع</option><option value="active">متصل</option><option value="suspended">موقوف</option><option value="cancelled">ملغي</option><option value="printed_free">مجاني مطبوع</option><option value="expired">منتهي الصلاحية</option><option value="exhausted">نفد الرصيد</option></select></label>
         <label htmlFor="card-plan-filter">الباقة<select id="card-plan-filter" value={cardPlanFilter} onChange={(e) => { setCardPlanFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, cardStatusFilter, e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الباقة")); }}><option value="">كل الباقات</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
         <button type="button" className="table-action" onClick={() => { setCardSearch(""); setCardStatusFilter(""); setCardPlanFilter(""); setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards("", 0, "", "", "").catch((err) => setError(err instanceof Error ? err.message : "تعذر إعادة ضبط الفلاتر")); }}>مسح الفلاتر</button>
