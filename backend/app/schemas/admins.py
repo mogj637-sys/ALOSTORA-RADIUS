@@ -15,6 +15,7 @@ class AdminUserResponse(BaseModel):
     display_name: str
     is_active: bool
     roles: list[str]
+    point_of_sale_ids: list[int] = []
     last_login_at: datetime | None = None
     created_at: datetime
 
@@ -24,6 +25,7 @@ class AdminUserCreate(BaseModel):
     display_name: str = Field(min_length=2, max_length=150)
     password: str = Field(min_length=12, max_length=256)
     role_codes: list[str] = Field(min_length=1)
+    point_of_sale_ids: list[int] = Field(default_factory=list)
 
     @field_validator("role_codes")
     @classmethod
@@ -39,6 +41,7 @@ class AdminUserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=12, max_length=256)
     role_codes: list[str] | None = Field(default=None, min_length=1)
     is_active: bool | None = None
+    point_of_sale_ids: list[int] | None = None
 
     @field_validator("role_codes")
     @classmethod
