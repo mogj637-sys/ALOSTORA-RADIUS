@@ -9,10 +9,10 @@ from app.models.core import Plan
 from app.services.audit import record_audit
 from app.schemas.plans import PlanCreate, PlanResponse, PlanUpdate
 
-router = APIRouter(prefix="/api/v1/plans", tags=["plans"], dependencies=[Depends(require_permission("plans.view"))])
+router = APIRouter(prefix="/api/v1/plans", tags=["plans"])
 
 
-@router.get("", response_model=list[PlanResponse])
+@router.get("", response_model=list[PlanResponse], dependencies=[Depends(require_permission("plans.view"))])
 def list_plans(
     include_inactive: bool = False,
     db: Session = Depends(get_db),
@@ -38,7 +38,7 @@ def create_plan(payload: PlanCreate, db: Session = Depends(get_db), user: AdminU
     return plan
 
 
-@router.patch("/{plan_id}", response_model=PlanResponse, dependencies=[Depends(require_permission("plans.create"))])
+@router.patch("/{plan_id}", response_model=PlanResponse, dependencies=[Depends(require_permission("plans.update"))])
 def update_plan(plan_id: int, payload: PlanUpdate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("plans.update"))):
     plan = db.get(Plan, plan_id)
     if plan is None:
