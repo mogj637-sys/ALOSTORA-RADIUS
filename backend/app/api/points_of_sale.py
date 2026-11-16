@@ -44,7 +44,21 @@ def create_point_of_sale(payload: PointOfSaleCreate, db: Session = Depends(get_d
     db.add(point)
     try:
         db.flush()
-        record_audit(db, user, "pos.created", "point_of_sale", f"إنشاء نقطة بيع {point.name}", entity_id=point.id, details={"code": point.code, "is_active": point.is_active})
+        record_audit(
+            db,
+            user,
+            "pos.created",
+            "point_of_sale",
+            f"إنشاء نقطة بيع {point.name}",
+            entity_id=point.id,
+            details={
+                "code": point.code,
+                "is_active": point.is_active,
+                "debt_limit": str(point.debt_limit) if point.debt_limit is not None else None,
+                "allow_card_creation": point.allow_card_creation,
+                "allow_printing": point.allow_printing,
+            },
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
