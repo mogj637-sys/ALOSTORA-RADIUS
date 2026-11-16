@@ -123,6 +123,41 @@ def list_card_batches(
     return results
 
 
+@router.get("/overview")
+def get_radius_overview(db: Session = Depends(get_db)):
+    """Return database-backed totals for the admin dashboard."""
+    card_counts = dict(
+        db.query(Card.status, func.count(Card.id)).group_by(Card.status).all()
+    )
+    active_sessions = (
+        db.query(func.count(RadiusSession.id))
+        .filter(RadiusSession.stopped_at.is_(None))
+        .scalar() or 0
+    )
+    active_users = (
+        db.query(func.count(func.distinct(RadiusSession.card_id)))
+        .filter(RadiusSession.stopped_at.is_(None))
+        .scalar() or 0
+    )
+    total_sessions = db.query(func.count(RadiusSession.id)).scalar() or 0
+    routers_total = db.query(func.count(Router.id)).scalar() or 0
+    routers_enabled = db.query(func.count(Router.id)).filter(Router.is_active.is_(True)).scalar() or 0
+    plans_total = db.query(func.count(Plan.id)).scalar() or 0
+    plans_enabled = db.query(func.count(Plan.id)).filter(Plan.is_active.is_(True)).scalar() or 0
+    return {
+        "database_status": "connected",
+        "cards_total": int(sum(card_counts.values())),
+        "cards_by_status": {str(key): int(value) for key, value in card_counts.items()},
+        "active_sessions": int(active_sessions),
+        "active_users": int(active_users),
+        "sessions_total": int(total_sessions),
+        "routers_total": int(routers_total),
+        "routers_enabled": int(routers_enabled),
+        "plans_total": int(plans_total),
+        "plans_enabled": int(plans_enabled),
+    }
+
+
 @router.get("/sessions")
 def list_radius_sessions(
     limit: int = Query(default=200, ge=1, le=500),
