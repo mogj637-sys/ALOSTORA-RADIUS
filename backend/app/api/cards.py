@@ -1,4 +1,5 @@
 import secrets
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
