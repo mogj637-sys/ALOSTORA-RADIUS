@@ -48,6 +48,7 @@ def _response(job: PrintJob, db: Session) -> PrintJobResponse:
     }
     commercial = [item for item in items if not item.is_free]
     free = [item for item in items if item.is_free]
+    plans_by_id = {plan.id: plan for plan in db.query(Plan).filter(Plan.id.in_({card.plan_id for card in cards_by_id.values()})).all()}
     try:
         response_items = [
             PrintJobItemResponse(
@@ -57,7 +58,10 @@ def _response(job: PrintJob, db: Session) -> PrintJobResponse:
                 password=decrypt_credential(cards_by_id[item.card_id].credential_ciphertext),
                 is_free=item.is_free,
                 price_snapshot=item.price_snapshot,
-                plan_snapshot=cards_by_id[item.card_id].plan_snapshot or {},
+                plan_name=plans_by_id[cards_by_id[item.card_id].plan_id].name,
+                data_limit_bytes=plans_by_id[cards_by_id[item.card_id].plan_id].data_limit_bytes,
+                session_time_limit_seconds=plans_by_id[cards_by_id[item.card_id].plan_id].session_time_limit_seconds,
+                validity_period_seconds=plans_by_id[cards_by_id[item.card_id].plan_id].validity_period_seconds,
             )
             for item in items
         ]
