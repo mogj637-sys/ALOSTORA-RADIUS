@@ -11,14 +11,14 @@ from app.models.core import CardBatch, CardTemplate, Plan, PrintJob
 from app.services.audit import record_audit
 from app.schemas.card_templates import CardTemplateCreate, CardTemplateUpdate, CardTemplateResponse
 
-router = APIRouter(prefix="/api/v1/card-templates", tags=["card-templates"], dependencies=[Depends(require_permission("cards.view"))])
+router = APIRouter(prefix="/api/v1/card-templates", tags=["card-templates"], dependencies=[Depends(require_permission("templates.view"))])
 
 @router.get("", response_model=list[CardTemplateResponse])
 def list_templates(db: Session = Depends(get_db)):
     return db.query(CardTemplate).order_by(CardTemplate.is_default.desc(), CardTemplate.id.asc()).all()
 
-@router.post("", response_model=CardTemplateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.manage"))])
-def create_template(payload: CardTemplateCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.manage"))):
+@router.post("", response_model=CardTemplateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("templates.create"))])
+def create_template(payload: CardTemplateCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("templates.create"))):
     plan = db.get(Plan, payload.plan_id)
     if plan is None or not plan.is_active:
         raise HTTPException(status_code=422, detail="اختر باقة موجودة ومفعلة لربطها بالقالب")
@@ -34,8 +34,8 @@ def create_template(payload: CardTemplateCreate, db: Session = Depends(get_db), 
     db.refresh(item)
     return item
 
-@router.patch("/{template_id}", response_model=CardTemplateResponse, dependencies=[Depends(require_permission("cards.manage"))])
-def update_template(template_id: int, payload: CardTemplateUpdate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.manage"))):
+@router.patch("/{template_id}", response_model=CardTemplateResponse, dependencies=[Depends(require_permission("templates.create"))])
+def update_template(template_id: int, payload: CardTemplateUpdate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("templates.update"))):
     item = db.get(CardTemplate, template_id)
     if item is None:
         raise HTTPException(status_code=404, detail="القالب غير موجود")
@@ -71,8 +71,8 @@ def update_template(template_id: int, payload: CardTemplateUpdate, db: Session =
     db.refresh(item)
     return item
 
-@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("cards.manage"))])
-def delete_template(template_id: int, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.manage"))):
+@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("templates.update"))])
+def delete_template(template_id: int, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("templates.delete"))):
     item = db.get(CardTemplate, template_id)
     if item is None:
         raise HTTPException(status_code=404, detail="القالب غير موجود")
