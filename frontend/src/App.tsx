@@ -394,6 +394,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [generatedBatchNumber, setGeneratedBatchNumber] = useState("");
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [cardSearch, setCardSearch] = useState("");
+  const [cardStatusFilter, setCardStatusFilter] = useState("");
+  const [cardPlanFilter, setCardPlanFilter] = useState("");
   const [cardOffset, setCardOffset] = useState(0);
   const [hasMoreCards, setHasMoreCards] = useState(false);
   const [points, setPoints] = useState<PointOfSale[]>([]);
@@ -649,6 +651,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     const params = new URLSearchParams({ offset: String(offset), limit: "200" });
     if (search.trim()) params.set("search", search.trim());
     if (batchId) params.set("batch_id", batchId);
+    if (cardStatusFilter) params.set("status", cardStatusFilter);
+    if (cardPlanFilter) params.set("plan_id", cardPlanFilter);
     const result = await apiRequest<Card[]>(token, `/api/v1/cards?${params.toString()}`);
     setCards(result);
     setHasMoreCards(result.length === 200);
@@ -1470,7 +1474,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <label><input type="checkbox" checked={cards.length > 0 && cards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? [...new Set([...selectedCardIds, ...cards.map((card) => card.id)])] : selectedCardIds.filter((id) => !cards.some((card) => card.id === id)))} /> تحديد كروت الصفحة الحالية</label>
         <span>تم تحديد {selectedCardIds.length} كرت</span><button type="button" disabled={!selectedCardIds.length} onClick={prepareSelectedCardsForPrinting}>تجهيز المحدد للطباعة</button>
       </div>
-      <div className="card-search"><label htmlFor="card-search">بحث في الكروت</label><input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0, cardBatchFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" /></div>
+      <div className="card-management-filters">
+        <label htmlFor="card-search">بحث في الكروت<input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0, cardBatchFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" /></label>
+        <label htmlFor="card-status-filter">الحالة<select id="card-status-filter" value={cardStatusFilter} onChange={(e) => { setCardStatusFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الحالة")); }}><option value="">كل الحالات</option><option value="generated">منشأ</option><option value="allocated">مخصص لنقطة بيع</option><option value="active">متصل</option><option value="suspended">موقوف</option><option value="cancelled">ملغي</option><option value="printed_free">مجاني مطبوع</option><option value="expired">منتهي الصلاحية</option><option value="exhausted">نفد الرصيد</option></select></label>
+        <label htmlFor="card-plan-filter">الباقة<select id="card-plan-filter" value={cardPlanFilter} onChange={(e) => { setCardPlanFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الباقة")); }}><option value="">كل الباقات</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
+        <button type="button" className="table-action" onClick={() => { setCardSearch(""); setCardStatusFilter(""); setCardPlanFilter(""); setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards("", 0, "").catch((err) => setError(err instanceof Error ? err.message : "تعذر إعادة ضبط الفلاتر")); }}>مسح الفلاتر</button>
+      </div>
       <div className="table-wrap"><table><thead><tr><th>تحديد</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>
         {cards.map((card) => <tr key={card.id}><td><input type="checkbox" aria-label={`تحديد ${card.username}`} checked={selectedCardIds.includes(card.id)} onChange={() => toggleSelectedCard(card.id)} /></td><td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td><td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td><td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td><td>{card.is_free ? "نعم" : "لا"}</td><td className="actions-cell">{card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null}{["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button>}</td></tr>)}
       </tbody></table>{cards.length === 0 && <div className="empty-state">لا توجد كروت تطابق البحث في هذه الصفحة.</div>}</div>
