@@ -102,6 +102,28 @@ class PointOfSale(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class CardBatch(TimestampMixin, Base):
+    __tablename__ = "card_batches"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_card_batches_quantity_positive"),
+        Index("ix_card_batches_created_at", "created_at"),
+        Index("ix_card_batches_pos_created", "point_of_sale_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    batch_number: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id", ondelete="RESTRICT"), nullable=False)
+    point_of_sale_id: Mapped[int | None] = mapped_column(ForeignKey("points_of_sale.id", ondelete="RESTRICT"), nullable=True)
+    template_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    card_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    generation_mode: Mapped[str] = mapped_column(String(30), nullable=False, default="digits")
+    username_length: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
+    password_length: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
+    prefix: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    requested_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
 class Router(TimestampMixin, Base):
     __tablename__ = "routers"
 
@@ -143,6 +165,7 @@ class Card(TimestampMixin, Base):
     is_free: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id", ondelete="RESTRICT"), nullable=False)
+    batch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("card_batches.id", ondelete="RESTRICT"), nullable=True)
     plan_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     price_snapshot: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
 
