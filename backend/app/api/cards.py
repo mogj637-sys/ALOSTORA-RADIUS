@@ -257,6 +257,7 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
 
     cards: list[Card] = []
     response_cards: list[CardCreatedSecret] = []
+    generated_passwords: list[str] = []
     try:
         for username, _ in credentials:
             if payload.card_type == "username_only":
@@ -268,6 +269,7 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
 
             card = _build_card(plan, username, password, payload.card_type)
             cards.append(card)
+            generated_passwords.append(password)
         db.add_all(cards)
         db.flush()
         response_cards = [
@@ -277,7 +279,7 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
                 username=card.username,
                 password=password,
             )
-            for card, (_, password) in zip(cards, credentials, strict=True)
+            for card, password in zip(cards, generated_passwords, strict=True)
         ]
         db.add_all([
             CardEvent(
