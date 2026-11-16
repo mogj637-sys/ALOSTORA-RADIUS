@@ -398,6 +398,7 @@ def batches_report(
             "created_at": batch.created_at, "plan_name": plan_name,
             "point_of_sale_name": point_name, "quantity": batch.quantity,
             "generated_cards": counts.get(batch.id, 0),
+            "is_online_sale": batch.is_online_sale, "note": batch.note,
         } for batch, plan_name, point_name in rows],
     }
 
