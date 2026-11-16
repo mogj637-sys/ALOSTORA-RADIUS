@@ -84,6 +84,7 @@ def test_employee_card_visibility_and_direct_permission_overrides(owner_client):
     point_b = _create_point(client, owner_headers, "INDIVIDUALB")
     card_a = _create_card(client, owner_headers, point_a["id"], "INDIVIDUAL_CARD_A")
     card_b = _create_card(client, owner_headers, point_b["id"], "INDIVIDUAL_CARD_B")
+    unprinted_batch_card = _new_unprinted_card(client, owner_headers, point_a["id"], "UNPRINTED_SCOPE")
 
     role_code = "ci_individual_" + secrets.token_hex(4)
     username = "ci_individual_staff_" + secrets.token_hex(4)
@@ -144,6 +145,7 @@ def test_employee_card_visibility_and_direct_permission_overrides(owner_client):
         assert assigned_cards.status_code == 200, assigned_cards.text
         assigned_ids = {item["id"] for item in assigned_cards.json()}
         assert card_a["id"] in assigned_ids
+        assert unprinted_batch_card["id"] in assigned_ids
         assert card_b["id"] not in assigned_ids
         assert client.get(f"/api/v1/cards?search={card_b['username']}", headers=headers).json() == []
 
