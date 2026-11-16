@@ -367,12 +367,12 @@ async function apiRequest<T>(token: string, path: string, init: RequestInit = {}
 }
 
 const modules = [
-  { title: "الكروت", detail: "إنشاء وإدارة كروت الإنترنت", icon: "▤", page: "cards" as const },
-  { title: "الباقات والسرعات", detail: "إعداد حدود الوقت والحجم والسرعة", icon: "◷", page: "plans" as const },
-  { title: "أجهزة MikroTik", detail: "تسجيل الراوترات وإعداد بيانات الاتصال", icon: "⌁", page: "routers" as const },
-  { title: "نقاط البيع", detail: "المخزون وتخصيص الكروت بالطباعة", icon: "▣", page: "pos" as const },
-  { title: "جلسات RADIUS", detail: "المصادقة والاستهلاك والجلسات", icon: "◉", page: "overview" as const },
-  { title: "التقارير", detail: "المبيعات والاستخدام والأرشفة", icon: "▥", page: "reports" as const },
+  { title: "الكروت", detail: "إنشاء وإدارة كروت الإنترنت", icon: "▤", page: "cards" as const, permission: "cards.view" },
+  { title: "الباقات والسرعات", detail: "إعداد حدود الوقت والحجم والسرعة", icon: "◷", page: "plans" as const, permission: "plans.view" },
+  { title: "أجهزة MikroTik", detail: "تسجيل الراوترات وإعداد بيانات الاتصال", icon: "⌁", page: "routers" as const, permission: "routers.view" },
+  { title: "نقاط البيع", detail: "إدارة المنافذ والمخزون", icon: "▣", page: "pos-management" as const, permission: "pos.view" },
+  { title: "جلسات RADIUS", detail: "المستخدمون المتصلون وسجل الجلسات", icon: "◉", page: "cards" as const, permission: "sessions.view" },
+  { title: "التقارير", detail: "تقارير الكروت والاستخدام والدفعات", icon: "▥", page: "reports" as const, permission: "reports.view" },
 ];
 
 function LoginScreen({ onLogin }: { onLogin: (username: string, password: string) => Promise<void> }) {
@@ -1579,10 +1579,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </div>
         <div className="section-heading"><div><h2>الوصول السريع</h2><p>انتقل مباشرة إلى أقسام إدارة النظام.</p></div></div>
         <div className="module-grid">
-          {modules.map((item) => (
-            <button className="module-card module-card-button" key={item.title} onClick={() => setPage(item.page)}>
+          {modules.filter((item) => can(item.permission)).map((item) => (
+            <button className="module-card module-card-button" key={item.title} onClick={() => { if (item.permission === "sessions.view") setCardManagementTab("sessions"); setPage(item.page); }}>
               <div className="module-icon">{item.icon}</div><h3>{item.title}</h3><p>{item.detail}</p>
-              <span className={item.page === "overview" ? "module-state" : "module-state active-state"}>{item.page === "overview" ? "قيد التطوير" : "متاح الآن"}</span>
+              <span className="module-state active-state">متاح الآن</span>
             </button>
           ))}
         </div>
