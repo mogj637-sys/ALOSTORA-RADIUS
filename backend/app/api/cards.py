@@ -612,15 +612,23 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
             raise HTTPException(status_code=422, detail="الباقة لا تطابق الباقة المرتبطة بقالب الطباعة")
 
     batch = None
-    if payload.existing_batch_id is not None:
-        batch = (
-            db.query(CardBatch)
-            .filter(CardBatch.id == payload.existing_batch_id)
-            .with_for_update()
-            .first()
-        )
+    if payload.existing_batch_id is not None or payload.existing_batch_number is not None:
+        batch_query = db.query(CardBatch).with_for_update()
+        if payload.existing_batch_id is not None:
+            batch_query = batch_query.filter(CardBatch.id == payload.existing_batch_id)
+        if payload.existing_batch_number is not None:
+            batch_query = batch_query.filter(
+                func.lower(CardBatch.batch_number) == payload.existing_batch_number.strip().lower()
+            )
+        batch = batch_query.first()
         if batch is None:
-            raise HTTPException(status_code=404, detail="الدفعة السابقة غير موجودة")
+            raise HTTPException(status_code=404, detail="لم يتم العثور على الدفعة السابقة بهذا الرقم")
+        if (
+            payload.existing_batch_id is not None
+            and payload.existing_batch_number is not None
+            and batch.batch_number.lower() != payload.existing_batch_number.strip().lower()
+        ):
+            raise HTTPException(status_code=409, detail="رقم الدفعة لا يطابق معرّف الدفعة المحدد")
         compatible = (
             batch.plan_id == plan.id
             and batch.point_of_sale_id == payload.point_of_sale_id
