@@ -219,6 +219,13 @@ def test_employee_can_search_any_pos_card_but_cannot_browse_all_cards_or_pos_fin
         )
         assert own_finances.status_code == 403
 
+        cannot_change_pos_controls = client.patch(
+            f"/api/v1/points-of-sale/{point_a['id']}",
+            headers=staff_headers,
+            json={"debt_limit": "100.00", "allow_printing": False},
+        )
+        assert cannot_change_pos_controls.status_code == 403
+
     finally:
         db = SessionLocal()
         user = db.query(AdminUser).filter_by(username=staff_username).first()
