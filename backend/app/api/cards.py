@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_owner
 from app.db.session import get_db
 from app.models.auth import AdminUser
-from app.models.core import Card, CardBatch, CardEvent, CardTemplate, Plan, PointOfSale, RadiusSession
+from app.models.core import Card, CardBatch, CardEvent, CardTemplate, Plan, PointOfSale, RadiusSession, Router
 from app.services.radius_disconnect import send_disconnect_for_session
 from app.schemas.cards import (
     CardBatchCreate,
@@ -121,6 +121,52 @@ def list_card_batches(
             printed_count=printed,
         ))
     return results
+
+
+@router.get("/sessions")
+def list_radius_sessions(
+    limit: int = Query(default=200, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    """Return live RADIUS sessions and aggregate counters for the admin dashboard."""
+    active_count = (
+        db.query(func.count(RadiusSession.id))
+        .filter(RadiusSession.stopped_at.is_(None))
+        .scalar() or 0
+    )
+    total_count = db.query(func.count(RadiusSession.id)).scalar() or 0
+    rows = (
+        db.query(RadiusSession, Card, Router)
+        .join(Card, Card.id == RadiusSession.card_id)
+        .join(Router, Router.id == RadiusSession.router_id)
+        .filter(RadiusSession.stopped_at.is_(None))
+        .order_by(RadiusSession.started_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "active_count": int(active_count),
+        "total_count": int(total_count),
+        "items": [
+            {
+                "id": session.id,
+                "username": card.username,
+                "serial_number": card.serial_number,
+                "card_status": card.status,
+                "router_name": router.name,
+                "nas_identifier": router.nas_identifier,
+                "acct_session_id": session.acct_session_id,
+                "framed_ip_address": session.framed_ip_address,
+                "calling_station_id": session.calling_station_id,
+                "started_at": session.started_at,
+                "last_update_at": session.last_update_at,
+                "session_time_seconds": session.session_time_seconds,
+                "upload_bytes": session.input_octets,
+                "download_bytes": session.output_octets,
+            }
+            for session, card, router in rows
+        ],
+    }
 
 
 @router.get("", response_model=list[CardListItem])
