@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_owner
+from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.core import Card, PointOfSale, PrintJob, PrintJobItem
 from app.schemas.points_of_sale import (
@@ -18,7 +18,7 @@ from app.schemas.points_of_sale import (
 router = APIRouter(
     prefix="/api/v1/points-of-sale",
     tags=["points-of-sale"],
-    dependencies=[Depends(get_current_owner)],
+    dependencies=[Depends(require_permission("pos.view"))],
 )
 
 
@@ -30,7 +30,7 @@ def list_points_of_sale(include_inactive: bool = False, db: Session = Depends(ge
     return query.order_by(PointOfSale.id.desc()).all()
 
 
-@router.post("", response_model=PointOfSaleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PointOfSaleResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("pos.manage"))])
 def create_point_of_sale(payload: PointOfSaleCreate, db: Session = Depends(get_db)):
     point = PointOfSale(**payload.model_dump())
     db.add(point)
@@ -43,7 +43,7 @@ def create_point_of_sale(payload: PointOfSaleCreate, db: Session = Depends(get_d
     return point
 
 
-@router.patch("/{point_id}", response_model=PointOfSaleResponse)
+@router.patch("/{point_id}", response_model=PointOfSaleResponse, dependencies=[Depends(require_permission("pos.manage"))])
 def update_point_of_sale(
     point_id: int,
     payload: PointOfSaleUpdate,
