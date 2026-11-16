@@ -93,6 +93,7 @@ class CardListItem(BaseModel):
     status: str
     is_free: bool
     plan_id: int
+    batch_id: UUID | None
     price_snapshot: Decimal
     assigned_pos_id: int | None
     first_used_at: datetime | None
