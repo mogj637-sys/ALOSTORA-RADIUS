@@ -524,3 +524,46 @@ def test_print_import_resolves_identifiers_across_the_full_database_and_respects
     assert data["matched_count"] == 2
     assert {item["id"] for item in data["items"]} == {cards[0]["id"], cards[1]["id"]}
     assert set(data["unmatched"]) == {cards[2]["username"], "NO-SUCH-CARD"}
+
+
+def test_card_list_reflects_elapsed_validity_even_before_next_radius_packet(owner_client):
+    from datetime import datetime, timedelta, timezone
+
+    client, headers, _ = owner_client
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "code": "EXPIRED-" + secrets.token_hex(4).upper(),
+            "name": "Expiry display plan",
+            "price": "5.00",
+            "validity_period_seconds": 3600,
+        },
+    )
+    assert plan.status_code == 201, plan.text
+    created = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": "EXPIRED" + secrets.token_hex(4).upper(),
+            "card_type": "username_only",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    db = SessionLocal()
+    card = db.get(Card, UUID(created.json()["id"]))
+    card.first_used_at = datetime.now(timezone.utc) - timedelta(days=2)
+    card.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+    db.commit()
+    db.close()
+
+    expired = client.get("/api/v1/cards?status=expired", headers=headers)
+    assert expired.status_code == 200, expired.text
+    match = next(item for item in expired.json() if item["id"] == created.json()["id"])
+    assert match["status"] == "expired"
+
+    generated = client.get("/api/v1/cards?status=generated", headers=headers)
+    assert generated.status_code == 200
+    assert all(item["id"] != created.json()["id"] for item in generated.json())
