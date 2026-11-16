@@ -9,6 +9,7 @@ class CardTemplateBase(BaseModel):
     background_color: str = Field(default="#ffffff", pattern=r"^#[0-9A-Fa-f]{6}$")
     text_color: str = Field(default="#173b2d", pattern=r"^#[0-9A-Fa-f]{6}$")
     layout: dict = Field(default_factory=dict)
+    plan_id: int = Field(gt=0)
 
 class CardTemplateCreate(CardTemplateBase):
     pass
@@ -20,6 +21,7 @@ class CardTemplateUpdate(BaseModel):
     background_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     text_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     layout: dict | None = None
+    plan_id: int | None = Field(default=None, gt=0)
     is_default: bool | None = None
 
 class CardTemplateResponse(CardTemplateBase):
