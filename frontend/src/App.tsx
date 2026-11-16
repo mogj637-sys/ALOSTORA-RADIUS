@@ -350,6 +350,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [templateDraft, setTemplateDraft] = useState({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37", plan_id: "" });
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
+  const [generatedBatchNumber, setGeneratedBatchNumber] = useState("");
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [cardSearch, setCardSearch] = useState("");
   const [cardOffset, setCardOffset] = useState(0);
@@ -932,7 +933,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     event.preventDefault();
     setBusy(true); setError(""); setNotice(""); setGeneratedCards([]);
     try {
-      const result = await apiRequest<{ id: string; serial_number: string; username: string; password: string }> (token, "/api/v1/cards/single", {
+      const result = await apiRequest<{ id: string; batch_id: string; batch_number: string; serial_number: string; username: string; password: string }> (token, "/api/v1/cards/single", {
         method: "POST",
         body: JSON.stringify({
           plan_id: Number(singleDraft.planId || plans[0]?.id),
@@ -940,9 +941,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           card_type: singleDraft.cardType,
           password: singleDraft.cardType === "separate_credentials" ? singleDraft.password : null,
           is_free: singleDraft.isFree,
+          template_code: printTemplate,
+          point_of_sale_id: selectedPosId ? Number(selectedPosId) : null,
         }),
       });
       setGeneratedCards([{ id: result.id, serial_number: result.serial_number, username: result.username, password: result.password }]);
+      setGeneratedBatchNumber(result.batch_number);
       setSelectedPrintCardIds([result.id]);
       await loadCards();
       setNotice("تم إنشاء الكرت. احفظ بيانات الدخول الآن؛ لن تظهر كلمة المرور مرة أخرى.");
@@ -957,7 +961,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     event.preventDefault();
     setBusy(true); setError(""); setNotice(""); setGeneratedCards([]);
     try {
-      const result = await apiRequest<{ created_count: number; cards: GeneratedCard[] }>(token, "/api/v1/cards/batch", {
+      const result = await apiRequest<{ batch_id: string; batch_number: string; plan_id: number; template_code: string | null; point_of_sale_id: number | null; created_count: number; cards: GeneratedCard[] }>(token, "/api/v1/cards/batch", {
         method: "POST",
         body: JSON.stringify({
           plan_id: Number(batchDraft.planId),
@@ -967,9 +971,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           username_length: Number(batchDraft.usernameLength),
           password_length: Number(batchDraft.passwordLength),
           prefix: batchDraft.prefix,
+          template_code: printTemplate,
+          point_of_sale_id: selectedPosId ? Number(selectedPosId) : null,
         }),
       });
       setGeneratedCards(result.cards);
+      setGeneratedBatchNumber(result.batch_number);
       setSelectedPrintCardIds(result.cards.map((card) => card.id));
       await loadCards();
       setNotice(`تم إنشاء ${result.created_count} كرت. احفظ بيانات الدخول الآن؛ لن تظهر كلمات المرور مرة أخرى.`);
@@ -1092,8 +1099,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       <div className="section-heading"><div><h2>إضافة الكروت</h2><p>أنشئ كرتاً منفرداً أو دفعة كروت وحدد الباقة وبيانات الدخول.</p></div></div><div className="notice">تنبيه: الكروت التي تنشئها هنا تُحفظ في قاعدة ALOSTORA-RADIUS. إنشاء الكروت مباشرة داخل User Manager القديم غير مفعّل بعد.</div>
       <div className="panel form-grid"><label>نقطة البيع المخصصة للطباعة<select value={selectedPosId} onChange={(e) => setSelectedPosId(e.target.value)}><option value="">اختر نقطة بيع</option>{points.filter((point) => point.is_active).map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}</option>)}</select></label><small className="field-hint">يتم تخصيص الكروت للنقطة عند تسجيل عملية الطباعة، وليس بمجرد إنشائها.</small></div>
       <div className="mode-tabs">
-        <button type="button" className={cardMode === "single" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("single"); setGeneratedCards([]); }}>كرت منفرد</button>
-        <button type="button" className={cardMode === "batch" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("batch"); setGeneratedCards([]); }}>دفعة كروت</button>
+        <button type="button" className={cardMode === "single" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("single"); setGeneratedCards([]); setGeneratedBatchNumber(""); }}>كرت منفرد</button>
+        <button type="button" className={cardMode === "batch" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("batch"); setGeneratedCards([]); setGeneratedBatchNumber(""); }}>دفعة كروت</button>
       </div>
       {plans.filter((plan) => plan.is_active).length === 0 ? <div className="empty-state">لا توجد باقات مفعلة. فعّل باقة من قسم الباقات أولاً.</div> : cardMode === "single" ? (
         <form className="panel form-grid" onSubmit={createSingle}>
@@ -1103,7 +1110,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <label>نوع بيانات الدخول<select value={singleDraft.cardType} onChange={(e) => setSingleDraft({ ...singleDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
           {singleDraft.cardType === "separate_credentials" && <label>كلمة المرور<input type="text" value={singleDraft.password} onChange={(e) => setSingleDraft({ ...singleDraft, password: e.target.value })} minLength={4} maxLength={32} required /></label>}
           <label className="checkbox-label"><input type="checkbox" checked={singleDraft.isFree} onChange={(e) => setSingleDraft({ ...singleDraft, isFree: e.target.checked })} /> كرت مجاني / خاص بمالك الشبكة</label>
-          <div className="form-actions"><button type="submit" disabled={busy || !singleDraft.planId}>{busy ? "جارٍ الإنشاء..." : "إنشاء الكرت"}</button></div>
+          <div className="form-actions"><button type="submit" disabled={busy || !singleDraft.planId || !selectedPosId || !printTemplate}>{busy ? "جارٍ الإنشاء..." : "إنشاء الكرت"}</button></div>
         </form>
       ) : (
         <form className="panel form-grid" onSubmit={createBatch}>
@@ -1115,11 +1122,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <label>طول اسم المستخدم<input type="number" min="3" max="32" value={batchDraft.usernameLength} onChange={(e) => setBatchDraft({ ...batchDraft, usernameLength: e.target.value })} /></label>
           <label>طول كلمة المرور<input type="number" min="4" max="32" value={batchDraft.passwordLength} onChange={(e) => setBatchDraft({ ...batchDraft, passwordLength: e.target.value })} disabled={batchDraft.cardType !== "separate_credentials"} /></label>
           <label>بادئة اختيارية<input value={batchDraft.prefix} onChange={(e) => setBatchDraft({ ...batchDraft, prefix: e.target.value })} placeholder="مثال: 777" /></label>
-          <div className="form-actions"><button type="submit" disabled={busy || !batchDraft.planId}>{busy ? "جارٍ إنشاء الكروت..." : "إنشاء الدفعة"}</button></div>
+          <div className="form-actions"><button type="submit" disabled={busy || !batchDraft.planId || !selectedPosId || !printTemplate}>{busy ? "جارٍ إنشاء الكروت..." : "إنشاء الدفعة"}</button></div>
         </form>
       )}
       {generatedCards.length > 0 && <section className="generated-panel">
-        <div className="section-heading compact-heading"><div><h2>بيانات الدفعة الجديدة</h2><p>كلمات المرور تظهر الآن فقط. احفظ الجدول أو اطبعه قبل مغادرة الصفحة.</p></div><div className="form-actions"><button type="button" disabled={!selectedPosId || !selectedPrintCardIds.length} onClick={() => setPage("pos")}>متابعة الطباعة لنقطة البيع</button><button type="button" className="secondary-button" onClick={() => window.print()}>طباعة الصفحة</button></div></div>
+        <div className="section-heading compact-heading"><div><h2>بيانات الدفعة الجديدة {generatedBatchNumber ? `— ${generatedBatchNumber}` : ""}</h2><p>كلمات المرور تظهر الآن فقط. احفظ الجدول أو اطبعه قبل مغادرة الصفحة.</p></div><div className="form-actions"><button type="button" disabled={!selectedPosId || !selectedPrintCardIds.length} onClick={() => setPage("pos")}>متابعة الطباعة لنقطة البيع</button><button type="button" className="secondary-button" onClick={() => window.print()}>طباعة الصفحة</button></div></div>
         <div className="table-wrap"><table><thead><tr><th>التسلسل</th><th>اسم المستخدم</th><th>كلمة المرور</th></tr></thead><tbody>{generatedCards.map((card) => <tr key={card.serial_number}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.password || "بدون كلمة مرور"}</td></tr>)}</tbody></table></div>
       </section>}
     </>;
