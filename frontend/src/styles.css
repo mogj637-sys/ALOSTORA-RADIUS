@@ -4750,3 +4750,78 @@ button:disabled { cursor: not-allowed; }
 .audit-summary-grid article strong { color: var(--text, #172b4d); font-size: 1.65rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .audit-summary-grid article small { color: var(--muted, #64748b); font-size: .77rem; line-height: 1.5; }
 @media (max-width: 680px) { .audit-summary-grid { grid-template-columns: 1fr; gap: 9px; } .audit-summary-grid article { padding: 13px 15px; } }
+
+/* RADIUS sessions: clearer four-metric layout and readable live table */
+.radius-session-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.radius-session-summary > div {
+  min-width: 0;
+  align-content: center;
+  box-shadow: 0 2px 8px rgba(24, 70, 48, 0.035);
+}
+.radius-session-summary > div:first-child {
+  border-color: #b9dfcb;
+  background: linear-gradient(145deg, #f2fbf6, #ffffff);
+}
+.radius-session-summary > div:first-child strong {
+  color: #08764f;
+}
+.radius-sessions-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.radius-sessions-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f1f7f3;
+  color: #365b48;
+  border-bottom: 1px solid #dce9e0;
+}
+.radius-sessions-table tbody tr:nth-child(even) {
+  background: #f9fcfa;
+}
+.radius-sessions-table tbody tr:hover {
+  background: #edf8f1;
+}
+.radius-sessions-table td {
+  border-bottom: 1px solid #edf2ee;
+  vertical-align: middle;
+}
+.radius-sessions-table td:nth-child(1) {
+  color: #176b51;
+  font-weight: 700;
+}
+.radius-sessions-table td:nth-child(5),
+.radius-sessions-table td:nth-child(6) {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  direction: ltr;
+  text-align: right;
+}
+.radius-sessions-table-wrap {
+  border: 1px solid #e5eee8;
+  border-radius: 12px;
+  background: #fff;
+}
+@media (max-width: 900px) {
+  .radius-session-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 420px) {
+  .radius-session-summary {
+    gap: 8px;
+  }
+  .radius-session-summary > div {
+    padding: 10px;
+  }
+  .radius-session-summary span {
+    font-size: 9px;
+    line-height: 1.5;
+  }
+  .radius-session-summary strong {
+    font-size: 18px;
+  }
+}
+
