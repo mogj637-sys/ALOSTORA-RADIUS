@@ -621,6 +621,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [cardOffset, setCardOffset] = useState(0);
   const [hasMoreCards, setHasMoreCards] = useState(false);
   const [points, setPoints] = useState<PointOfSale[]>([]);
+  const [posSearch, setPosSearch] = useState("");
+  const [posStatusFilter, setPosStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [selectedPosId, setSelectedPosId] = useState("");
   const [posInventory, setPosInventory] = useState<PosInventory | null>(null);
   const [posAccount, setPosAccount] = useState<PosAccountSummary | null>(null);
@@ -2539,6 +2541,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   function renderPosManagement() {
     const activePoints = points.filter((point) => point.is_active).length;
     const inactivePoints = points.length - activePoints;
+    const normalizedPosSearch = posSearch.trim().toLocaleLowerCase();
+    const visiblePoints = points.filter((point) => {
+      const matchesStatus = posStatusFilter === "all" || (posStatusFilter === "active" ? point.is_active : !point.is_active);
+      const searchable = [point.name, point.code, point.contact_name ?? "", point.phone ?? ""].join(" ").toLocaleLowerCase();
+      return matchesStatus && (!normalizedPosSearch || searchable.includes(normalizedPosSearch));
+    });
     return (
       <section className="pos-management-page">
         <div className="section-heading pos-page-heading">
@@ -2584,9 +2592,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <div><span className="eyebrow">دليل الموزعين</span><h3>النقاط المسجلة</h3><p>يمكنك تعديل بيانات النقطة أو إيقافها وإعادة تفعيلها.</p></div>
               <span className="count-tag">{points.length.toLocaleString("ar")} سجل</span>
             </div>
+            <div className="pos-directory-tools">
+              <label className="pos-directory-search">بحث في النقاط<input type="search" value={posSearch} onChange={(event) => setPosSearch(event.target.value)} placeholder="اسم النقطة أو الرمز أو المسؤول أو الهاتف" /></label>
+              <label className="pos-directory-filter">حالة النقطة<select value={posStatusFilter} onChange={(event) => setPosStatusFilter(event.target.value as "all" | "active" | "inactive")}><option value="all">كل الحالات</option><option value="active">المفعّلة فقط</option><option value="inactive">المتوقفة فقط</option></select></label>
+              <span className="pos-directory-result">عرض {visiblePoints.length.toLocaleString("ar")} من {points.length.toLocaleString("ar")} نقطة</span>
+            </div>
             <div className="table-wrap pos-directory-table">
               <table><thead><tr><th>الرمز</th><th>اسم نقطة البيع</th><th>المسؤول</th><th>رقم الهاتف</th><th>سقف المديونية</th><th>إنشاء الكروت</th><th>الطباعة</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
-                <tbody>{points.map((point) => (
+                <tbody>{visiblePoints.map((point) => (
                   <tr key={point.id}>
                     <td><span className="pos-code">{point.code}</span></td>
                     <td><strong>{point.name}</strong></td>
@@ -2609,7 +2622,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   </tr>
                 ))}</tbody>
               </table>
-              {points.length === 0 && <div className="empty-state">لا توجد نقاط بيع مسجلة بعد. أضف أول نقطة بيع من النموذج.</div>}
+              {visiblePoints.length === 0 && <div className="empty-state">{points.length === 0 ? "لا توجد نقاط بيع مسجلة بعد. أضف أول نقطة بيع من النموذج." : "لا توجد نقاط تطابق البحث أو الحالة المحددة."}</div>}
             </div>
             <div className="pos-directory-note"><span>معلومة</span> إيقاف نقطة البيع يمنع استخدامها في عمليات الطباعة الجديدة، مع الاحتفاظ بسجلها وحركاتها السابقة.</div>
           </section>
