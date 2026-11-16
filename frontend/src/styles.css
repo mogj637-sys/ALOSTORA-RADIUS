@@ -3735,3 +3735,477 @@ button:disabled { cursor: not-allowed; }
   }
 }
 
+/* Point-of-sale workspace: refined distributor directory, inventory and finance ledger */
+.workspace .pos-management-page {
+  gap: 20px;
+}
+.workspace .pos-page-heading {
+  align-items: center;
+  padding: 17px 19px;
+  border: 1px solid #dfebe3;
+  border-radius: 14px;
+  background: linear-gradient(115deg, #fff, #f6fbf7);
+  box-shadow: 0 5px 17px rgba(24, 65, 43, .035);
+}
+.workspace .pos-page-heading h2 {
+  margin: 4px 0;
+  color: #244e3b;
+}
+.workspace .pos-page-heading p {
+  margin: 0;
+  color: #788a7e;
+  font-size: 11px;
+  line-height: 1.9;
+}
+.workspace .pos-page-heading > .count-tag,
+.workspace .pos-directory-heading > .count-tag {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border: 1px solid #d8e9de;
+  border-radius: 9px;
+  background: #edf7f1;
+  color: #176b50;
+  font-size: 10px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+.workspace .pos-management-summary {
+  gap: 12px;
+}
+.workspace .pos-management-summary article {
+  position: relative;
+  min-height: 108px;
+  align-content: center;
+  overflow: hidden;
+  padding: 17px 19px;
+  border-color: #deebe2;
+  background: linear-gradient(145deg, #fff, #f8fcf9);
+  box-shadow: 0 5px 16px rgba(24, 65, 43, .035);
+}
+.workspace .pos-management-summary article::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #168767, #a6d9ba);
+  content: "";
+}
+.workspace .pos-management-summary article strong {
+  color: #245a42;
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+}
+.workspace .pos-management-summary article small {
+  color: #87958c;
+  line-height: 1.7;
+}
+.workspace .pos-management-layout {
+  grid-template-columns: minmax(285px, .76fr) minmax(0, 1.8fr);
+  gap: 17px;
+}
+.workspace .pos-editor-panel,
+.workspace .pos-directory-panel {
+  padding: 19px;
+  border: 1px solid #e0eae3;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 19px rgba(24, 65, 43, .04);
+}
+.workspace .pos-editor-heading,
+.workspace .pos-directory-heading {
+  padding-bottom: 13px;
+  border-bottom: 1px solid #edf2ee;
+}
+.workspace .pos-editor-heading h3,
+.workspace .pos-directory-heading h3 {
+  color: #28543e;
+}
+.workspace .pos-editor-heading .eyebrow,
+.workspace .pos-directory-heading .eyebrow {
+  color: #168064;
+  font-size: 9px;
+  font-weight: 850;
+}
+.workspace .pos-editor-icon {
+  width: 42px;
+  height: 42px;
+  border: 1px solid #d8eadf;
+  background: #edf7f1;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+.workspace .pos-editor-grid {
+  gap: 13px;
+}
+.workspace .pos-editor-grid label {
+  color: #536c5c;
+  font-size: 10px;
+  font-weight: 750;
+}
+.workspace .pos-editor-grid input {
+  min-height: 40px;
+  border: 1px solid #dfe9e2;
+  border-radius: 8px;
+  background: #fbfdfb;
+  color: #345541;
+}
+.workspace .pos-editor-grid input:focus {
+  border-color: #78b99a;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(8, 127, 99, .09);
+  outline: none;
+}
+.workspace .pos-editor-grid .field-hint {
+  color: #89968e;
+  font-size: 9px;
+  line-height: 1.7;
+}
+.workspace .pos-editor-grid .day-selector {
+  min-height: 40px;
+  align-items: center;
+  padding: 9px 11px;
+  border: 1px solid #e4eee7;
+  border-radius: 9px;
+  background: #f8fbf9;
+  color: #45634f;
+}
+.workspace .pos-editor-grid .day-selector input {
+  width: 16px;
+  min-height: 16px;
+  accent-color: #168363;
+}
+.workspace .pos-editor-actions {
+  padding-top: 4px;
+}
+.workspace .pos-editor-actions button {
+  min-height: 40px;
+  padding: 9px 15px;
+  border-radius: 9px;
+  box-shadow: 0 3px 8px rgba(22, 112, 78, .1);
+}
+.workspace .pos-editor-actions .secondary-button {
+  border: 1px solid #dce9e0;
+  background: #f5f9f6;
+  color: #38634b;
+  box-shadow: none;
+}
+.workspace .pos-directory-heading {
+  align-items: center;
+  margin-bottom: 14px;
+}
+.workspace .pos-directory-heading p {
+  color: #819087;
+  line-height: 1.8;
+}
+.workspace .pos-directory-table {
+  overflow: auto;
+  border: 1px solid #e3ece6;
+  border-radius: 11px;
+  scrollbar-width: thin;
+  scrollbar-color: #c5d9cc transparent;
+}
+.workspace .pos-directory-table table {
+  min-width: 900px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.workspace .pos-directory-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 10px;
+  border-bottom: 1px solid #dfeae3;
+  background: #f1f7f3;
+  color: #526d5d;
+  font-size: 9px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.workspace .pos-directory-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #edf2ee;
+  color: #596e61;
+  font-size: 9px;
+  vertical-align: middle;
+}
+.workspace .pos-directory-table tbody tr:nth-child(even) td {
+  background: #fcfefc;
+}
+.workspace .pos-directory-table tbody tr:hover td {
+  background: #f1f8f3;
+}
+.workspace .pos-directory-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.workspace .pos-directory-table td strong {
+  color: #315943;
+  font-size: 10px;
+}
+.workspace .pos-code {
+  padding: 5px 8px;
+  border: 1px solid #e1ebe4;
+  border-radius: 7px;
+  background: #f5f9f6;
+  color: #42634f;
+  font-size: 9px;
+  font-weight: 800;
+  unicode-bidi: isolate;
+}
+.workspace .pos-status {
+  min-width: 60px;
+  justify-content: center;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 9px;
+  font-weight: 850;
+}
+.workspace .pos-status.active {
+  border-color: #cfe9d8;
+  background: #edf8f0;
+  color: #16734f;
+}
+.workspace .pos-status.inactive {
+  border-color: #f0dfce;
+  background: #fff6ed;
+  color: #98613a;
+}
+.workspace .pos-directory-table .actions-cell {
+  min-width: 190px;
+  white-space: normal;
+}
+.workspace .pos-directory-table .table-action {
+  min-height: 29px;
+  margin: 2px;
+  padding: 5px 8px;
+  border: 1px solid #dce9e0;
+  border-radius: 7px;
+  background: #f7fbf8;
+  color: #286248;
+  font-size: 9px;
+  font-weight: 750;
+}
+.workspace .pos-directory-table .table-action:hover:not(:disabled) {
+  border-color: #b5d8c2;
+  background: #edf7f0;
+}
+.workspace .pos-directory-table .danger-action {
+  border-color: #f0d9d5;
+  background: #fff7f5;
+  color: #a34c42;
+}
+.workspace .pos-directory-note {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border: 1px solid #e7eee9;
+  border-radius: 9px;
+  background: #f8fbf9;
+  color: #74857a;
+  line-height: 1.9;
+}
+.workspace .pos-directory-note span {
+  color: #176b51;
+}
+.workspace .pos-toolbar {
+  align-items: end;
+  gap: 12px;
+  padding: 15px 17px;
+  border: 1px solid #e0ebe4;
+  border-radius: 12px;
+  background: linear-gradient(115deg, #fff, #f7fbf8);
+}
+.workspace .pos-toolbar label {
+  min-width: min(100%, 340px);
+  color: #526b5c;
+  font-size: 10px;
+  font-weight: 800;
+}
+.workspace .pos-toolbar select {
+  min-height: 41px;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  background: #fff;
+}
+.workspace .pos-stats {
+  gap: 11px;
+  margin: 14px 0;
+}
+.workspace .pos-stats > div {
+  position: relative;
+  min-height: 91px;
+  justify-content: center;
+  padding: 14px;
+  border-color: #e0ebe4;
+  background: linear-gradient(145deg, #fff, #f8fcf9);
+  box-shadow: 0 4px 14px rgba(24, 65, 43, .03);
+}
+.workspace .pos-stats span {
+  color: #718378;
+  font-size: 10px;
+  line-height: 1.7;
+}
+.workspace .pos-stats strong {
+  color: #245a42;
+  font-size: 18px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.workspace .pos-account-section {
+  display: grid;
+  gap: 13px;
+  margin: 17px 0;
+  padding: 18px;
+  border: 1px solid #dfeae3;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 19px rgba(24, 65, 43, .04);
+}
+.workspace .pos-account-section > .section-heading {
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #edf2ee;
+}
+.workspace .pos-account-section > .section-heading h2 {
+  color: #244e3b;
+}
+.workspace .pos-account-section > .section-heading p {
+  color: #7b8b81;
+  line-height: 1.8;
+}
+.workspace .pos-account-section .account-stats {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+}
+.workspace .pos-account-section .account-stats > div {
+  min-width: 0;
+  min-height: 94px;
+}
+.workspace .pos-account-section .account-stats > div:nth-child(3) {
+  border-color: #cfe5d6;
+  background: linear-gradient(145deg, #f4fbf6, #eaf6ee);
+}
+.workspace .pos-account-section .account-stats > div:nth-child(3) strong {
+  color: #146b49;
+}
+.workspace .pos-account-section .account-entry-form {
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e4ede7;
+  border-radius: 11px;
+  background: #f9fcfa;
+}
+.workspace .pos-account-section .account-entry-form label {
+  color: #526b5c;
+  font-size: 10px;
+  font-weight: 750;
+}
+.workspace .pos-account-section .account-entry-form input,
+.workspace .pos-account-section .account-entry-form select {
+  min-height: 39px;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  background: #fff;
+}
+.workspace .pos-account-section .account-entry-form input:focus,
+.workspace .pos-account-section .account-entry-form select:focus {
+  border-color: #78b99a;
+  box-shadow: 0 0 0 3px rgba(8, 127, 99, .09);
+  outline: none;
+}
+.workspace .pos-account-section .account-entry-form .form-actions {
+  align-self: end;
+}
+.workspace .pos-account-section .account-entry-form button {
+  min-height: 39px;
+  border-radius: 8px;
+}
+.workspace .pos-account-section > .table-wrap {
+  overflow: auto;
+  border: 1px solid #e3ece6;
+  border-radius: 10px;
+}
+.workspace .pos-account-section > .table-wrap table {
+  min-width: 790px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.workspace .pos-account-section > .table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 10px;
+  border-bottom: 1px solid #dfeae3;
+  background: #f1f7f3;
+  color: #526d5d;
+  font-size: 9px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.workspace .pos-account-section > .table-wrap td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #edf2ee;
+  color: #586d60;
+  font-size: 9px;
+  line-height: 1.8;
+}
+.workspace .pos-account-section > .table-wrap tbody tr:nth-child(even) td {
+  background: #fcfefc;
+}
+.workspace .pos-account-section > .table-wrap tbody tr:hover td {
+  background: #f1f8f3;
+}
+.workspace .pos-account-section > .table-wrap tbody tr:last-child td {
+  border-bottom: 0;
+}
+.workspace .pos-account-section > .table-wrap td:nth-child(4),
+.workspace .pos-account-section > .table-wrap td:nth-child(5) {
+  color: #315f48;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 1050px) {
+  .workspace .pos-management-layout {
+    grid-template-columns: 1fr;
+  }
+  .workspace .pos-editor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace .pos-account-section .account-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .workspace .pos-page-heading,
+  .workspace .pos-directory-heading,
+  .workspace .pos-account-section > .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .workspace .pos-editor-panel,
+  .workspace .pos-directory-panel,
+  .workspace .pos-account-section {
+    padding: 14px;
+  }
+  .workspace .pos-account-section .account-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace .pos-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .workspace .pos-toolbar label {
+    width: 100%;
+  }
+}
+@media (max-width: 480px) {
+  .workspace .pos-management-summary {
+    grid-template-columns: 1fr;
+  }
+  .workspace .pos-editor-grid,
+  .workspace .pos-account-section .account-stats {
+    grid-template-columns: 1fr;
+  }
+  .workspace .pos-editor-actions button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+
