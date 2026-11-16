@@ -427,6 +427,18 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     generationMode: "digits", usernameLength: "8", passwordLength: "10", prefix: "",
   });
 
+  useEffect(() => {
+    const activeTemplates = cardTemplates.filter((item) => item.plan_id !== null && plans.some((plan) => plan.id === item.plan_id && plan.is_active));
+    const current = activeTemplates.find((item) => item.code === printTemplate);
+    const preferred = current ?? activeTemplates.find((item) => item.is_default) ?? activeTemplates[0];
+    if (preferred && preferred.code !== printTemplate) {
+      setPrintTemplate(preferred.code);
+      const planId = String(preferred.plan_id);
+      setSingleDraft((draft) => ({ ...draft, planId }));
+      setBatchDraft((draft) => ({ ...draft, planId }));
+    }
+  }, [cardTemplates, plans, printTemplate]);
+
   async function loadPlans() {
     const result = await apiRequest<Plan[]>(token, "/api/v1/plans?include_inactive=true");
     setPlans(result);
