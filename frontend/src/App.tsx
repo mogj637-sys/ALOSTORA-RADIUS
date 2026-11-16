@@ -811,7 +811,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         }),
       });
       setPrintTemplate(job.template_code ?? "classic-green");
-      setPrintOptions(job.print_options);
+      setPrintOptions({ show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true, show_limits: true, sequential: false, ...job.print_options });
       setPrintPreviewCards(result.items);
       await loadPrintHistory(selectedPosId);
       setNotice(`تم تسجيل إعادة طباعة ${result.card_count} كرت دون إضافة قيمة تجارية جديدة.`);
@@ -840,7 +840,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       });
       setSelectedPrintCardIds([]);
       setPrintTemplate(result.template_code || printTemplate);
-      setPrintOptions(result.print_options);
+      setPrintOptions({ show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true, show_limits: true, sequential: false, ...result.print_options });
       setPrintPreviewCards(result.items);
       await Promise.all([loadCards(), loadPosInventory(selectedPosId), loadPrintHistory(selectedPosId), loadPosAccount(selectedPosId)]);
       setNotice(`تم تسجيل طباعة ${result.card_count} كرت: ${result.commercial_card_count} تجاري و${result.free_card_count} مجاني. القيمة التجارية: ${Number(result.total_amount).toFixed(2)}.`);
@@ -1405,7 +1405,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                     <button type="button" className="secondary-button" onClick={() => setPrintPreviewCards([])}>إغلاق المعاينة</button>
                   </div>
                 </div>
-                <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"}>
+                <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"} style={selectedTemplate ? { gridTemplateColumns: `repeat(${Math.max(1, Math.min(5, Number(selectedLayout.columns ?? 2)))}, minmax(0, 1fr))` } : undefined}>
                   {printPreviewCards.map((card) => (
                     <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { position: "relative", background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, minHeight: `${selectedTemplate.height_mm}mm`, fontFamily: String(selectedLayout.font_family ?? "Arial"), fontSize: `${Number(selectedLayout.font_size ?? 12)}px`, border: selectedLayout.show_border === false ? "none" : `${Number(selectedLayout.border_width ?? 1)}px solid ${String(selectedLayout.border_color ?? "#b9d9c8")}` } : undefined}>
                       <div className="voucher-head"><strong>الأسطورة نت</strong><span>{card.is_free ? "كرت مجاني" : "بطاقة إنترنت"}</span></div>
