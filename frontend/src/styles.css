@@ -4639,3 +4639,51 @@ button:disabled { cursor: not-allowed; }
     font-size: 21px;
   }
 }
+
+
+/* Card search result context */
+.workspace .card-results-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  min-height: 54px;
+  margin: 12px 0 9px;
+  padding: 10px 14px;
+  border: 1px solid #e0ebe4;
+  border-radius: 10px;
+  background: #f7fbf8;
+}
+.workspace .card-results-strip > div {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.workspace .card-results-strip strong {
+  color: #205b40;
+  font-size: 17px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.workspace .card-results-strip span {
+  color: #788a7e;
+  font-size: 10px;
+  font-weight: 700;
+}
+.workspace .card-results-strip .card-results-loading {
+  margin-inline-start: auto;
+  color: #26734e;
+}
+@media (max-width: 560px) {
+  .workspace .card-results-strip {
+    align-items: flex-start;
+    gap: 8px 14px;
+  }
+  .workspace .card-results-strip > div {
+    flex: 1 1 40%;
+  }
+  .workspace .card-results-strip .card-results-loading {
+    margin-inline-start: 0;
+    flex-basis: 100%;
+  }
+}
