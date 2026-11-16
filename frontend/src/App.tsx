@@ -572,7 +572,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [batchDraft, setBatchDraft] = useState({
     planId: "", quantity: "100", cardType: "username_only",
     generationMode: "digits", usernameLength: "8", passwordLength: "10", prefix: "",
-    batchMode: "new" as "new" | "existing", existingBatchId: "",
+    batchMode: "new" as "new" | "existing", existingBatchNumber: "",
     isOnlineSale: false, note: "",
   });
 
@@ -1608,7 +1608,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           prefix: batchDraft.prefix,
           template_code: printTemplate,
           point_of_sale_id: selectedPosId ? Number(selectedPosId) : null,
-          existing_batch_id: batchDraft.batchMode === "existing" ? batchDraft.existingBatchId : null,
+          existing_batch_number: batchDraft.batchMode === "existing" ? batchDraft.existingBatchNumber.trim() : null,
           is_online_sale: batchDraft.isOnlineSale,
           note: batchDraft.note.trim() || null,
         }),
@@ -2022,7 +2022,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       batch.password_length === Number(batchDraft.passwordLength) &&
       batch.prefix === batchDraft.prefix
     );
-    const selectedExistingBatch = compatibleBatches.find((batch) => batch.batch_id === batchDraft.existingBatchId);
+    const selectedExistingBatch = compatibleBatches.find((batch) => batch.batch_number.toLowerCase() === batchDraft.existingBatchNumber.trim().toLowerCase());
     const chooseTemplate = (code: string) => {
       const template = availableTemplates.find((item) => item.code === code);
       setPrintTemplate(template?.code ?? "");
@@ -2106,17 +2106,17 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 </select>
               </label>
               {batchDraft.batchMode === "existing" && <label>رقم الدفعة السابقة
-                <select value={batchDraft.existingBatchId} onChange={(e) => setBatchDraft({ ...batchDraft, existingBatchId: e.target.value })} required>
-                  <option value="">اختر دفعة متوافقة</option>
-                  {compatibleBatches.map((batch) => <option key={batch.batch_id} value={batch.batch_id}>{batch.batch_number} — {batch.quantity} كرت</option>)}
-                </select>
-                <span className="field-hint">تظهر الدفعات المطابقة للباقة والقالب ونقطة البيع ونمط بيانات الدخول فقط.</span>
+                <input list="compatible-card-batches" value={batchDraft.existingBatchNumber} onChange={(e) => setBatchDraft({ ...batchDraft, existingBatchNumber: e.target.value })} required placeholder="أدخل رقم الدفعة مثل BAT..." />
+                <datalist id="compatible-card-batches">
+                  {compatibleBatches.map((batch) => <option key={batch.batch_id} value={batch.batch_number}>{batch.quantity} كرت</option>)}
+                </datalist>
+                <span className="field-hint">يمكنك اختيار دفعة ظاهرة أو إدخال رقم دفعة أقدم يدوياً؛ يتحقق النظام من تطابق إعداداتها قبل الإضافة.</span>
               </label>}
               <label className="checkbox-label"><input type="checkbox" checked={batchDraft.isOnlineSale} onChange={(e) => setBatchDraft({ ...batchDraft, isOnlineSale: e.target.checked })} /> دفعة مخصصة للبيع أونلاين</label>
               <label>ملاحظة الدفعة<textarea value={batchDraft.note} onChange={(e) => setBatchDraft({ ...batchDraft, note: e.target.value })} maxLength={500} rows={2} placeholder="ملاحظة اختيارية للدفعة" /></label>
             </div>
-            {batchDraft.batchMode === "existing" && compatibleBatches.length === 0 && <div className="notice">لا توجد دفعة سابقة متوافقة مع الإعدادات الحالية. اختر دفعة جديدة أو عدّل إعدادات التوليد ونقطة البيع.</div>}
-            <div className="card-create-submit-row"><span>سيتم إنشاء {Number(batchDraft.quantity) || 0} كرت · {selectedTemplate?.name ?? "لا يوجد قالب"} · {selectedPlan?.name ?? "لا توجد باقة"}</span><button type="submit" disabled={!canCreate || (batchDraft.batchMode === "existing" && !selectedExistingBatch) || Number(batchDraft.quantity) < 1 || Number(batchDraft.quantity) > 5000 || Number(batchDraft.usernameLength) < 3 || Number(batchDraft.usernameLength) > 32 || (batchDraft.cardType === "separate_credentials" && (Number(batchDraft.passwordLength) < 4 || Number(batchDraft.passwordLength) > 32))}>{busy ? "جارٍ حفظ الكروت..." : batchDraft.batchMode === "existing" ? "إضافة الكروت إلى الدفعة" : "إنشاء الدفعة"}</button></div>
+            {batchDraft.batchMode === "existing" && compatibleBatches.length === 0 && <div className="notice">لا توجد دفعة متوافقة ضمن آخر الدفعات المحمّلة. يمكنك إدخال رقم دفعة أقدم وسيتم التحقق من توافقها قبل الحفظ.</div>}
+            <div className="card-create-submit-row"><span>سيتم إنشاء {Number(batchDraft.quantity) || 0} كرت · {selectedTemplate?.name ?? "لا يوجد قالب"} · {selectedPlan?.name ?? "لا توجد باقة"}</span><button type="submit" disabled={!canCreate || (batchDraft.batchMode === "existing" && !batchDraft.existingBatchNumber.trim()) || Number(batchDraft.quantity) < 1 || Number(batchDraft.quantity) > 5000 || Number(batchDraft.usernameLength) < 3 || Number(batchDraft.usernameLength) > 32 || (batchDraft.cardType === "separate_credentials" && (Number(batchDraft.passwordLength) < 4 || Number(batchDraft.passwordLength) > 32))}>{busy ? "جارٍ حفظ الكروت..." : batchDraft.batchMode === "existing" ? "إضافة الكروت إلى الدفعة" : "إنشاء الدفعة"}</button></div>
           </form>
         )}
 
