@@ -2236,7 +2236,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           const snapshot = card.plan_snapshot ?? {};
           const timeLimit = typeof snapshot.session_time_limit_seconds === "number" ? snapshot.session_time_limit_seconds : null;
           const remaining = timeLimit === null ? null : Math.max(0, timeLimit - card.used_seconds);
-          const speed = typeof snapshot.speed_profile === "string" && snapshot.speed_profile ? snapshot.speed_profile : "غير محددة";
+          const planSettings = snapshot.settings && typeof snapshot.settings === "object" ? snapshot.settings as Record<string, unknown> : {};
+          const rx = planSettings.rate_limit_rx;
+          const tx = planSettings.rate_limit_tx;
+          const rateUnit = typeof planSettings.rate_limit_unit === "string" ? planSettings.rate_limit_unit : "Kbps";
+          const rateSpeed = rx !== undefined && rx !== null && tx !== undefined && tx !== null ? `${String(rx)}${rateUnit}/${String(tx)}${rateUnit}` : "";
+          const speed = typeof snapshot.speed_profile === "string" && snapshot.speed_profile ? snapshot.speed_profile : rateSpeed || "غير محددة";
           const formatDateTime = (value: string | null) => value
             ? new Date(value).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" })
             : "—";
