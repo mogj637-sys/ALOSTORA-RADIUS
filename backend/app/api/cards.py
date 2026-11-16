@@ -148,7 +148,21 @@ def list_cards(
         query = query.filter(Card.batch_id == batch_id)
     if is_free is not None:
         query = query.filter(Card.is_free.is_(is_free))
-    return query.order_by(Card.created_at.desc()).offset(offset).limit(limit).all()
+    cards = query.order_by(Card.created_at.desc()).offset(offset).limit(limit).all()
+    if not cards:
+        return cards
+    session_counts = dict(
+        db.query(RadiusSession.card_id, func.count(RadiusSession.id))
+        .filter(
+            RadiusSession.card_id.in_([card.id for card in cards]),
+            RadiusSession.stopped_at.is_(None),
+        )
+        .group_by(RadiusSession.card_id)
+        .all()
+    )
+    for card in cards:
+        card.active_sessions_count = int(session_counts.get(card.id, 0))
+    return cards
 
 
 @router.patch("/{card_id}/status", response_model=CardListItem)
