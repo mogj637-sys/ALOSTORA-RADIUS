@@ -253,11 +253,22 @@ type PosStatement = {
   entries: PosStatementEntry[];
 };
 
+type PrintOptions = {
+  show_username: boolean;
+  show_password: boolean;
+  show_serial_number: boolean;
+  show_plan: boolean;
+  show_price: boolean;
+  show_limits: boolean;
+  sequential: boolean;
+};
+
 type PrintJobHistory = {
   id: string;
   template_code: string | null;
   card_count: number;
   is_reprint: boolean;
+  print_options: PrintOptions;
   created_at: string;
   cards: { card_id: string; serial_number: string; username: string; is_free: boolean }[];
 };
@@ -270,7 +281,8 @@ type PrintJobResult = {
   free_card_count: number;
   total_amount: number;
   is_reprint: boolean;
-  items: { card_id: string; serial_number: string; username: string; password: string; is_free: boolean; price_snapshot: number }[];
+  print_options: PrintOptions;
+  items: { card_id: string; serial_number: string; username: string; password: string; is_free: boolean; price_snapshot: number; plan_snapshot: Record<string, unknown> }[];
 };
 
 async function apiRequest<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
@@ -388,6 +400,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [selectedPrintCardIds, setSelectedPrintCardIds] = useState<string[]>([]);
   const [printPreviewCards, setPrintPreviewCards] = useState<PrintJobResult["items"]>([]);
   const [printTemplate, setPrintTemplate] = useState("classic-green");
+  const [printOptions, setPrintOptions] = useState<PrintOptions>({ show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true, show_limits: true, sequential: false });
   const [cardMode, setCardMode] = useState<"batch" | "single">("batch");
   const [singleDraft, setSingleDraft] = useState({ planId: "", username: "", cardType: "username_only", password: "", isFree: false });
   const [notice, setNotice] = useState("");
@@ -785,9 +798,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           card_ids: job.cards.map((card) => card.card_id),
           template_code: job.template_code ?? "classic-green",
           is_reprint: true,
+          print_options: job.print_options,
         }),
       });
       setPrintTemplate(job.template_code ?? "classic-green");
+      setPrintOptions(job.print_options);
       setPrintPreviewCards(result.items);
       await loadPrintHistory(selectedPosId);
       setNotice(`تم تسجيل إعادة طباعة ${result.card_count} كرت دون إضافة قيمة تجارية جديدة.`);
@@ -811,10 +826,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           card_ids: selectedPrintCardIds,
           template_code: printTemplate,
           is_reprint: false,
+          print_options: printOptions,
         }),
       });
       setSelectedPrintCardIds([]);
       setPrintTemplate(result.template_code || printTemplate);
+      setPrintOptions(result.print_options);
       setPrintPreviewCards(result.items);
       await Promise.all([loadCards(), loadPosInventory(selectedPosId), loadPrintHistory(selectedPosId), loadPosAccount(selectedPosId)]);
       setNotice(`تم تسجيل طباعة ${result.card_count} كرت: ${result.commercial_card_count} تجاري و${result.free_card_count} مجاني. القيمة التجارية: ${Number(result.total_amount).toFixed(2)}.`);
@@ -1316,6 +1333,18 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   {cardTemplates.map((item) => <option key={item.id} value={item.code}>{item.name}</option>)}
                 </select>
               </label>
+              <div className="plan-form-section">
+                <h3>خيارات الطباعة</h3>
+                <div className="day-selector">
+                  <label><input type="checkbox" checked={printOptions.show_username} onChange={(e) => setPrintOptions({ ...printOptions, show_username: e.target.checked })} /> إظهار اسم المستخدم</label>
+                  <label><input type="checkbox" checked={printOptions.show_password} onChange={(e) => setPrintOptions({ ...printOptions, show_password: e.target.checked })} /> إظهار كلمة المرور</label>
+                  <label><input type="checkbox" checked={printOptions.show_serial_number} onChange={(e) => setPrintOptions({ ...printOptions, show_serial_number: e.target.checked })} /> إظهار الرقم التسلسلي</label>
+                  <label><input type="checkbox" checked={printOptions.show_plan} onChange={(e) => setPrintOptions({ ...printOptions, show_plan: e.target.checked })} /> إظهار اسم الباقة</label>
+                  <label><input type="checkbox" checked={printOptions.show_price} onChange={(e) => setPrintOptions({ ...printOptions, show_price: e.target.checked })} /> إظهار السعر</label>
+                  <label><input type="checkbox" checked={printOptions.show_limits} onChange={(e) => setPrintOptions({ ...printOptions, show_limits: e.target.checked })} /> إظهار الرصيد والوقت والصلاحية</label>
+                  <label><input type="checkbox" checked={printOptions.sequential} onChange={(e) => setPrintOptions({ ...printOptions, sequential: e.target.checked })} /> ترتيب متسلسل</label>
+                </div>
+              </div>
               <div className="pos-print-summary">تم اختيار {selectedPrintCardIds.length} كرت. الكروت المجانية تظهر في القسائم ولا تدخل في قيمة نقطة البيع.</div>
               <button type="button" disabled={busy || selectedPrintCardIds.length === 0 || !selectedPoint?.is_active} onClick={printSelectedCards}>{busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة وتخصيص الكروت"}</button>
             </div>
@@ -1328,13 +1357,15 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                     <button type="button" className="secondary-button" onClick={() => setPrintPreviewCards([])}>إغلاق المعاينة</button>
                   </div>
                 </div>
-                <div className="voucher-grid">
+                <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"}>
                   {printPreviewCards.map((card) => (
                     <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, minHeight: `${selectedTemplate.height_mm}mm` } : undefined}>
                       <div className="voucher-head"><strong>الأسطورة نت</strong><span>{card.is_free ? "كرت مجاني" : "بطاقة إنترنت"}</span></div>
-                      <div className="voucher-user"><span>اسم المستخدم</span><strong>{card.username}</strong></div>
-                      <div className="voucher-password"><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>
-                      <div className="voucher-foot"><span>{card.serial_number}</span><strong>{card.is_free ? "مجاني" : `${Number(card.price_snapshot).toLocaleString("en-US")} ريال`}</strong></div>
+                      {printOptions.show_plan && <div className="voucher-plan"><span>الباقة</span><strong>{String(card.plan_snapshot.name ?? "—")}</strong></div>}
+                      {printOptions.show_username && <div className="voucher-user"><span>اسم المستخدم</span><strong>{card.username}</strong></div>}
+                      {printOptions.show_password && <div className="voucher-password"><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>}
+                      {printOptions.show_limits && <div className="voucher-limits"><span>{card.plan_snapshot.data_limit_bytes == null ? "رصيد مفتوح" : (Number(card.plan_snapshot.data_limit_bytes) / (1024 ** 2)).toFixed(0) + " MB"} · {card.plan_snapshot.session_time_limit_seconds == null ? "وقت مفتوح" : (Number(card.plan_snapshot.session_time_limit_seconds) / 3600).toFixed(0) + " ساعة"} · {card.plan_snapshot.validity_period_seconds == null ? "صلاحية مفتوحة" : (Number(card.plan_snapshot.validity_period_seconds) / 86400).toFixed(0) + " يوم"}</span></div>}
+                      <div className="voucher-foot"><span>{printOptions.show_serial_number ? card.serial_number : ""}</span><strong>{printOptions.show_price ? (card.is_free ? "مجاني" : Number(card.price_snapshot).toLocaleString("en-US") + " ريال") : ""}</strong></div>
                     </article>
                   ))}
                 </div>
