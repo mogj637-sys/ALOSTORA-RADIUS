@@ -938,6 +938,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createRouter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (editingRouterId !== null ? !can("routers.update") : !can("routers.create")) { setError("ليست لديك صلاحية هذه العملية على الراوترات."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
       if (editingRouterId !== null) {
@@ -1108,6 +1109,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function toggleRouter(item: RouterRecord) {
+    if (!can("routers.update")) { setError("ليست لديك صلاحية تعديل الراوترات."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
       await apiRequest<RouterRecord>(token, `/api/v1/routers/${item.id}`, {
@@ -1260,6 +1262,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createAccountEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!can("finance.create")) { setError("ليست لديك صلاحية تسجيل الحركات المالية."); return; }
     if (!selectedPosId || Number(accountDraft.amount) <= 0) return;
     setBusy(true); setError(""); setNotice("");
     try {
@@ -1304,6 +1307,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createPointOfSale(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (editingPosId !== null ? !can("pos.update") : !can("pos.create")) { setError("ليست لديك صلاحية هذه العملية على نقاط البيع."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
       const pointSettings = user.roles.includes("owner") ? {
@@ -1332,6 +1336,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function togglePointOfSale(point: PointOfSale) {
+    if (!user.roles.includes("owner")) { setError("إيقاف نقاط البيع متاح لمدير النظام فقط."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
       await apiRequest<PointOfSale>(token, `/api/v1/points-of-sale/${point.id}`, {
@@ -1346,6 +1351,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function togglePointOperation(point: PointOfSale, field: "allow_card_creation" | "allow_printing") {
+    if (!user.roles.includes("owner")) { setError("تغيير إعدادات تشغيل نقطة البيع متاح لمدير النظام فقط."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
       await apiRequest<PointOfSale>(token, `/api/v1/points-of-sale/${point.id}`, {
@@ -1402,6 +1408,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function reprintJob(job: PrintJobHistory) {
+    if (!can("printing.reprint") || !can("printing.credentials")) { setError("تتطلب إعادة الطباعة صلاحية إعادة الطباعة وعرض بيانات الدخول."); return; }
     if (!selectedPosId) return;
     setBusy(true); setError(""); setNotice("");
     try {
@@ -1427,6 +1434,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function printSelectedCards() {
+    if (!can("printing.create") || !can("printing.credentials")) { setError("تتطلب الطباعة صلاحية تنفيذ الطباعة وعرض بيانات دخول الكروت."); return; }
     if (!selectedPosId || selectedPrintCardIds.length === 0) {
       setError("اختر نقطة البيع وكرتاً واحداً على الأقل.");
       return;
@@ -1503,6 +1511,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (editingPlanId !== null ? !can("plans.update") : !can("plans.create")) { setError("ليست لديك صلاحية هذه العملية على الباقات."); return; }
     setBusy(true); setError(""); setNotice("");
     const numberOrNull = (value: string, multiplier: number) =>
       value.trim() === "" ? null : Math.round(Number(value) * multiplier);
@@ -1574,6 +1583,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function togglePlan(plan: Plan) {
+    if (!can("plans.update")) { setError("ليست لديك صلاحية تعديل الباقات."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
       await apiRequest<Plan>(token, `/api/v1/plans/${plan.id}`, {
@@ -1590,6 +1600,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function changeCardStatus(card: Card, action: "suspend" | "reactivate" | "cancel") {
+    if (!can("cards.update")) { setError("ليست لديك صلاحية تعديل الكروت."); return; }
     const labels = { suspend: "إيقاف", reactivate: "إعادة تفعيل", cancel: "إلغاء" };
     if (action === "cancel" && !window.confirm("هل تريد إلغاء هذا الكرت نهائياً؟")) return;
     setBusy(true); setError(""); setNotice("");
@@ -1609,6 +1620,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createSingle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!can("cards.create")) { setError("ليست لديك صلاحية إنشاء الكروت."); return; }
     const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
     const linkedPlan = selectedTemplate?.plan_id ? plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
     if (!selectedTemplate || !linkedPlan) { setError("اختر قالباً مرتبطاً بباقة مفعّلة قبل إنشاء الكرت."); return; }
@@ -1640,6 +1652,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createBatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!can("cards.create")) { setError("ليست لديك صلاحية إنشاء دفعات الكروت."); return; }
     const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
     const linkedPlan = selectedTemplate?.plan_id ? plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
     if (!selectedTemplate || !linkedPlan) { setError("اختر قالباً مرتبطاً بباقة مفعّلة قبل إنشاء الدفعة."); return; }
@@ -1937,7 +1950,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function saveCardTemplate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError(""); setNotice("");
+    event.preventDefault();
+    if (editingTemplateId ? !can("templates.update") : !can("templates.create")) { setError("ليست لديك صلاحية هذه العملية على تصاميم الكروت."); return; }
+    setBusy(true); setError(""); setNotice("");
     try {
       const payload = { ...templateDraft, width_mm: Number(templateDraft.width_mm), height_mm: Number(templateDraft.height_mm), plan_id: Number(templateDraft.plan_id), layout: templateLayoutDraft };
       if (editingTemplateId) await apiRequest<CardTemplate>(token, `/api/v1/card-templates/${editingTemplateId}`, { method: "PATCH", body: JSON.stringify({ name: payload.name, width_mm: payload.width_mm, height_mm: payload.height_mm, background_color: payload.background_color, text_color: payload.text_color, plan_id: Number(payload.plan_id), layout: payload.layout }) });
@@ -1947,6 +1962,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function deleteCardTemplate(template: CardTemplate) {
+    if (!can("templates.delete")) { setError("ليست لديك صلاحية حذف القوالب."); return; }
     if (template.is_default || !window.confirm(`حذف القالب ${template.name}؟`)) return;
     setBusy(true); setError("");
     try { await apiRequest<void>(token, `/api/v1/card-templates/${template.id}`, { method: "DELETE" }); await loadCardTemplates(); setNotice("تم حذف القالب."); }
