@@ -2025,3 +2025,118 @@ button:disabled { cursor: not-allowed; }
   .overview-stat-grid article { min-height: 105px; }
   .overview-status-panel { padding: 15px; }
 }
+
+
+/* MikroTik router management: organize diagnostics and connection records */
+.um-probe-panel {
+  display: grid;
+  gap: 15px;
+  margin: 16px 0;
+  padding: 19px;
+  border-color: #dfeae3;
+  background: linear-gradient(155deg, #ffffff 0%, #fbfdfb 100%);
+}
+.um-probe-panel > .section-heading {
+  align-items: center;
+  margin: 0;
+  padding-bottom: 13px;
+  border-bottom: 1px solid #edf2ee;
+}
+.um-probe-panel > .section-heading h2 {
+  margin: 0 0 5px;
+  color: #214d3b;
+  font-size: 15px;
+}
+.um-probe-panel > .section-heading p { line-height: 1.7; }
+.um-probe-panel > label {
+  display: grid;
+  gap: 7px;
+  max-width: 620px;
+  color: #42594c;
+  font-size: 12px;
+  font-weight: 700;
+}
+.um-probe-panel .um-preview-counts {
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 10px;
+  margin: 2px 0 4px;
+}
+.um-probe-panel .um-preview-count {
+  min-height: 82px;
+  justify-content: center;
+  border-color: #e3ece6;
+  background: #f8fbf9;
+}
+.um-probe-panel .um-preview-count strong {
+  color: #176b51;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.um-probe-panel .um-preview-count span { line-height: 1.55; }
+.um-probe-panel > .notice {
+  margin: 0;
+  padding: 13px 15px;
+  border-color: #e5eee8;
+  background: #fbfdfb;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+.um-probe-panel > .notice > strong {
+  display: inline-block;
+  margin-bottom: 5px;
+  color: #245d46;
+}
+.um-probe-panel .form-actions { align-items: center; flex-wrap: wrap; }
+.um-probe-panel .form-actions .field-hint { flex: 1 1 220px; }
+.workspace > .notice { line-height: 1.9; }
+.workspace > .section-heading.compact-heading {
+  align-items: center;
+  margin-top: 27px;
+  margin-bottom: 13px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e8eee9;
+}
+.workspace > .section-heading.compact-heading h2 { margin-bottom: 4px; }
+.workspace > .section-heading.compact-heading .count-tag {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.workspace > .table-wrap {
+  border: 1px solid #e3ebe5;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(24, 65, 43, .035);
+}
+.workspace > .table-wrap table { min-width: 1120px; }
+.workspace > .table-wrap th {
+  white-space: nowrap;
+  color: #496354;
+  background: #f3f8f4;
+  font-size: 11px;
+}
+.workspace > .table-wrap td { vertical-align: middle; line-height: 1.7; }
+.workspace > .table-wrap tbody tr:hover { background: #f8fcf9; }
+.workspace > .table-wrap .actions-cell {
+  min-width: 230px;
+  white-space: nowrap;
+}
+.workspace > .table-wrap .actions-cell .table-action {
+  margin: 2px;
+  white-space: nowrap;
+}
+@media (max-width: 680px) {
+  .um-probe-panel { padding: 14px; }
+  .um-probe-panel > .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .um-probe-panel > .section-heading .table-action { width: 100%; }
+  .um-probe-panel .um-preview-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace > .section-heading.compact-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .workspace > .table-wrap .actions-cell { min-width: 210px; }
+}
