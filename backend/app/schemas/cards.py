@@ -80,6 +80,10 @@ class CardBatchListItem(BaseModel):
     point_of_sale_name: str | None
     quantity: int
     card_type: str
+    generation_mode: str
+    username_length: int
+    password_length: int
+    prefix: str
     created_at: datetime
     printed_count: int
     is_online_sale: bool = False
