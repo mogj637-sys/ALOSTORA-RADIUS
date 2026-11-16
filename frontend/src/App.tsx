@@ -165,6 +165,21 @@ type RouterRecord = {
   last_seen_at: string | null;
 };
 
+type RouterConnectionProbe = {
+  router_id: number;
+  router_name: string;
+  identity: string | null;
+  version: string | null;
+  board_name: string | null;
+  architecture_name: string | null;
+  uptime: string | null;
+  cpu_load: string | null;
+  connected: boolean;
+  secure: boolean;
+  warnings: string[];
+  read_only: boolean;
+};
+
 type UserManagerProbe = {
   connected: boolean;
   router_id: number;
@@ -562,6 +577,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   const [routers, setRouters] = useState<RouterRecord[]>([]);
   const [userManagerProbe, setUserManagerProbe] = useState<UserManagerProbe | null>(null);
+  const [routerConnectionProbe, setRouterConnectionProbe] = useState<RouterConnectionProbe | null>(null);
+  const [testingRouterConnectionId, setTestingRouterConnectionId] = useState<number | null>(null);
   const [probingRouterId, setProbingRouterId] = useState<number | null>(null);
   const [inspectRouterId, setInspectRouterId] = useState("");
   const [inspectUsername, setInspectUsername] = useState("");
@@ -1023,6 +1040,26 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تسجيل الراوتر");
     } finally { setBusy(false); }
+  }
+
+  async function testRouterConnection(item: RouterRecord) {
+    setTestingRouterConnectionId(item.id);
+    setRouterConnectionProbe(null);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiRequest<RouterConnectionProbe>(
+        token,
+        `/api/v1/routers/${item.id}/test-connection`,
+        { method: "POST" },
+      );
+      setRouterConnectionProbe(result);
+      setNotice(`نجح اتصال RouterOS API مع ${item.name}؛ الفحص قراءة فقط.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر فحص اتصال RouterOS API");
+    } finally {
+      setTestingRouterConnectionId(null);
+    }
   }
 
   async function testRouterUserManager(item: RouterRecord) {
@@ -3010,14 +3047,32 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <td>{router.routeros_version || "غير محدد"}</td><td>{router.last_seen_at ? new Date(router.last_seen_at).toLocaleString("ar") : "لم يتصل بعد"}</td>
               <td>{router.is_active ? "مفعل" : "متوقف"}</td>
               <td className="actions-cell">
-                {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => beginEditRouter(router)}>تعديل</button>}}
-                {user.roles.includes("owner") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || !router.api_username} onClick={() => testRouterUserManager(router)}>{probingRouterId === router.id ? "جارٍ الفحص..." : "فحص User Manager"}</button>}
+                {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null} onClick={() => beginEditRouter(router)}>تعديل</button>}
+                <button type="button" className="table-action" disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null || !router.api_username || !router.is_active} onClick={() => testRouterConnection(router)}>{testingRouterConnectionId === router.id ? "جارٍ فحص API..." : "فحص اتصال API"}</button>
+                {user.roles.includes("owner") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null || !router.api_username} onClick={() => testRouterUserManager(router)}>{probingRouterId === router.id ? "جارٍ الفحص..." : "فحص User Manager"}</button>}
                 {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => toggleRouter(router)}>{router.is_active ? "تعطيل" : "تفعيل"}</button>}
               </td>
             </tr>)}</tbody>
           </table>
           {routers.length === 0 && <div className="empty-state">لا توجد راوترات مسجلة. أضف أول راوتر من النموذج أعلاه.</div>}
         </div>
+        {routerConnectionProbe && (
+          <section className="panel um-probe-panel">
+            <div className="section-heading">
+              <div><h2>نتيجة اتصال RouterOS API</h2><p>{routerConnectionProbe.router_name} · {routerConnectionProbe.identity || "هوية غير متاحة"} · {routerConnectionProbe.version || "إصدار غير معروف"}</p></div>
+              <span className="count-tag">{routerConnectionProbe.connected ? "متصل" : "غير متصل"}</span>
+            </div>
+            <div className="pos-metrics">
+              <div><span>اللوحة</span><strong>{routerConnectionProbe.board_name || "غير متاح"}</strong></div>
+              <div><span>المعمارية</span><strong>{routerConnectionProbe.architecture_name || "غير متاح"}</strong></div>
+              <div><span>مدة التشغيل</span><strong>{routerConnectionProbe.uptime || "غير متاح"}</strong></div>
+              <div><span>استخدام المعالج</span><strong>{routerConnectionProbe.cpu_load ? routerConnectionProbe.cpu_load + "%" : "غير متاح"}</strong></div>
+              <div><span>التشفير</span><strong>{routerConnectionProbe.secure ? "TLS مفعل" : "اتصال غير مشفر"}</strong></div>
+            </div>
+            {routerConnectionProbe.warnings.length > 0 && <div className="notice">{routerConnectionProbe.warnings.map((warning) => <div key={warning}>• {warning}</div>)}</div>}
+            <small className="field-hint">الفحص يقرأ هوية النظام ومعلومات الموارد فقط؛ لا يغيّر إعدادات الراوتر ولا يفحص User Manager.</small>
+          </section>
+        )}
         {user.roles.includes("owner") && userManagerProbe && (
           <section className="panel um-probe-panel">
             <div className="section-heading">
