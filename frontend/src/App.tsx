@@ -423,7 +423,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     code: "", name: "", price: "", commissionType: "none" as "none" | "fixed" | "percentage", commissionValue: "", dataAmount: "", dataUnit: "GB" as "MB" | "GB", timeHours: "", validityDays: "", speedProfile: "", sharedUsers: "", groupName: "", rateRx: "", rateTx: "", rateUnit: "Kbps" as "Kbps" | "Mbps", scheduleEnabled: false, scheduleDays: ["0","1","2","3","4","5","6"], scheduleFrom: "00:00", scheduleTo: "23:59", notificationsEnabled: false, notifyRemaining: "70", notifyExhausted: "95",
   });
   const [batchDraft, setBatchDraft] = useState({
-    planId: "", quantity: "100", cardType: "separate_credentials",
+    planId: "", quantity: "100", cardType: "username_only",
     generationMode: "digits", usernameLength: "8", passwordLength: "10", prefix: "",
   });
 
