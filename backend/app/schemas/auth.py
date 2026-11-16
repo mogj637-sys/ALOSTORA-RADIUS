@@ -18,3 +18,4 @@ class CurrentUserResponse(BaseModel):
     display_name: str
     roles: list[str]
     permissions: list[str]
+    point_of_sale_ids: list[int] = []
