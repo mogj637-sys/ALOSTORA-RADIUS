@@ -178,10 +178,6 @@ def create_print_job(
     # Voucher credentials are returned only to accounts explicitly granted credential access.
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
     response.headers["Pragma"] = "no-cache"
-    existing = _existing_job(db, payload, include_credentials=True)
-    if existing is not None:
-        return existing
-
     if not any(role.code == "owner" for role in user.roles) and payload.point_of_sale_id not in {point.id for point in user.point_of_sales}:
         raise HTTPException(status_code=403, detail="لا تملك صلاحية الطباعة لنقطة البيع هذه")
     point_of_sale = (
@@ -192,6 +188,9 @@ def create_print_job(
     )
     if point_of_sale is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
+    existing = _existing_job(db, payload, include_credentials=True)
+    if existing is not None:
+        return existing
     ensure_pos_printing_allowed(point_of_sale)
 
     cards = (
