@@ -12,17 +12,21 @@ const DEFAULT_TEMPLATE_LAYOUT = {
   plan_x: "50", plan_y: "25", limits_x: "50", limits_y: "82",
 };
 
+type PermissionOverride = { permission_code: string; allowed: boolean };
+type CardVisibility = "all" | "assigned" | "search_any";
 type CurrentUser = {
   id: number;
   username: string;
   display_name: string;
   roles: string[];
   permissions: string[];
+  permission_overrides: PermissionOverride[];
   point_of_sale_ids: number[];
+  card_visibility: CardVisibility;
 };
 type AdminRole = { code: string; name: string; description: string | null };
 type AdminPermission = { code: string; name: string; module: string; description: string | null };
-type AdminAccount = { id: number; username: string; display_name: string; is_active: boolean; roles: string[]; point_of_sale_ids: number[]; last_login_at: string | null; created_at: string };
+type AdminAccount = { id: number; username: string; display_name: string; is_active: boolean; roles: string[]; point_of_sale_ids: number[]; card_visibility: CardVisibility; permission_overrides: PermissionOverride[]; last_login_at: string | null; created_at: string };
 type AuditLogRecord = { id: number; actor_username: string; action: string; entity_type: string; entity_id: string | null; summary: string; details: Record<string, unknown>; ip_address: string | null; created_at: string };
 
 type Plan = {
@@ -464,12 +468,15 @@ function formatDuration(value: number): string {
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
   const can = (permission: string) => {
-    if (user.roles.includes("owner") || user.permissions.includes(permission)) return true;
+    if (user.roles.includes("owner")) return true;
+    const direct = user.permission_overrides.find((item) => item.permission_code === permission);
+    if (direct) return direct.allowed;
+    if (user.permissions.includes(permission)) return true;
     const [module, action] = permission.split(".");
-    return action === "view" && (
-      user.permissions.includes(module + ".manage") ||
-      (module === "sessions" && user.permissions.includes("sessions.disconnect"))
-    );
+    if (action !== "view") return false;
+    if (user.permission_overrides.some((item) => item.permission_code === module + ".view" && !item.allowed)) return false;
+    return user.permissions.includes(module + ".manage") ||
+      (module === "sessions" && user.permissions.includes("sessions.disconnect"));
   };
   const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
   const [systemStatus, setSystemStatus] = useState<{ api: string; database: string; version: string; checkedAt: string } | null>(null);
@@ -483,7 +490,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [adminPermissions, setAdminPermissions] = useState<AdminPermission[]>([]);
   const [selectedPermissionRole, setSelectedPermissionRole] = useState("manager");
   const [rolePermissionCodes, setRolePermissionCodes] = useState<string[]>([]);
-  const [adminDraft, setAdminDraft] = useState({ username: "", displayName: "", password: "", roleCode: "operator", pointOfSaleIds: [] as number[] });
+  const [adminDraft, setAdminDraft] = useState({ username: "", displayName: "", password: "", roleCode: "operator", pointOfSaleIds: [] as number[], cardVisibility: "search_any" as CardVisibility });
+  const [selectedAdminId, setSelectedAdminId] = useState<number | null>(null);
+  const [adminOverrideDraft, setAdminOverrideDraft] = useState<Record<string, "inherit" | "allow" | "deny">>({});
+  const [adminVisibilityDraft, setAdminVisibilityDraft] = useState<CardVisibility>("search_any");
   const [roleDraft, setRoleDraft] = useState({ code: "", name: "", description: "" });
 
   const [routers, setRouters] = useState<RouterRecord[]>([]);
@@ -793,9 +803,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           password: adminDraft.password,
           role_codes: [adminDraft.roleCode],
           point_of_sale_ids: adminDraft.pointOfSaleIds,
+          card_visibility: adminDraft.cardVisibility,
         }),
       });
-      setAdminDraft((draft) => ({ ...draft, username: "", displayName: "", password: "", pointOfSaleIds: [] }));
+      setAdminDraft((draft) => ({ ...draft, username: "", displayName: "", password: "", pointOfSaleIds: [], cardVisibility: "search_any" }));
       await loadAdminAccounts();
       setNotice("تم إنشاء حساب الإدارة بنجاح.");
     } catch (err) {
@@ -803,7 +814,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } finally { setBusy(false); }
   }
 
-  async function updateAdminAccount(account: AdminAccount, changes: { role_codes?: string[]; is_active?: boolean; point_of_sale_ids?: number[] }) {
+  async function updateAdminAccount(account: AdminAccount, changes: { role_codes?: string[]; is_active?: boolean; point_of_sale_ids?: number[]; card_visibility?: CardVisibility; permission_overrides?: PermissionOverride[] }) {
     setBusy(true); setError(""); setNotice("");
     try {
       await apiRequest<AdminAccount>(token, `/api/v1/admins/${account.id}`, {
@@ -815,6 +826,26 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تحديث حساب الإدارة");
     } finally { setBusy(false); }
+  }
+
+  function selectAdminForIndividualSettings(account: AdminAccount) {
+    setSelectedAdminId(account.id);
+    setAdminVisibilityDraft(account.card_visibility);
+    setAdminOverrideDraft(Object.fromEntries(
+      account.permission_overrides.map((item) => [item.permission_code, item.allowed ? "allow" : "deny"]),
+    ));
+  }
+
+  async function saveAdminIndividualSettings() {
+    const account = adminAccounts.find((item) => item.id === selectedAdminId);
+    if (!account) return;
+    const permission_overrides = Object.entries(adminOverrideDraft)
+      .filter(([, value]) => value !== "inherit")
+      .map(([permission_code, value]) => ({ permission_code, allowed: value === "allow" }));
+    await updateAdminAccount(account, {
+      permission_overrides,
+      card_visibility: adminVisibilityDraft,
+    });
   }
 
   async function loadCardBatches() {
