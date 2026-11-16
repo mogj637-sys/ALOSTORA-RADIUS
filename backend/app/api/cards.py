@@ -98,10 +98,15 @@ def list_card_batches(
     )
     results = []
     for batch, plan, point in rows:
-        printed = db.query(func.count(Card.id)).filter(
-            Card.batch_id == batch.id,
-            Card.status.in_(["allocated", "printed_free", "active", "expired", "exhausted"]),
-        ).scalar() or 0
+        printed = (
+            db.query(func.count(func.distinct(Card.id)))
+            .join(CardEvent, CardEvent.card_id == Card.id)
+            .filter(
+                Card.batch_id == batch.id,
+                CardEvent.event_type.in_(["printed_to_pos", "printed_free"]),
+            )
+            .scalar() or 0
+        )
         results.append(CardBatchListItem(
             batch_id=batch.id,
             batch_number=batch.batch_number,
