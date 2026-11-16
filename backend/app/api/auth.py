@@ -46,5 +46,9 @@ def current_identity(user: AdminUser = Depends(get_current_user)) -> CurrentUser
         roles=[role.code for role in user.roles],
         point_of_sale_ids=sorted(point.id for point in user.point_of_sales),
         card_visibility=user.card_visibility,
+        permission_overrides=[
+            {"permission_code": item.permission.code, "allowed": item.allowed}
+            for item in user.permission_overrides
+        ],
         permissions=sorted(effective_permission_codes(user)),
     )
