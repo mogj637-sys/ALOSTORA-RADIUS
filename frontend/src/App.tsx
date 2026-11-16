@@ -2,6 +2,14 @@ import { FormEvent, useEffect, useState } from "react";
 
 const API_BASE = "http://localhost:8000";
 
+const DEFAULT_TEMPLATE_LAYOUT = {
+  show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true,
+  show_limits: true, show_border: true, font_family: "Arial", font_size: "12", border_width: "1",
+  border_color: "#667085", columns: "2", rows: "5",
+  username_x: "50", username_y: "48", password_x: "50", password_y: "65",
+  serial_x: "8", serial_y: "90", price_x: "92", price_y: "90",
+};
+
 type CurrentUser = {
   id: number;
   username: string;
@@ -378,6 +386,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [templateDraft, setTemplateDraft] = useState({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37", plan_id: "" });
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
+  const [templateLayoutDraft, setTemplateLayoutDraft] = useState<Record<string, string | boolean>>({ ...DEFAULT_TEMPLATE_LAYOUT });
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
   const [generatedBatchNumber, setGeneratedBatchNumber] = useState("");
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
@@ -1106,10 +1115,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   async function saveCardTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(""); setNotice("");
     try {
-      const payload = { ...templateDraft, width_mm: Number(templateDraft.width_mm), height_mm: Number(templateDraft.height_mm) };
-      if (editingTemplateId) await apiRequest<CardTemplate>(token, `/api/v1/card-templates/${editingTemplateId}`, { method: "PATCH", body: JSON.stringify({ name: payload.name, width_mm: payload.width_mm, height_mm: payload.height_mm, background_color: payload.background_color, text_color: payload.text_color, plan_id: Number(payload.plan_id) }) });
+      const payload = { ...templateDraft, width_mm: Number(templateDraft.width_mm), height_mm: Number(templateDraft.height_mm), plan_id: Number(templateDraft.plan_id), layout: templateLayoutDraft };
+      if (editingTemplateId) await apiRequest<CardTemplate>(token, `/api/v1/card-templates/${editingTemplateId}`, { method: "PATCH", body: JSON.stringify({ name: payload.name, width_mm: payload.width_mm, height_mm: payload.height_mm, background_color: payload.background_color, text_color: payload.text_color, plan_id: Number(payload.plan_id), layout: payload.layout }) });
       else await apiRequest<CardTemplate>(token, "/api/v1/card-templates", { method: "POST", body: JSON.stringify(payload) });
-      await loadCardTemplates(); setEditingTemplateId(null); setTemplateDraft({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37", plan_id: "" }); setNotice("تم حفظ القالب.");
+      await loadCardTemplates(); setEditingTemplateId(null); setTemplateDraft({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37", plan_id: "" }); setTemplateLayoutDraft({ ...DEFAULT_TEMPLATE_LAYOUT }); setNotice("تم حفظ القالب.");
     } catch (err) { setError(err instanceof Error ? err.message : "تعذر حفظ القالب"); } finally { setBusy(false); }
   }
 
@@ -1131,9 +1140,43 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <label>الارتفاع (مم)<input type="number" min="1" max="300" value={templateDraft.height_mm} onChange={(e) => setTemplateDraft({ ...templateDraft, height_mm: e.target.value })} required /></label>
         <label>لون الخلفية<input type="color" value={templateDraft.background_color} onChange={(e) => setTemplateDraft({ ...templateDraft, background_color: e.target.value })} /></label>
         <label>لون النص<input type="color" value={templateDraft.text_color} onChange={(e) => setTemplateDraft({ ...templateDraft, text_color: e.target.value })} /></label>
-        <div className="form-actions"><button type="submit" disabled={busy}>{editingTemplateId ? "حفظ التعديلات" : "إنشاء قالب"}</button><button type="button" className="secondary-button" onClick={() => { setEditingTemplateId(null); setTemplateDraft({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37", plan_id: "" }); }}>جديد / إلغاء</button></div>
+        <div className="plan-form-section">
+          <h3>عناصر الكرت</h3>
+          <div className="day-selector">
+            <label><input type="checkbox" checked={!!templateLayoutDraft.show_username} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_username: e.target.checked })} /> اسم المستخدم</label>
+            <label><input type="checkbox" checked={!!templateLayoutDraft.show_password} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_password: e.target.checked })} /> كلمة المرور</label>
+            <label><input type="checkbox" checked={!!templateLayoutDraft.show_serial_number} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_serial_number: e.target.checked })} /> الرقم التسلسلي</label>
+            <label><input type="checkbox" checked={!!templateLayoutDraft.show_plan} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_plan: e.target.checked })} /> اسم الباقة</label>
+            <label><input type="checkbox" checked={!!templateLayoutDraft.show_price} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_price: e.target.checked })} /> السعر</label>
+            <label><input type="checkbox" checked={!!templateLayoutDraft.show_limits} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_limits: e.target.checked })} /> الرصيد والوقت والصلاحية</label>
+            <label><input type="checkbox" checked={!!templateLayoutDraft.show_border} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_border: e.target.checked })} /> إطار الكرت</label>
+          </div>
+        </div>
+        <div className="plan-form-section">
+          <h3>الخط والإطار وتخطيط الصفحة</h3>
+          <label>نوع الخط<select value={String(templateLayoutDraft.font_family)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, font_family: e.target.value })}><option>Arial</option><option>Tahoma</option><option>Consolas</option><option>sans-serif</option></select></label>
+          <label>حجم الخط<input type="number" min="6" max="32" value={String(templateLayoutDraft.font_size)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, font_size: e.target.value })} /></label>
+          <label>لون الإطار<input type="color" value={String(templateLayoutDraft.border_color)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, border_color: e.target.value })} /></label>
+          <label>سماكة الإطار<input type="number" min="0" max="5" step="0.5" value={String(templateLayoutDraft.border_width)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, border_width: e.target.value })} /></label>
+          <label>عدد الأعمدة<input type="number" min="1" max="5" value={String(templateLayoutDraft.columns)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, columns: e.target.value })} /></label>
+          <label>عدد الصفوف<input type="number" min="1" max="12" value={String(templateLayoutDraft.rows)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, rows: e.target.value })} /></label>
+        </div>
+        <div className="plan-form-section">
+          <h3>مواضع العناصر (X و Y بالنسبة المئوية)</h3>
+          <div className="form-grid">
+            <label>اسم المستخدم X<input type="number" min="0" max="100" value={String(templateLayoutDraft.username_x)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, username_x: e.target.value })} /></label>
+            <label>اسم المستخدم Y<input type="number" min="0" max="100" value={String(templateLayoutDraft.username_y)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, username_y: e.target.value })} /></label>
+            <label>كلمة المرور X<input type="number" min="0" max="100" value={String(templateLayoutDraft.password_x)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, password_x: e.target.value })} /></label>
+            <label>كلمة المرور Y<input type="number" min="0" max="100" value={String(templateLayoutDraft.password_y)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, password_y: e.target.value })} /></label>
+            <label>الرقم التسلسلي X<input type="number" min="0" max="100" value={String(templateLayoutDraft.serial_x)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, serial_x: e.target.value })} /></label>
+            <label>الرقم التسلسلي Y<input type="number" min="0" max="100" value={String(templateLayoutDraft.serial_y)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, serial_y: e.target.value })} /></label>
+            <label>السعر X<input type="number" min="0" max="100" value={String(templateLayoutDraft.price_x)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, price_x: e.target.value })} /></label>
+            <label>السعر Y<input type="number" min="0" max="100" value={String(templateLayoutDraft.price_y)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, price_y: e.target.value })} /></label>
+          </div>
+        </div>
+        <div className="form-actions"><button type="submit" disabled={busy}>{editingTemplateId ? "حفظ التعديلات" : "إنشاء قالب"}</button><button type="button" className="secondary-button" onClick={() => { setEditingTemplateId(null); setTemplateDraft({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37", plan_id: "" }); setTemplateLayoutDraft({ ...DEFAULT_TEMPLATE_LAYOUT }); }}>جديد / إلغاء</button></div>
       </form>
-      <div className="template-gallery">{cardTemplates.map((item) => <article className="panel template-item" key={item.id}><div className="template-sample" style={{ background: item.background_color, color: item.text_color, aspectRatio: `${item.width_mm}/${item.height_mm}` }}><strong>اسم المستخدم</strong><span>الأسطورة نت</span></div><h3>{item.name} {item.is_default ? "— افتراضي" : ""}</h3><small>{item.width_mm} × {item.height_mm} مم · {item.code} · الباقة: {plans.find((plan) => plan.id === item.plan_id)?.name ?? "غير مرتبطة"}</small><div className="form-actions"><button type="button" className="table-action" onClick={() => { setEditingTemplateId(item.id); setTemplateDraft({ code: item.code, name: item.name, width_mm: String(item.width_mm), height_mm: String(item.height_mm), background_color: item.background_color, text_color: item.text_color, plan_id: item.plan_id ? String(item.plan_id) : "" }); }}>تعديل</button><button type="button" className="table-action" disabled={busy || item.is_default} onClick={() => apiRequest<CardTemplate>(token, `/api/v1/card-templates/${item.id}`, { method: "PATCH", body: JSON.stringify({ is_default: true }) }).then(() => loadCardTemplates()).then(() => setNotice("تم تعيين القالب الافتراضي.")).catch((err) => setError(err instanceof Error ? err.message : "تعذر تعيين القالب الافتراضي"))}>جعله افتراضياً</button><button type="button" className="table-action danger-action" disabled={busy || item.is_default} onClick={() => deleteCardTemplate(item)}>حذف</button></div></article>)}</div>
+      <div className="template-gallery">{cardTemplates.map((item) => <article className="panel template-item" key={item.id}><div className="template-sample" style={{ background: item.background_color, color: item.text_color, aspectRatio: `${item.width_mm}/${item.height_mm}` }}><strong>اسم المستخدم</strong><span>الأسطورة نت</span></div><h3>{item.name} {item.is_default ? "— افتراضي" : ""}</h3><small>{item.width_mm} × {item.height_mm} مم · {item.code} · الباقة: {plans.find((plan) => plan.id === item.plan_id)?.name ?? "غير مرتبطة"}</small><div className="form-actions"><button type="button" className="table-action" onClick={() => { setEditingTemplateId(item.id); setTemplateDraft({ code: item.code, name: item.name, width_mm: String(item.width_mm), height_mm: String(item.height_mm), background_color: item.background_color, text_color: item.text_color, plan_id: item.plan_id ? String(item.plan_id) : "" }); setTemplateLayoutDraft({ ...DEFAULT_TEMPLATE_LAYOUT, ...item.layout } as Record<string, string | boolean>); }}>تعديل</button><button type="button" className="table-action" disabled={busy || item.is_default} onClick={() => apiRequest<CardTemplate>(token, `/api/v1/card-templates/${item.id}`, { method: "PATCH", body: JSON.stringify({ is_default: true }) }).then(() => loadCardTemplates()).then(() => setNotice("تم تعيين القالب الافتراضي.")).catch((err) => setError(err instanceof Error ? err.message : "تعذر تعيين القالب الافتراضي"))}>جعله افتراضياً</button><button type="button" className="table-action danger-action" disabled={busy || item.is_default} onClick={() => deleteCardTemplate(item)}>حذف</button></div></article>)}</div>
       {cardTemplates.length === 0 && <div className="empty-state">لا توجد قوالب محفوظة بعد.</div>}
     </>;
   }
