@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_owner
+from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import (
@@ -31,7 +31,7 @@ from app.schemas.print_jobs import (
 router = APIRouter(
     prefix="/api/v1/print-jobs",
     tags=["print-jobs"],
-    dependencies=[Depends(get_current_owner)],
+    dependencies=[Depends(require_permission("cards.view"))],
 )
 
 
@@ -158,12 +158,12 @@ def list_print_jobs(
     ]
 
 
-@router.post("", response_model=PrintJobResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PrintJobResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("printing.manage"))])
 def create_print_job(
     payload: PrintJobCreate,
     response: Response,
     db: Session = Depends(get_db),
-    user: AdminUser = Depends(get_current_owner),
+    user: AdminUser = Depends(require_permission("cards.view")),
 ):
     # Voucher credentials are returned only to authenticated owners and must not be cached.
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
