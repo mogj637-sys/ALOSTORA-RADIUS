@@ -134,6 +134,11 @@ def list_radius_sessions(
         .filter(RadiusSession.stopped_at.is_(None))
         .scalar() or 0
     )
+    active_users_count = (
+        db.query(func.count(func.distinct(RadiusSession.card_id)))
+        .filter(RadiusSession.stopped_at.is_(None))
+        .scalar() or 0
+    )
     total_count = db.query(func.count(RadiusSession.id)).scalar() or 0
     rows = (
         db.query(RadiusSession, Card, Router)
@@ -146,6 +151,7 @@ def list_radius_sessions(
     )
     return {
         "active_count": int(active_count),
+        "active_users_count": int(active_users_count),
         "total_count": int(total_count),
         "items": [
             {
