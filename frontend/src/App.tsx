@@ -2363,6 +2363,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         : { position: "absolute" as const, left: String(selectedLayout[xKey]) + "%", top: String(selectedLayout[yKey]) + "%", transform: "translate(-50%, -50%)", width: "88%" };
     const printableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
     const selectedPoint = points.find((point) => String(point.id) === selectedPosId);
+    const atDebtLimit = selectedPoint?.debt_limit !== null && selectedPoint?.debt_limit !== undefined &&
+      posAccount !== null && posAccount !== undefined &&
+      Number(posAccount.balance_due) >= Number(selectedPoint.debt_limit);
     const cardsPerPage = Math.max(1, Math.min(60, Number(selectedLayout.columns ?? 2) * Number(selectedLayout.rows ?? 5)));
     return (
       <>
@@ -2382,11 +2385,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               {points.map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}</option>)}
             </select>
           </label>
-          {selectedPoint && can("pos.manage") && <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOfSale(selectedPoint)}>{selectedPoint.is_active ? "إيقاف النقطة" : "تفعيل النقطة"}</button>}
+          {selectedPoint && user.roles.includes("owner") && <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOfSale(selectedPoint)}>{selectedPoint.is_active ? "إيقاف النقطة" : "تفعيل النقطة"}</button>}
         </div>
 
         {selectedPosId && selectedPoint && !selectedPoint.allow_printing && (
           <div className="notice">الطباعة متوقفة لهذه النقطة بقرار من الإدارة. يمكنك مراجعة السجلات، لكن لن تُقبل أي عملية طباعة جديدة.</div>
+        )}
+        {selectedPosId && atDebtLimit && (
+          <div className="notice">وصلت نقطة البيع إلى سقف المديونية. أوقف النظام الطباعة حتى تسجيل سداد يخفض الرصيد المستحق.</div>
         )}
         {selectedPosId && selectedPoint && !selectedPoint.allow_card_creation && (
           <div className="notice">إنشاء الكروت متوقف لهذه النقطة بقرار من الإدارة.</div>
@@ -2433,7 +2439,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <div className="section-heading compact-heading"><div><h2>الكروت الجاهزة للتخصيص</h2><p>حدد الكروت المنشأة وغير المخصصة. عند التسجيل تُرحّل القيمة التجارية مرة واحدة فقط.</p></div><span className="count-tag">{printableCards.length} كرت</span></div>
             <div className="card-search">
               <label htmlFor="pos-card-search">بحث عن كرت</label>
-              <input id="pos-card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder={user.roles.includes("owner") || user.point_of_sale_ids.length > 0 ? "اسم المستخدم أو الرقم التسلسلي" : "أدخل اسم المستخدم أو الرقم التسلسلي كاملاً"} />
+              <input id="pos-card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder={user.card_visibility === "search_any" ? "أدخل اسم المستخدم أو الرقم التسلسلي كاملاً" : "اسم المستخدم أو الرقم التسلسلي"} />
               <button type="button" className="table-action" onClick={() => loadCards(cardSearch, cardOffset).catch((err) => setError(err instanceof Error ? err.message : "تعذر التحديث"))}>تحديث</button>
             </div>
             <div className="table-wrap">
@@ -2484,7 +2490,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 </div>
               </div>
               <div className="pos-print-summary">تم اختيار {selectedPrintCardIds.length} كرت. الكروت المجانية تظهر في القسائم ولا تدخل في قيمة نقطة البيع.</div>
-              <button type="button" disabled={busy || selectedPrintCardIds.length === 0 || !selectedPoint?.is_active || !selectedPoint?.allow_printing} onClick={printSelectedCards}>{busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة وتخصيص الكروت"}</button>
+              <button type="button" disabled={busy || selectedPrintCardIds.length === 0 || !selectedPoint?.is_active || !selectedPoint?.allow_printing || atDebtLimit} onClick={printSelectedCards}>{busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة وتخصيص الكروت"}</button>
             </div>
             {printPreviewCards.length > 0 && (
               <section className="voucher-print-preview">
@@ -2514,7 +2520,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <table><thead><tr><th>التاريخ</th><th>القالب</th><th>عدد الكروت</th><th>النوع</th><th>الإجراء</th></tr></thead>
                 <tbody>{printHistory.map((job) => <tr key={job.id}>
                   <td>{new Date(job.created_at).toLocaleString("ar")}</td><td>{job.template_code || "افتراضي"}</td><td>{job.card_count}</td><td>{job.is_reprint ? "إعادة طباعة" : "طباعة أصلية"}</td>
-                  <td><button type="button" className="table-action" disabled={busy || !selectedPoint?.is_active || !selectedPoint?.allow_printing} onClick={() => reprintJob(job)}>إعادة طباعة</button></td>
+                  <td><button type="button" className="table-action" disabled={busy || !selectedPoint?.is_active || !selectedPoint?.allow_printing || atDebtLimit} onClick={() => reprintJob(job)}>إعادة طباعة</button></td>
                 </tr>)}</tbody>
               </table>
               {printHistory.length === 0 && <div className="empty-state">لا توجد عمليات طباعة لهذه النقطة.</div>}
