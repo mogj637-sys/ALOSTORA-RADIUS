@@ -4209,3 +4209,267 @@ button:disabled { cursor: not-allowed; }
   }
 }
 
+
+
+/* Card creation and batch history: clear workflow and readable inventory */
+.workspace .card-create-workspace {
+  gap: 18px;
+}
+.workspace .card-create-heading {
+  align-items: center;
+  padding: 17px 19px;
+  border: 1px solid #deebe3;
+  border-radius: 14px;
+  background: linear-gradient(115deg, #fff, #f5faf7);
+  box-shadow: 0 5px 17px rgba(24, 65, 43, .035);
+}
+.workspace .card-create-heading h2 {
+  color: #244e3b;
+}
+.workspace .card-create-heading p {
+  margin-top: 5px;
+  color: #788a7e;
+  line-height: 1.9;
+}
+.workspace .card-create-steps article {
+  min-height: 66px;
+  border-color: #e0eae3;
+  box-shadow: 0 3px 11px rgba(24, 65, 43, .025);
+}
+.workspace .card-create-steps article.pending {
+  background: #fbfcfb;
+}
+.workspace .card-create-setup,
+.workspace .card-create-form {
+  padding: 19px;
+  border: 1px solid #e0eae3;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 19px rgba(24, 65, 43, .04);
+}
+.workspace .card-create-section-heading {
+  padding-bottom: 12px;
+  border-bottom: 1px solid #edf2ee;
+}
+.workspace .card-create-section-heading > span {
+  border: 1px solid #d8eadf;
+  background: #edf7f1;
+}
+.workspace .card-create-setup .form-grid,
+.workspace .card-create-form .form-grid {
+  gap: 14px;
+}
+.workspace .card-create-setup .form-grid label,
+.workspace .card-create-form .form-grid label {
+  gap: 7px;
+  color: #526b5c;
+  font-size: 10px;
+  font-weight: 750;
+}
+.workspace .card-create-setup select,
+.workspace .card-create-form input:not([type="checkbox"]),
+.workspace .card-create-form select,
+.workspace .card-create-form textarea {
+  min-height: 40px;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  background: #fbfdfb;
+  color: #345541;
+}
+.workspace .card-create-form textarea {
+  min-height: 70px;
+  padding: 10px 12px;
+}
+.workspace .card-create-setup select:focus,
+.workspace .card-create-form input:focus,
+.workspace .card-create-form select:focus,
+.workspace .card-create-form textarea:focus {
+  border-color: #78b99a;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(8, 127, 99, .09);
+  outline: none;
+}
+.workspace .card-create-mode-tabs {
+  padding: 5px;
+  border: 1px solid #e0ebe4;
+  border-radius: 11px;
+  background: #f4f8f5;
+}
+.workspace .card-create-mode-tabs .mode-tab {
+  min-height: 39px;
+  border-radius: 8px;
+  font-weight: 800;
+}
+.workspace .card-create-mode-tabs .mode-tab.active {
+  box-shadow: 0 2px 8px rgba(24, 65, 43, .09);
+}
+.workspace .card-create-submit-row {
+  margin-top: 2px;
+}
+.workspace .card-create-submit-row button {
+  min-height: 42px;
+  border-radius: 9px;
+  box-shadow: 0 4px 10px rgba(22, 112, 78, .12);
+}
+.workspace .card-generated-panel {
+  overflow: hidden;
+  border: 1px solid #dce9e1;
+  border-radius: 14px;
+  box-shadow: 0 6px 19px rgba(24, 65, 43, .04);
+}
+.workspace .card-generated-panel > .section-heading {
+  padding: 17px;
+  border-bottom: 1px solid #e8f0eb;
+  background: #f7fbf8;
+}
+.workspace .card-generated-panel .table-wrap {
+  margin: 0;
+  border: 0;
+}
+.workspace .card-generated-panel table {
+  min-width: 480px;
+}
+.workspace .card-batches-workspace {
+  display: grid;
+  gap: 15px;
+  min-width: 0;
+}
+.workspace .card-batches-heading {
+  align-items: center;
+  padding: 17px 19px;
+  border: 1px solid #deebe3;
+  border-radius: 14px;
+  background: linear-gradient(115deg, #fff, #f5faf7);
+  box-shadow: 0 5px 17px rgba(24, 65, 43, .035);
+}
+.workspace .card-batches-heading h2 {
+  margin: 3px 0;
+  color: #244e3b;
+}
+.workspace .card-batches-heading p {
+  margin: 0;
+  color: #788a7e;
+  font-size: 11px;
+  line-height: 1.9;
+}
+.workspace .card-batches-heading button {
+  min-height: 39px;
+  padding: 8px 15px;
+  border: 1px solid #cfe3d6;
+  border-radius: 9px;
+  background: #edf7f1;
+  color: #246246;
+  font-size: 10px;
+  font-weight: 800;
+}
+.workspace .card-batches-heading button:hover:not(:disabled) {
+  border-color: #a9d2b8;
+  background: #e2f2e8;
+}
+.workspace .card-batches-table-wrap {
+  overflow: auto;
+  border: 1px solid #e0eae3;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 6px 19px rgba(24, 65, 43, .035);
+  scrollbar-width: thin;
+  scrollbar-color: #c5d9cc transparent;
+}
+.workspace .card-batches-table {
+  min-width: 1120px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.workspace .card-batches-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 13px 11px;
+  border-bottom: 1px solid #dfeae3;
+  background: #f1f7f3;
+  color: #526d5d;
+  font-size: 9px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.workspace .card-batches-table td {
+  padding: 12px 11px;
+  border-bottom: 1px solid #edf2ee;
+  color: #596e61;
+  font-size: 9px;
+  line-height: 1.8;
+  vertical-align: middle;
+}
+.workspace .card-batches-table tbody tr:nth-child(even) td {
+  background: #fcfefc;
+}
+.workspace .card-batches-table tbody tr:hover td {
+  background: #f1f8f3;
+}
+.workspace .card-batches-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.workspace .card-batches-table td:first-child {
+  color: #285b43;
+  font-weight: 850;
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+}
+.workspace .card-batches-table td:nth-child(5),
+.workspace .card-batches-table td:nth-child(6) {
+  color: #315f48;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+.workspace .card-batches-table td:nth-child(8) {
+  min-width: 130px;
+  max-width: 240px;
+  white-space: normal;
+}
+.workspace .card-batches-table .table-action {
+  min-height: 31px;
+  padding: 6px 11px;
+  border: 1px solid #d4e7da;
+  border-radius: 8px;
+  background: #eff8f2;
+  color: #246246;
+  font-size: 9px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.workspace .card-batches-table-wrap > .empty-state {
+  padding: 36px 16px;
+  border-top: 1px solid #edf2ee;
+  background: #fbfdfb;
+  color: #7b8c81;
+  font-size: 11px;
+  text-align: center;
+}
+@media (max-width: 760px) {
+  .workspace .card-create-heading,
+  .workspace .card-batches-heading {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 14px;
+  }
+  .workspace .card-create-setup,
+  .workspace .card-create-form {
+    padding: 14px;
+  }
+  .workspace .card-create-steps {
+    grid-template-columns: 1fr;
+  }
+  .workspace .card-create-submit-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .workspace .card-create-submit-row button,
+  .workspace .card-batches-heading button {
+    width: 100%;
+  }
+  .workspace .card-generated-panel > .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
