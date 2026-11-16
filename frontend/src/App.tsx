@@ -41,6 +41,7 @@ type Card = {
 };
 
 type GeneratedCard = {
+  id: string;
   serial_number: string;
   username: string;
   password: string;
@@ -813,7 +814,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       Promise.all([
         loadPlans(),
         page === "cards" || page === "card-create" || page === "pos" ? loadCards() : Promise.resolve(),
-        page === "pos" || page === "pos-management" ? loadPointsOfSale() : Promise.resolve(),
+        page === "pos" || page === "pos-management" || page === "card-create" ? loadPointsOfSale() : Promise.resolve(),
         page === "routers" ? loadRouters() : Promise.resolve(),
       ]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل البيانات"));
     }
@@ -931,7 +932,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     event.preventDefault();
     setBusy(true); setError(""); setNotice(""); setGeneratedCards([]);
     try {
-      const result = await apiRequest<{ serial_number: string; username: string; password: string }> (token, "/api/v1/cards/single", {
+      const result = await apiRequest<{ id: string; serial_number: string; username: string; password: string }> (token, "/api/v1/cards/single", {
         method: "POST",
         body: JSON.stringify({
           plan_id: Number(singleDraft.planId || plans[0]?.id),
@@ -941,7 +942,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           is_free: singleDraft.isFree,
         }),
       });
-      setGeneratedCards([{ serial_number: result.serial_number, username: result.username, password: result.password }]);
+      setGeneratedCards([{ id: result.id, serial_number: result.serial_number, username: result.username, password: result.password }]);
+      setSelectedPrintCardIds([result.id]);
       await loadCards();
       setNotice("تم إنشاء الكرت. احفظ بيانات الدخول الآن؛ لن تظهر كلمة المرور مرة أخرى.");
     } catch (err) {
@@ -968,6 +970,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         }),
       });
       setGeneratedCards(result.cards);
+      setSelectedPrintCardIds(result.cards.map((card) => card.id));
       await loadCards();
       setNotice(`تم إنشاء ${result.created_count} كرت. احفظ بيانات الدخول الآن؛ لن تظهر كلمات المرور مرة أخرى.`);
     } catch (err) {
@@ -1087,6 +1090,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   function renderCardCreate() {
     return <>
       <div className="section-heading"><div><h2>إضافة الكروت</h2><p>أنشئ كرتاً منفرداً أو دفعة كروت وحدد الباقة وبيانات الدخول.</p></div></div><div className="notice">تنبيه: الكروت التي تنشئها هنا تُحفظ في قاعدة ALOSTORA-RADIUS. إنشاء الكروت مباشرة داخل User Manager القديم غير مفعّل بعد.</div>
+      <div className="panel form-grid"><label>نقطة البيع المخصصة للطباعة<select value={selectedPosId} onChange={(e) => setSelectedPosId(e.target.value)}><option value="">اختر نقطة بيع</option>{points.filter((point) => point.is_active).map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}</option>)}</select></label><small className="field-hint">يتم تخصيص الكروت للنقطة عند تسجيل عملية الطباعة، وليس بمجرد إنشائها.</small></div>
       <div className="mode-tabs">
         <button type="button" className={cardMode === "single" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("single"); setGeneratedCards([]); }}>كرت منفرد</button>
         <button type="button" className={cardMode === "batch" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("batch"); setGeneratedCards([]); }}>دفعة كروت</button>
@@ -1115,7 +1119,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </form>
       )}
       {generatedCards.length > 0 && <section className="generated-panel">
-        <div className="section-heading compact-heading"><div><h2>بيانات الدفعة الجديدة</h2><p>كلمات المرور تظهر الآن فقط. احفظ الجدول أو اطبعه قبل مغادرة الصفحة.</p></div><button type="button" className="secondary-button" onClick={() => window.print()}>طباعة الصفحة</button></div>
+        <div className="section-heading compact-heading"><div><h2>بيانات الدفعة الجديدة</h2><p>كلمات المرور تظهر الآن فقط. احفظ الجدول أو اطبعه قبل مغادرة الصفحة.</p></div><div className="form-actions"><button type="button" disabled={!selectedPosId || !selectedPrintCardIds.length} onClick={() => setPage("pos")}>متابعة الطباعة لنقطة البيع</button><button type="button" className="secondary-button" onClick={() => window.print()}>طباعة الصفحة</button></div></div>
         <div className="table-wrap"><table><thead><tr><th>التسلسل</th><th>اسم المستخدم</th><th>كلمة المرور</th></tr></thead><tbody>{generatedCards.map((card) => <tr key={card.serial_number}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.password || "بدون كلمة مرور"}</td></tr>)}</tbody></table></div>
       </section>}
     </>;
