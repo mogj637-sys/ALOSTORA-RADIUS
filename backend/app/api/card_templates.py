@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_owner
 from app.db.session import get_db
-from app.models.core import CardTemplate, Plan
+from app.models.core import CardBatch, CardTemplate, Plan, PrintJob
 from app.schemas.card_templates import CardTemplateCreate, CardTemplateUpdate, CardTemplateResponse
 
 router = APIRouter(prefix="/api/v1/card-templates", tags=["card-templates"], dependencies=[Depends(get_current_owner)])
@@ -55,5 +55,7 @@ def delete_template(template_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="القالب غير موجود")
     if item.is_default:
         raise HTTPException(status_code=409, detail="لا يمكن حذف القالب الافتراضي")
+    if db.query(CardBatch.id).filter(CardBatch.template_code == item.code).first() or db.query(PrintJob.id).filter(PrintJob.template_code == item.code).first():
+        raise HTTPException(status_code=409, detail="لا يمكن حذف قالب مرتبط بدفعات أو عمليات طباعة محفوظة")
     db.delete(item)
     db.commit()
