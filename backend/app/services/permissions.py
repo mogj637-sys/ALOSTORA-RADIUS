@@ -24,13 +24,25 @@ def effective_permission_codes(user: AdminUser) -> set[str]:
 def has_permission(user: AdminUser, permission_code: str) -> bool:
     if is_owner(user):
         return True
+    overrides = {
+        item.permission.code: item.allowed
+        for item in user.permission_overrides
+    }
+    if permission_code in overrides:
+        return overrides[permission_code]
     granted = effective_permission_codes(user)
     if permission_code in granted:
         return True
     module, _, action = permission_code.partition(".")
-    if action == "view" and (
-        f"{module}.manage" in granted
-        or (module == "sessions" and "sessions.disconnect" in granted)
-    ):
-        return True
+    if action == "view":
+        if f"{module}.view" in overrides:
+            return False
+        if f"{module}.manage" in granted or (
+            module == "sessions" and "sessions.disconnect" in granted
+        ):
+            return True
     return False
+
+
+def card_visibility(user: AdminUser) -> str:
+    return "all" if is_owner(user) else user.card_visibility
