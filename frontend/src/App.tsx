@@ -420,7 +420,9 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
   const can = (permission: string) => user.roles.includes("owner") || user.permissions.includes(permission);
-  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
+  const [systemStatus, setSystemStatus] = useState<{ api: string; database: string; version: string; checkedAt: string } | null>(null);
+  const [systemStatusLoading, setSystemStatusLoading] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
@@ -516,6 +518,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }, [cardTemplates, plans, printTemplate]);
 
   async function loadPlans() {
+    const result = await apiRequest<Plan[]>(token, "/api/v1/plans?include_inactive=true");
+    setPlans(result);
+  }
+
   async function loadAuditLogs(offset = 0) {
     const result = await apiRequest<{ total: number; items: AuditLogRecord[] }>(
       token, `/api/v1/audit-logs?offset=${offset}&limit=50`
@@ -523,6 +529,73 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setAuditLogs(result.items);
     setAuditTotal(result.total);
     setAuditOffset(offset);
+  }
+
+  async function loadSystemStatus() {
+    setSystemStatusLoading(true);
+    const checkedAt = new Date().toISOString();
+    try {
+      const [apiResult, databaseResult] = await Promise.allSettled([
+        fetch(`${API_BASE}/health`, { cache: "no-store" }),
+        fetch(`${API_BASE}/health/ready`, { cache: "no-store" }),
+      ]);
+      let api = "unavailable";
+      let version = "غير متاح";
+      if (apiResult.status === "fulfilled" && apiResult.value.ok) {
+        const data = await apiResult.value.json();
+        api = "connected";
+        version = typeof data.version === "string" ? data.version : "غير محدد";
+      }
+      let database = "unknown";
+      if (databaseResult.status === "fulfilled") {
+        try {
+          const data = await databaseResult.value.json();
+          database = databaseResult.value.ok && data.database === "connected" ? "connected" : "unavailable";
+        } catch {
+          database = "unavailable";
+        }
+      }
+      setSystemStatus({ api, database, version, checkedAt });
+    } finally {
+      setSystemStatusLoading(false);
+    }
+  }
+
+  function renderSystemSettings() {
+    const statusLabel = (value: string) => value === "connected" ? "متصل" : value === "unavailable" ? "غير متاح" : "لم يتم الفحص";
+    return (
+      <>
+        <div className="section-heading system-settings-heading">
+          <div><span className="eyebrow">إدارة النظام</span><h2>الإعدادات والصيانة</h2><p>مركز متابعة سلامة خدمات النظام والوصول إلى إعداداته الحالية.</p></div>
+          <button type="button" className="secondary-button" disabled={systemStatusLoading} onClick={() => loadSystemStatus().catch(() => setError("تعذر فحص حالة النظام."))}>{systemStatusLoading ? "جارٍ الفحص..." : "فحص الحالة الآن"}</button>
+        </div>
+        <div className="system-status-grid">
+          <article className="system-status-card"><span>واجهة API</span><strong className={systemStatus?.api === "connected" ? "status-ok" : "status-unknown"}>{statusLabel(systemStatus?.api ?? "unknown")}</strong><small>فحص استجابة خدمة التطبيق</small></article>
+          <article className="system-status-card"><span>قاعدة البيانات</span><strong className={systemStatus?.database === "connected" ? "status-ok" : "status-unknown"}>{statusLabel(systemStatus?.database ?? "unknown")}</strong><small>فحص اتصال PostgreSQL واستعلام جاهزية</small></article>
+          <article className="system-status-card"><span>إصدار API</span><strong>{systemStatus?.version ?? "لم يتم الفحص"}</strong><small>الإصدار المعلن من خدمة التطبيق</small></article>
+        </div>
+        <section className="panel system-maintenance-panel">
+          <div className="section-heading"><div><h3>حالة الفحص</h3><p>آخر نتيجة فحص محفوظة في هذه الجلسة.</p></div></div>
+          <div className="system-status-row"><span>آخر فحص</span><strong>{systemStatus?.checkedAt ? new Date(systemStatus.checkedAt).toLocaleString("ar") : "لم يتم الفحص بعد"}</strong></div>
+          <p className="overview-disclaimer">فحص الجاهزية يؤكد اتصال قاعدة البيانات فقط، ولا يثبت تشغيل FreeRADIUS أو اتصال أجهزة MikroTik فعلياً.</p>
+        </section>
+        <section className="panel system-maintenance-panel">
+          <div className="section-heading"><div><h3>الوصول إلى إعدادات النظام</h3><p>تُدار الإعدادات من صفحاتها الأصلية حتى لا تتكرر القيم أو تتعارض.</p></div></div>
+          <div className="system-shortcuts">
+            <button type="button" onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات<span>إدارة الحسابات والأدوار</span></button>
+            <button type="button" onClick={() => setPage("routers")}>إعدادات أجهزة الشبكة<span>الراوترات ومعرّفات NAS</span></button>
+            <button type="button" onClick={() => setPage("plans")}>إعدادات الباقات والسرعات<span>حدود الوقت والحجم والسرعة</span></button>
+            <button type="button" onClick={() => setPage("templates")}>إعدادات تصاميم الكروت<span>القوالب ومقاسات الطباعة</span></button>
+          </div>
+        </section>
+        <section className="panel system-maintenance-panel">
+          <div className="section-heading"><div><h3>أدوات الصيانة</h3><p>لن تظهر إجراءات تنفيذية قبل توفير حماية واختبار مناسبين لها.</p></div></div>
+          <div className="maintenance-item"><div><strong>النسخ الاحتياطي والاستعادة</strong><small>غير مفعّل بعد؛ يحتاج آلية نسخ مشفرة، والتحقق من سلامة الملف، وخطة استعادة آمنة.</small></div><span className="maintenance-unavailable">غير متاح حالياً</span></div>
+          <div className="maintenance-item"><div><strong>تنظيف البيانات والسجلات</strong><small>غير مفعّل بعد؛ لن نحذف سجلات أو جلسات تلقائياً قبل تحديد سياسة الاحتفاظ.</small></div><span className="maintenance-unavailable">غير متاح حالياً</span></div>
+          <div className="maintenance-item"><div><strong>إعادة تشغيل الخدمات</strong><small>غير مفعّل من لوحة التحكم؛ لتجنب قطع الخدمة دون تحكم وتأكيد واضح.</small></div><span className="maintenance-unavailable">غير متاح حالياً</span></div>
+        </section>
+      </>
+    );
   }
 
   function renderAuditLogs() {
@@ -1183,6 +1256,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     if (page === "audit" && can("audit.view")) {
       setError("");
       loadAuditLogs(0).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل سجل العمليات"));
+    }
+    if (page === "settings" && user.roles.includes("owner")) {
+      setError("");
+      loadSystemStatus().catch(() => setError("تعذر فحص حالة النظام."));
     }
     if (page === "admins" && user.roles.includes("owner")) {
       setError("");
@@ -2505,18 +2582,18 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           {can("cards.view") && <button className={page === "batches" ? "nav-item active" : "nav-item"} onClick={() => setPage("batches")}>دفعات الكروت</button>}
           {can("cards.manage") && <button className={page === "templates" ? "nav-item active" : "nav-item"} onClick={() => setPage("templates")}>تصاميم الكروت</button>}
           {can("audit.view") && <button className={page === "audit" ? "nav-item active" : "nav-item"} onClick={() => setPage("audit")}>سجل عمليات النظام</button>}
-          <div className="nav-group muted"><span>أقسام قيد التطوير</span><small>نظام الهوتسبوت · الكفتيريا والهوست · أجهزة البث · محرر الصفحات · الخدمات الإضافية · الإعدادات والصيانة</small></div>
+          {user.roles.includes("owner") && <button className={page === "settings" ? "nav-item active" : "nav-item"} onClick={() => setPage("settings")}>الإعدادات والصيانة</button>}
         </nav>
         <div className="sidebar-foot">ALOSTORA-RADIUS · 0.4.0</div>
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "الطباعة والدفعات" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "reports" ? "تقارير اليوزرمنجر والمالية" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : "إدارة أجهزة MikroTik"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "الطباعة والدفعات" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "reports" ? "تقارير اليوزرمنجر والمالية" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : page === "settings" ? "الإعدادات والصيانة" : "إدارة أجهزة MikroTik"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "card-create" ? renderCardCreate() : page === "pos" ? renderPos() : page === "pos-management" ? renderPosManagement() : page === "batches" ? renderBatches() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "card-create" ? renderCardCreate() : page === "pos" ? renderPos() : page === "pos-management" ? renderPosManagement() : page === "batches" ? renderBatches() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
