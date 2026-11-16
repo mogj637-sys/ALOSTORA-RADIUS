@@ -1,4 +1,4 @@
-from app.models.auth import AdminUser, Role
+from app.models.auth import AdminUser, Role, Permission
 from app.models.user_manager import UserManagerCardSource, UserManagerSyncRun
 from app.models.user_manager_preview import UserManagerImportPreview
 from app.models.core import (
@@ -7,7 +7,7 @@ from app.models.core import (
 )
 
 __all__ = [
-    "AdminUser", "Role", "Card", "CardBatch", "CardEvent", "CardTemplate", "Plan",
+    "AdminUser", "Role", "Permission", "Card", "CardBatch", "CardEvent", "CardTemplate", "Plan",
     "PointOfSale", "PrintJob", "PrintJobItem", "PosInventoryMovement",
     "PosAccountEntry", "RadiusSession", "Router", "UserManagerCardSource",
     "UserManagerImportPreview", "UserManagerSyncRun",
