@@ -14,6 +14,7 @@ from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import Card, CardBatch, Plan, PointOfSale, PosAccountEntry, PrintJob, RadiusSession, Router
+from app.services.permissions import card_visibility
 from app.schemas.reports import (
     PosReportResponse, PosReportRow, PosReportTotals,
     PosStatementEntry, PosStatementResponse,
@@ -277,9 +278,14 @@ def cards_report(
     db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.view")),
 ):
     start_at, end_at = _period_bounds(date_from, date_to)
-    is_owner = any(role.code == "owner" for role in user.roles)
+    visibility = card_visibility(user)
     pos_ids = [point.id for point in user.point_of_sales]
-    card_scope = True if is_owner else (Card.assigned_pos_id.in_(pos_ids) if pos_ids else Card.id.is_(None))
+    card_scope = (
+        True if visibility == "all"
+        else (Card.assigned_pos_id.in_(pos_ids) if pos_ids else Card.id.is_(None))
+        if visibility == "assigned"
+        else Card.id.is_(None)
+    )
     rows = (
         db.query(Card.status, func.count(Card.id))
         .filter(Card.created_at >= start_at, Card.created_at < end_at, card_scope)
@@ -314,10 +320,15 @@ def sessions_report(
     db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("sessions.view")),
 ):
     start_at, end_at = _period_bounds(date_from, date_to)
-    is_owner = any(role.code == "owner" for role in user.roles)
+    visibility = card_visibility(user)
     pos_ids = [point.id for point in user.point_of_sales]
     scoped_card_ids = db.query(Card.id).filter(Card.assigned_pos_id.in_(pos_ids)) if pos_ids else db.query(Card.id).filter(Card.id.is_(None))
-    session_scope = True if is_owner else RadiusSession.card_id.in_(scoped_card_ids)
+    session_scope = (
+        True if visibility == "all"
+        else RadiusSession.card_id.in_(scoped_card_ids)
+        if visibility == "assigned"
+        else RadiusSession.id.is_(None)
+    )
     totals = db.query(
         func.count(RadiusSession.id),
         func.count(func.distinct(RadiusSession.card_id)),
@@ -347,7 +358,7 @@ def batches_report(
     db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.view")),
 ):
     start_at, end_at = _period_bounds(date_from, date_to)
-    is_owner = any(role.code == "owner" for role in user.roles)
+    visibility = card_visibility(user)
     pos_ids = [point.id for point in user.point_of_sales]
     rows_query = (
         db.query(CardBatch, Plan.name, PointOfSale.name)
@@ -356,8 +367,10 @@ def batches_report(
         .filter(CardBatch.created_at >= start_at, CardBatch.created_at < end_at)
         .order_by(CardBatch.created_at.desc())
     )
-    if not is_owner:
+    if visibility == "assigned":
         rows_query = rows_query.filter(CardBatch.point_of_sale_id.in_(pos_ids)) if pos_ids else rows_query.filter(CardBatch.id.is_(None))
+    elif visibility == "search_any":
+        rows_query = rows_query.filter(CardBatch.id.is_(None))
     rows = rows_query.all()
     batch_ids = [row[0].id for row in rows]
     counts = {}
@@ -386,9 +399,14 @@ def printing_report(
     db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.view")),
 ):
     start_at, end_at = _period_bounds(date_from, date_to)
-    is_owner = any(role.code == "owner" for role in user.roles)
+    visibility = card_visibility(user)
     pos_ids = [point.id for point in user.point_of_sales]
-    job_scope = True if is_owner else (PrintJob.point_of_sale_id.in_(pos_ids) if pos_ids else PrintJob.id.is_(None))
+    job_scope = (
+        True if visibility == "all"
+        else (PrintJob.point_of_sale_id.in_(pos_ids) if pos_ids else PrintJob.id.is_(None))
+        if visibility == "assigned"
+        else PrintJob.id.is_(None)
+    )
     totals = db.query(
         func.count(PrintJob.id), func.coalesce(func.sum(PrintJob.card_count), 0),
         func.coalesce(func.sum(case((PrintJob.is_reprint.is_(True), 1), else_=0)), 0),
