@@ -30,6 +30,7 @@ class CardBatchCreate(BaseModel):
 
 
 class CardCreatedSecret(BaseModel):
+    id: UUID
     serial_number: str
     username: str
     password: str
