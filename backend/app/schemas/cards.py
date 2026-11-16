@@ -18,6 +18,8 @@ class CardSingleCreate(BaseModel):
     card_type: CardType
     password: str | None = Field(default=None, min_length=4, max_length=32)
     is_free: bool = False
+    template_code: str | None = Field(default=None, max_length=80)
+    point_of_sale_id: int | None = Field(default=None, gt=0)
 
 
 class CardBatchCreate(BaseModel):
@@ -41,6 +43,10 @@ class CardCreatedSecret(BaseModel):
 
 class CardCreateResponse(BaseModel):
     id: UUID
+    batch_id: UUID
+    batch_number: str
+    template_code: str | None
+    point_of_sale_id: int | None
     serial_number: str
     username: str
     password: str
