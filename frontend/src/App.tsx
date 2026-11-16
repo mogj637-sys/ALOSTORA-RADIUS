@@ -517,6 +517,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   function renderAuditLogs() {
     const actionNames: Record<string, string> = {
+      "auth.login": "تسجيل دخول",
       "admin.created": "إنشاء حساب إداري",
       "admin.updated": "تعديل حساب إداري",
       "role.permissions_updated": "تعديل صلاحيات دور",
