@@ -655,8 +655,12 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
                 actor="radius",
             )
         )
-        disconnect_required = False
-        reason = "انتهت الجلسة"
+        if card.status in {"suspended", "exhausted", "expired"}:
+            disconnect_required = True
+            reason = "الكرت موقوف أو انتهى رصيده ويجب فصل الجلسات المتبقية"
+        else:
+            disconnect_required = False
+            reason = "انتهت الجلسة"
 
     db.commit()
     disconnect_sent = (
