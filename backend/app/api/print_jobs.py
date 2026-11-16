@@ -20,6 +20,7 @@ from app.models.core import (
     PrintJobItem,
 )
 from app.services.credentials import CredentialEncryptionNotConfigured, decrypt_credential
+from app.services.audit import record_audit
 from app.schemas.print_jobs import (
     PrintJobCreate,
     PrintJobHistoryCardResponse,
@@ -356,6 +357,7 @@ def create_print_job(
                     )
                 )
 
+        record_audit(db, user, "print.reprint_created" if payload.is_reprint else "print.job_created", "print_job", f"{"إعادة طباعة" if payload.is_reprint else "طباعة"} {len(cards)} كرت لنقطة البيع {point_of_sale.name}", entity_id=job.id, details={"card_count": len(cards), "point_of_sale_id": point_of_sale.id, "template_code": payload.template_code, "is_reprint": payload.is_reprint})
         db.commit()
         db.refresh(job)
     except IntegrityError:
