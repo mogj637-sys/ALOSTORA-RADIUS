@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.auth import AdminUser, Role, Permission
 from app.schemas.admins import AdminRoleResponse, AdminUserCreate, AdminUserResponse, AdminUserUpdate
 from app.security import hash_password
+from app.services.audit import record_audit
 
 router = APIRouter(prefix="/api/v1/admins", tags=["administrators"])
 
@@ -62,7 +63,7 @@ def list_admins(
 def create_admin(
     payload: AdminUserCreate,
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(get_current_owner),
+    current_user: AdminUser = Depends(get_current_owner),
 ) -> AdminUserResponse:
     if db.query(AdminUser).filter(AdminUser.username == payload.username).first():
         raise HTTPException(status_code=409, detail="اسم المستخدم مستخدم بالفعل")
@@ -79,6 +80,8 @@ def create_admin(
         roles=roles,
     )
     db.add(user)
+    db.flush()
+    record_audit(db, current_user, "admin.created", "admin_user", f"إنشاء حساب إداري: {user.username}", entity_id=user.id, details={"role_codes": [role.code for role in roles]})
     db.commit()
     db.refresh(user)
     return _user_response(user)
@@ -117,6 +120,7 @@ def update_admin(
         if active_owners <= 1:
             raise HTTPException(status_code=400, detail="لا يمكن تعطيل أو تخفيض صلاحية آخر مدير نظام")
 
+    before = {"display_name": user.display_name, "is_active": user.is_active, "role_codes": sorted(role.code for role in user.roles)}
     if payload.display_name is not None:
         user.display_name = payload.display_name
     if payload.password:
@@ -127,6 +131,7 @@ def update_admin(
     if payload.role_codes is not None:
         user.roles = next_roles
     user.is_active = next_active
+    record_audit(db, current_user, "admin.updated", "admin_user", f"تحديث حساب إداري: {user.username}", entity_id=user.id, details={"before": before, "after": {"display_name": user.display_name, "is_active": user.is_active, "role_codes": sorted(role.code for role in user.roles)}, "password_changed": bool(payload.password)})
     db.commit()
     db.refresh(user)
     return _user_response(user)
@@ -174,6 +179,8 @@ def update_role_permissions(
     missing = sorted(set(normalized) - found)
     if missing:
         raise HTTPException(status_code=422, detail=f"صلاحيات غير معروفة: {', '.join(missing)}")
+    previous_codes = sorted(item.code for item in role.permissions)
     role.permissions = permissions
+    record_audit(db, _, "role.permissions_updated", "role", f"تعديل صلاحيات الدور: {role.name}", entity_id=role.id, details={"before": previous_codes, "after": sorted(item.code for item in permissions)})
     db.commit()
     return {"role_code": role.code, "permission_codes": sorted(item.code for item in permissions)}
