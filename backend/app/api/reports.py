@@ -403,10 +403,10 @@ def batches_report(
     }
 
 
-@router.get("/printing", dependencies=[Depends(require_permission("cards.view"))])
+@router.get("/printing", dependencies=[Depends(require_permission("printing.view"))])
 def printing_report(
     date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.view")),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("printing.view")),
 ):
     start_at, end_at = _period_bounds(date_from, date_to)
     visibility = card_visibility(user)
