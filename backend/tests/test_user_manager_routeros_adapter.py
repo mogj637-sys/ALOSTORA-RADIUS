@@ -260,7 +260,7 @@ def test_exact_user_inspection_uses_device_query_and_never_requests_password(mon
         "warnings": [],
     }
     assert user_resource.calls[0] == (
-        "print", {"count-only": None}, {"username": "voucher-100"}
+        "print", {"count-only": ""}, {"username": "voucher-100"}
     )
     assert user_resource.last_params == {
         ".proplist": ".id,username,customer,disabled,actual-profile,shared-users,uptime-used,download-used,upload-used,last-seen,active-sessions",
@@ -371,7 +371,7 @@ def test_exact_user_count_zero_skips_detail_print(monkeypatch):
 
     assert result is None
     assert user_resource.calls == [
-        ("print", {"count-only": None}, {"username": "missing-card"})
+        ("print", {"count-only": ""}, {"username": "missing-card"})
     ]
 
 
@@ -404,6 +404,6 @@ def test_profile_relation_count_guard_stops_before_large_detail_read(monkeypatch
         )
 
     assert relation_resource.calls == [
-        ("print", {"count-only": None}, {"profile": "basic"})
+        ("print", {"count-only": ""}, {"profile": "basic"})
     ]
     assert FakePool.last.disconnected is True
