@@ -464,3 +464,63 @@ def test_card_batch_persists_template_pos_and_print_preferences(owner_client):
     assert printed.json()["print_options"]["show_username"] is False
     assert printed.json()["print_options"]["show_password"] is True
     assert printed.json()["items"][0]["plan_name"] == "Linked batch plan"
+
+
+def test_print_import_resolves_identifiers_across_the_full_database_and_respects_pos_batch_scope(owner_client):
+    client, headers, _ = owner_client
+    code = "IMPORT-" + secrets.token_hex(4).upper()
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={"code": code, "name": "Import selection plan", "price": "10.00"},
+    )
+    assert plan.status_code == 201, plan.text
+
+    point_a = client.post(
+        "/api/v1/points-of-sale",
+        headers=headers,
+        json={"code": "IMPORT-A-" + secrets.token_hex(3).upper(), "name": "Import point A"},
+    )
+    point_b = client.post(
+        "/api/v1/points-of-sale",
+        headers=headers,
+        json={"code": "IMPORT-B-" + secrets.token_hex(3).upper(), "name": "Import point B"},
+    )
+    assert point_a.status_code == 201, point_a.text
+    assert point_b.status_code == 201, point_b.text
+
+    cards = []
+    for point in (point_a.json(), point_a.json(), point_b.json()):
+        username = "IMPORTED" + secrets.token_hex(5).upper()
+        response = client.post(
+            "/api/v1/cards/single",
+            headers=headers,
+            json={
+                "plan_id": plan.json()["id"],
+                "username": username,
+                "card_type": "username_only",
+                "point_of_sale_id": point["id"],
+            },
+        )
+        assert response.status_code == 201, response.text
+        cards.append(response.json())
+
+    resolved = client.post(
+        "/api/v1/cards/print-selection/resolve",
+        headers=headers,
+        json={
+            "point_of_sale_id": point_a.json()["id"],
+            "identifiers": [
+                cards[0]["username"],
+                cards[1]["serial_number"],
+                cards[2]["username"],
+                "NO-SUCH-CARD",
+            ],
+        },
+    )
+    assert resolved.status_code == 200, resolved.text
+    data = resolved.json()
+    assert data["total_requested"] == 4
+    assert data["matched_count"] == 2
+    assert {item["id"] for item in data["items"]} == {cards[0]["id"], cards[1]["id"]}
+    assert set(data["unmatched"]) == {cards[2]["username"], "NO-SUCH-CARD"}
