@@ -11,9 +11,9 @@ from app.models.core import CardBatch, CardTemplate, Plan, PrintJob
 from app.services.audit import record_audit
 from app.schemas.card_templates import CardTemplateCreate, CardTemplateUpdate, CardTemplateResponse
 
-router = APIRouter(prefix="/api/v1/card-templates", tags=["card-templates"], dependencies=[Depends(require_permission("templates.view"))])
+router = APIRouter(prefix="/api/v1/card-templates", tags=["card-templates"])
 
-@router.get("", response_model=list[CardTemplateResponse])
+@router.get("", response_model=list[CardTemplateResponse], dependencies=[Depends(require_permission("templates.view"))])
 def list_templates(db: Session = Depends(get_db)):
     return db.query(CardTemplate).order_by(CardTemplate.is_default.desc(), CardTemplate.id.asc()).all()
 
@@ -34,7 +34,7 @@ def create_template(payload: CardTemplateCreate, db: Session = Depends(get_db), 
     db.refresh(item)
     return item
 
-@router.patch("/{template_id}", response_model=CardTemplateResponse, dependencies=[Depends(require_permission("templates.create"))])
+@router.patch("/{template_id}", response_model=CardTemplateResponse, dependencies=[Depends(require_permission("templates.update"))])
 def update_template(template_id: int, payload: CardTemplateUpdate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("templates.update"))):
     item = db.get(CardTemplate, template_id)
     if item is None:
@@ -71,7 +71,7 @@ def update_template(template_id: int, payload: CardTemplateUpdate, db: Session =
     db.refresh(item)
     return item
 
-@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("templates.update"))])
+@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("templates.delete"))])
 def delete_template(template_id: int, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("templates.delete"))):
     item = db.get(CardTemplate, template_id)
     if item is None:
