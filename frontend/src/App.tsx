@@ -2172,7 +2172,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ إعداد التقرير..." : "عرض التقرير"}</button></div>
         </form>
         <div className="report-tabs" role="tablist" aria-label="أقسام التقارير">
-          {can("cards.view") && <button type="button" className={reportTab === "cards" ? "active" : ""} onClick={() => setReportTab("cards")}>الكروت والمبيعات</button>}
+          {can("cards.view") && <button type="button" className={reportTab === "cards" ? "active" : ""} onClick={() => setReportTab("cards")}>الكروت</button>}
           {can("sessions.view") && <button type="button" className={reportTab === "usage" ? "active" : ""} onClick={() => setReportTab("usage")}>الاستهلاك والوقت</button>}
           {can("cards.view") && <button type="button" className={reportTab === "batches" ? "active" : ""} onClick={() => setReportTab("batches")}>دفعات الكروت</button>}
           {can("cards.view") && <button type="button" className={reportTab === "printing" ? "active" : ""} onClick={() => setReportTab("printing")}>عمليات الطباعة</button>}
@@ -2182,7 +2182,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <section className="report-section">
             <div className="stats-grid">
               <article className="stat-card"><span>إجمالي الكروت</span><strong>{(cardsReport?.total_cards ?? 0).toLocaleString("ar")}</strong></article>
-              <article className="stat-card"><span>القيمة الاسمية</span><strong>{money(cardsReport?.total_value)} ريال</strong></article>
+              <article className="stat-card"><span>القيمة الاسمية للكروت المنشأة</span><strong>{money(cardsReport?.total_value)} ريال</strong></article>
               <article className="stat-card"><span>إجمالي الرفع</span><strong>{formatBytes(cardsReport?.upload_bytes ?? 0)}</strong></article>
               <article className="stat-card"><span>إجمالي التنزيل</span><strong>{formatBytes(cardsReport?.download_bytes ?? 0)}</strong></article>
             </div>
