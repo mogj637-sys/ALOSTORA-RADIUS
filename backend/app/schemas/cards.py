@@ -33,6 +33,7 @@ class CardBatchCreate(BaseModel):
     template_code: str | None = Field(default=None, max_length=80)
     point_of_sale_id: int | None = Field(default=None, gt=0)
     existing_batch_id: UUID | None = None
+    existing_batch_number: str | None = Field(default=None, min_length=4, max_length=40)
     is_online_sale: bool = False
     note: str | None = Field(default=None, max_length=500)
 
