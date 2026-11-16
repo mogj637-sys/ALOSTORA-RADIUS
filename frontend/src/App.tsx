@@ -1646,7 +1646,18 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <label>اسم الموظف<input value={adminDraft.displayName} onChange={(event) => setAdminDraft({ ...adminDraft, displayName: event.target.value })} minLength={2} maxLength={150} required /></label>
           <label>كلمة المرور<input type="password" value={adminDraft.password} onChange={(event) => setAdminDraft({ ...adminDraft, password: event.target.value })} minLength={12} maxLength={256} autoComplete="new-password" required /></label>
           <label>الدور الإداري<select value={adminDraft.roleCode} onChange={(event) => setAdminDraft({ ...adminDraft, roleCode: event.target.value })} required>{adminRoles.filter((role) => role.code !== "owner").map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}</select></label>
-          <label>نقاط البيع المسموح بها <small>يمكن اختيار أكثر من نقطة، والموظف يرى كروتها فقط.</small><select multiple value={adminDraft.pointOfSaleIds.map(String)} onChange={(event) => setAdminDraft({ ...adminDraft, pointOfSaleIds: Array.from(event.target.selectedOptions, (option) => Number(option.value)) })} size={Math.min(5, Math.max(2, points.length))}>{points.map((point) => <option key={point.id} value={point.id} disabled={!point.is_active}>{point.name}{point.is_active ? "" : " (متوقفة)"}</option>)}</select></label>
+          <label>نقاط البيع المسموح بها <small>يمكن اختيار أكثر من نقطة، والموظف يرى كروتها فقط.</small><select multiple value={adminDraft.pointOfSaleIds.map(String)} onChange={(event) => {
+            const pointOfSaleIds = Array.from(event.target.selectedOptions, (option) => Number(option.value));
+            setAdminDraft({
+              ...adminDraft,
+              pointOfSaleIds,
+              cardVisibility: pointOfSaleIds.length > 0 && adminDraft.cardVisibility === "search_any"
+                ? "assigned"
+                : pointOfSaleIds.length === 0 && adminDraft.cardVisibility === "assigned"
+                  ? "search_any"
+                  : adminDraft.cardVisibility,
+            });
+          }} size={Math.min(5, Math.max(2, points.length))}>{points.map((point) => <option key={point.id} value={point.id} disabled={!point.is_active}>{point.name}{point.is_active ? "" : " (متوقفة)"}</option>)}</select></label>
           <label>نطاق ظهور الكروت
             <select value={adminDraft.cardVisibility} onChange={(event) => setAdminDraft({ ...adminDraft, cardVisibility: event.target.value as CardVisibility })}>
               <option value="search_any">البحث عن كرت محدد من أي نقطة بيع</option>
