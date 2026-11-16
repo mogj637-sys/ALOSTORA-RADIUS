@@ -2128,14 +2128,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     return (
       <>
         <div className="section-heading">
-          <div><h2>دفعات الكروت</h2><p>سجل الدفعات المحفوظة مع الباقة والقالب ونقطة البيع وعدد الكروت التي طُبعت.</p></div>
+          <div><h2>دفعات الكروت</h2><p>سجل الدفعات المحفوظة مع الباقة والقالب ونقطة البيع ونوع البيع والملاحظات.</p></div>
           <button type="button" className="table-action" disabled={busy} onClick={() => loadCardBatches().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث الدفعات"))}>تحديث</button>
         </div>
         <div className="table-wrap">
-          <table><thead><tr><th>رقم الدفعة</th><th>الباقة</th><th>القالب</th><th>نقطة البيع</th><th>عدد الكروت</th><th>المطبوع</th><th>التاريخ</th><th>الإجراء</th></tr></thead>
+          <table><thead><tr><th>رقم الدفعة</th><th>الباقة</th><th>القالب</th><th>نقطة البيع</th><th>عدد الكروت</th><th>المطبوع</th><th>نوع البيع</th><th>ملاحظة</th><th>التاريخ</th><th>الإجراء</th></tr></thead>
             <tbody>{cardBatches.map((batch) => <tr key={batch.batch_id}>
               <td>{batch.batch_number}</td><td>{batch.plan_name}</td><td>{batch.template_code || "—"}</td><td>{batch.point_of_sale_name || "لم تحدد"}</td>
-              <td>{batch.quantity}</td><td>{batch.printed_count}</td><td>{new Date(batch.created_at).toLocaleString("ar")}</td>
+              <td>{batch.quantity}</td><td>{batch.printed_count}</td><td>{batch.is_online_sale ? "أونلاين" : "عادي"}</td><td>{batch.note || "—"}</td><td>{new Date(batch.created_at).toLocaleString("ar")}</td>
               <td><button type="button" className="table-action" onClick={() => { setCardBatchFilter(batch.batch_id); setCardSearch(""); setCardOffset(0); setPage("cards"); loadCards("", 0, batch.batch_id).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل كروت الدفعة")); }}>عرض الكروت</button></td>
             </tr>)}</tbody>
           </table>
