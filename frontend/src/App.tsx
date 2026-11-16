@@ -1054,6 +1054,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         { method: "POST" },
       );
       setRouterConnectionProbe(result);
+      await loadRouters();
       setNotice(`نجح اتصال RouterOS API مع ${item.name}؛ الفحص قراءة فقط.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر فحص اتصال RouterOS API");
