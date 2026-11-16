@@ -20,4 +20,4 @@ class CurrentUserResponse(BaseModel):
     permissions: list[str]
     point_of_sale_ids: list[int] = []
     card_visibility: str = "search_any"
-    permission_overrides: list[dict] = []
+    permission_overrides: list[dict] = Field(default_factory=list)
