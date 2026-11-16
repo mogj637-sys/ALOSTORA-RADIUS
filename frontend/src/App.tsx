@@ -1895,7 +1895,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <article><span>باقات متوقفة</span><strong>{inactivePlans.toLocaleString("ar")}</strong><small>محفوظة ويمكن إعادة تفعيلها</small></article>
         </div>
 
-        <form className="panel plan-editor plans-editor-panel" onSubmit={createPlan}>
+        {can("plans.create") || (editingPlanId !== null && can("plans.update")) && (
+<form className="panel plan-editor plans-editor-panel" onSubmit={createPlan}>
           <div className="plans-editor-title">
             <div><span className="eyebrow">{editingPlanId !== null ? "تحديث باقة محفوظة" : "إعداد باقة جديدة"}</span><h3>{editingPlanId !== null ? "تعديل بيانات الباقة" : "إضافة باقة جديدة"}</h3><p>الحقول الاختيارية التي تتركها فارغة تعني أن الحد مفتوح.</p></div>
             <span className="plans-editor-symbol">◷</span>
@@ -1938,11 +1939,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div className="notice">تُحفظ إعدادات الإضافات والجدولة ضمن الباقة. تفعيلها فعلياً على الراوتر وإرسال الإشعارات يحتاج ربط محرك التنفيذ لاحقاً.</div>
           <div className="form-actions plans-form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPlanId ? "حفظ التعديلات" : "إنشاء الباقة"}</button>{editingPlanId !== null && <button type="button" className="secondary-button" onClick={resetPlanDraft}>إلغاء التعديل</button>}</div>
         </form>
+)}
 
         <section className="plans-directory">
           <div className="section-heading compact-heading"><div><span className="eyebrow">دليل الاشتراكات</span><h2>الباقات المسجلة</h2><p>جميع الباقات الحالية وحالتها وحدودها، دون حذف السجلات عند الإيقاف.</p></div><span className="count-tag">{plans.length.toLocaleString("ar")} باقة</span></div>
           <div className="table-wrap plans-table-wrap"><table><thead><tr><th>الرمز</th><th>اسم الباقة</th><th>السعر</th><th>عمولة نقطة البيع</th><th>الحجم</th><th>الوقت</th><th>الصلاحية</th><th>المستخدمون</th><th>المجموعة</th><th>السرعة</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
-            <tbody>{plans.map((plan) => <tr key={plan.id}><td><span className="plan-code">{plan.code}</span></td><td><strong>{plan.name}</strong></td><td>{Number(plan.price).toLocaleString("en-US")} ريال</td><td>{plan.commission_type === "none" ? "بدون" : plan.commission_type === "percentage" ? `${Number(plan.commission_value)}%` : `${Number(plan.commission_value).toFixed(2)} ريال`}</td><td>{plan.data_limit_bytes === null ? "مفتوح" : `${plan.data_limit_bytes % (1024 ** 3) === 0 ? (plan.data_limit_bytes / 1024 ** 3).toFixed(2) + " GB" : (plan.data_limit_bytes / 1024 ** 2).toFixed(0) + " MB"}`}</td><td>{plan.session_time_limit_seconds === null ? "مفتوح" : `${(plan.session_time_limit_seconds / 3600).toFixed(2)} ساعة`}</td><td>{plan.validity_period_seconds === null ? "مفتوح" : `${(plan.validity_period_seconds / 86400).toFixed(2)} يوم`}</td><td>{plan.settings?.shared_users == null ? "غير محدود" : String(plan.settings.shared_users)}</td><td>{String(plan.settings?.group ?? "—")}</td><td>{plan.speed_profile || "—"}</td><td><span className={plan.is_active ? "plan-status active" : "plan-status inactive"}>{plan.is_active ? "مفعّلة" : "متوقفة"}</span></td><td><button type="button" className="table-action" disabled={busy} onClick={() => editPlan(plan)}>تعديل</button><button type="button" className={plan.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePlan(plan)}>{plan.is_active ? "إيقاف" : "تفعيل"}</button></td></tr>)}</tbody>
+            <tbody>{plans.map((plan) => <tr key={plan.id}><td><span className="plan-code">{plan.code}</span></td><td><strong>{plan.name}</strong></td><td>{Number(plan.price).toLocaleString("en-US")} ريال</td><td>{plan.commission_type === "none" ? "بدون" : plan.commission_type === "percentage" ? `${Number(plan.commission_value)}%` : `${Number(plan.commission_value).toFixed(2)} ريال`}</td><td>{plan.data_limit_bytes === null ? "مفتوح" : `${plan.data_limit_bytes % (1024 ** 3) === 0 ? (plan.data_limit_bytes / 1024 ** 3).toFixed(2) + " GB" : (plan.data_limit_bytes / 1024 ** 2).toFixed(0) + " MB"}`}</td><td>{plan.session_time_limit_seconds === null ? "مفتوح" : `${(plan.session_time_limit_seconds / 3600).toFixed(2)} ساعة`}</td><td>{plan.validity_period_seconds === null ? "مفتوح" : `${(plan.validity_period_seconds / 86400).toFixed(2)} يوم`}</td><td>{plan.settings?.shared_users == null ? "غير محدود" : String(plan.settings.shared_users)}</td><td>{String(plan.settings?.group ?? "—")}</td><td>{plan.speed_profile || "—"}</td><td><span className={plan.is_active ? "plan-status active" : "plan-status inactive"}>{plan.is_active ? "مفعّلة" : "متوقفة"}</span></td><td>{can("plans.update") && <><button type="button" className="table-action" disabled={busy} onClick={() => editPlan(plan)}>تعديل</button><button type="button" className={plan.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePlan(plan)}>{plan.is_active ? "إيقاف" : "تفعيل"}</button></>}</td></tr>)}</tbody>
           </table>{plans.length === 0 && <div className="empty-state">لا توجد باقات بعد. أنشئ أول باقة من النموذج أعلاه.</div>}</div>
         </section>
       </section>
@@ -2007,7 +2009,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </div>
 
         <div className="template-studio-grid">
-          <form className="panel template-editor-panel" onSubmit={saveCardTemplate}>
+          {can("templates.create") || (editingTemplateId !== null && can("templates.update")) && (
+<form className="panel template-editor-panel" onSubmit={saveCardTemplate}>
             <div className="template-editor-heading"><div><span className="eyebrow">{editingTemplateId ? "تعديل تصميم محفوظ" : "تصميم جديد"}</span><h3>{editingTemplateId ? "تحرير القالب" : "إنشاء قالب طباعة"}</h3></div><span className="template-editor-mark">✎</span></div>
 
             <div className="template-editor-section"><div className="plan-section-title"><span>01</span><div><h3>البيانات وربط الباقة</h3><p>اختر الباقة التي سيحملها هذا القالب تلقائياً</p></div></div><div className="form-grid">
@@ -2046,6 +2049,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
             <div className="form-actions template-editor-actions"><button type="submit" disabled={busy || !plans.some((plan) => plan.is_active && String(plan.id) === templateDraft.plan_id)}>{busy ? "جارٍ الحفظ..." : editingTemplateId ? "حفظ تعديلات القالب" : "حفظ القالب"}</button><button type="button" className="secondary-button" onClick={resetTemplateDraft}>قالب جديد / إلغاء</button></div>
           </form>
+)}
 
           <aside className="template-preview-column">
             <div className="panel template-live-preview">
@@ -2072,7 +2076,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           return <article className="panel template-item" key={item.id}>
             <div className="template-sample" style={{ background: item.background_color, color: item.text_color, aspectRatio: `${item.width_mm}/${item.height_mm}`, border: savedLayout.show_border === false ? "none" : `${Number(savedLayout.border_width ?? 1)}px solid ${String(savedLayout.border_color ?? "#667085")}` }}><strong>{String(savedLayout.header_text ?? "الأسطورة نت")}</strong><span>{item.name}</span><small>{plans.find((plan) => plan.id === item.plan_id)?.name ?? "غير مرتبطة"}</small></div>
             <h3>{item.name} {item.is_default ? "— افتراضي" : ""}</h3><small>{item.width_mm} × {item.height_mm} مم · {item.code} · الباقة: {plans.find((plan) => plan.id === item.plan_id)?.name ?? "غير مرتبطة"}</small>
-            <div className="form-actions"><button type="button" className="table-action" onClick={() => { setEditingTemplateId(item.id); setTemplateDraft({ code: item.code, name: item.name, width_mm: String(item.width_mm), height_mm: String(item.height_mm), background_color: item.background_color, text_color: item.text_color, plan_id: item.plan_id ? String(item.plan_id) : "" }); setTemplateLayoutDraft({ ...DEFAULT_TEMPLATE_LAYOUT, ...item.layout } as Record<string, string | boolean>); }}>تعديل</button><button type="button" className="table-action" disabled={busy || item.is_default} onClick={() => apiRequest<CardTemplate>(token, `/api/v1/card-templates/${item.id}`, { method: "PATCH", body: JSON.stringify({ is_default: true }) }).then(() => loadCardTemplates()).then(() => setNotice("تم تعيين القالب الافتراضي.")).catch((err) => setError(err instanceof Error ? err.message : "تعذر تعيين القالب الافتراضي"))}>جعله افتراضياً</button><button type="button" className="table-action danger-action" disabled={busy || item.is_default} onClick={() => deleteCardTemplate(item)}>حذف</button></div>
+            <div className="form-actions">{can("templates.update") && <><button type="button" className="table-action" onClick={() => { setEditingTemplateId(item.id); setTemplateDraft({ code: item.code, name: item.name, width_mm: String(item.width_mm), height_mm: String(item.height_mm), background_color: item.background_color, text_color: item.text_color, plan_id: item.plan_id ? String(item.plan_id) : "" }); setTemplateLayoutDraft({ ...DEFAULT_TEMPLATE_LAYOUT, ...item.layout } as Record<string, string | boolean>); }}>تعديل</button><button type="button" className="table-action" disabled={busy || item.is_default} onClick={() => apiRequest<CardTemplate>(token, `/api/v1/card-templates/${item.id}`, { method: "PATCH", body: JSON.stringify({ is_default: true }) }).then(() => loadCardTemplates()).then(() => setNotice("تم تعيين القالب الافتراضي.")).catch((err) => setError(err instanceof Error ? err.message : "تعذر تعيين القالب الافتراضي"))}>جعله افتراضياً</button></>}{can("templates.delete") && <button type="button" className="table-action danger-action" disabled={busy || item.is_default} onClick={() => deleteCardTemplate(item)}>حذف</button>}</div>
           </article>;
         })}</div>
         {cardTemplates.length === 0 && <div className="empty-state">لا توجد قوالب محفوظة بعد. أنشئ أول قالب من المحرر.</div>}
@@ -2374,7 +2378,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </div>
 
         <div className="pos-management-layout">
-          {(can("pos.create") || can("pos.update")) && (user.roles.includes("owner") || editingPosId !== null) && <form className="panel pos-editor-panel" onSubmit={createPointOfSale}>
+          {(can("pos.create") || (editingPosId !== null && can("pos.update"))) && <form className="panel pos-editor-panel" onSubmit={createPointOfSale}>
             <div className="pos-editor-heading">
               <div><span className="eyebrow">{editingPosId !== null ? "تحديث البيانات" : "نقطة بيع جديدة"}</span><h3>{editingPosId !== null ? "تعديل نقطة البيع" : "إضافة نقطة بيع"}</h3></div>
               <span className="pos-editor-icon">＋</span>
@@ -2414,7 +2418,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                     <td><span className={point.allow_printing ? "pos-status active" : "pos-status inactive"}>{point.allow_printing ? "مسموح" : "موقوف"}</span></td>
                     <td><span className={point.is_active ? "pos-status active" : "pos-status inactive"}>{point.is_active ? "مفعّلة" : "متوقفة"}</span></td>
                     <td className="actions-cell">
-                      {(can("pos.create") || can("pos.update")) ? <>
+                      {can("pos.update") ? <>
                         <button type="button" className="table-action" disabled={busy} onClick={() => { setEditingPosId(point.id); setPosDraft({ code: point.code, name: point.name, contactName: point.contact_name || "", phone: point.phone || "", debtLimit: point.debt_limit === null ? "" : String(point.debt_limit), allowCardCreation: point.allow_card_creation, allowPrinting: point.allow_printing }); }}>تعديل</button>
                         {user.roles.includes("owner") && <>
                           <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOperation(point, "allow_card_creation")}>{point.allow_card_creation ? "إيقاف الإنشاء" : "السماح بالإنشاء"}</button>
@@ -2759,7 +2763,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div><h2>إدارة أجهزة MikroTik</h2><p>سجل الراوترات ومعرّفات NAS. تُحفظ كلمات المرور والأسرار مشفرة ولا تظهر في قائمة الراوترات.</p></div>
         </div>
         <div className="notice">أدخل عنوان مصدر RADIUS الذي سيظهر به الراوتر أمام خادم RADIUS. بيانات العملاء النشطة متاحة داخلياً لخدمة FreeRADIUS؛ لم يتم بعد تشغيل خادم FreeRADIUS أو الاتصال بإدارة RouterOS.</div>
-        <form className="panel form-grid" onSubmit={createRouter}>
+        {can("routers.create") || (editingRouterId !== null && can("routers.update")) && (
+<form className="panel form-grid" onSubmit={createRouter}>
           <div className="section-heading"><div><h3>{editingRouterId !== null ? "تعديل بيانات الراوتر" : "إضافة راوتر جديد"}</h3><p>{editingRouterId !== null ? "تعديل بيانات الاتصال والعنوان دون إعادة إدخال الأسرار." : "سجّل بيانات الراوتر ومعرّف NAS."}</p></div></div>
           <label>اسم الراوتر<input value={routerDraft.name} onChange={(e) => setRouterDraft({ ...routerDraft, name: e.target.value })} required minLength={2} maxLength={120} /></label>
           <label>NAS Identifier<input value={routerDraft.nasIdentifier} onChange={(e) => setRouterDraft({ ...routerDraft, nasIdentifier: e.target.value })} required maxLength={150} readOnly={editingRouterId !== null} placeholder="مثال: router-aden-01" /><small className="field-hint">يجب أن يطابق اسم الهوية في MikroTik: /system identity. لا يتغير أثناء التعديل الحالي.</small></label>
@@ -2775,6 +2780,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div className="form-actions"><button type="submit" disabled={busy || (editingRouterId === null && !!routerDraft.apiUsername !== !!routerDraft.apiSecret)}>{busy ? "جارٍ الحفظ..." : editingRouterId !== null ? "حفظ التعديلات" : "حفظ الراوتر"}</button>{editingRouterId !== null && <button type="button" className="secondary-button" disabled={busy} onClick={resetRouterDraft}>إلغاء التعديل</button>}</div>
           {editingRouterId === null && !!routerDraft.apiUsername !== !!routerDraft.apiSecret && <div className="field-hint">أدخل اسم مستخدم API وكلمة مروره معاً، أو اتركهما فارغين.</div>}
         </form>
+)}
         <section className="panel form-grid">
           <div className="section-heading"><div><h2>فحص كرت واحد من User Manager</h2><p>بحث تشخيصي بالاسم الدقيق؛ لا ينشئ كرتاً ولا يستورده ولا يغيّر بيانات المصدر.</p></div></div>
           <label>جهاز User Manager
