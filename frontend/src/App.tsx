@@ -2234,7 +2234,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <tbody>{cardBatches.map((batch) => <tr key={batch.batch_id}>
               <td>{batch.batch_number}</td><td>{batch.plan_name}</td><td>{batch.template_code || "—"}</td><td>{batch.point_of_sale_name || "لم تحدد"}</td>
               <td>{batch.quantity}</td><td>{batch.printed_count}</td><td>{batch.is_online_sale ? "أونلاين" : "عادي"}</td><td>{batch.note || "—"}</td><td>{new Date(batch.created_at).toLocaleString("ar")}</td>
-              <td><button type="button" className="table-action" onClick={() => { setCardBatchFilter(batch.batch_id); setCardSearch(""); setCardOffset(0); setPage("cards"); loadCards("", 0, batch.batch_id).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل كروت الدفعة")); }}>عرض الكروت</button></td>
+              <td><button type="button" className="table-action" onClick={() => { setCardBatchFilter(batch.batch_id); setCardSearch(""); setCardStatusFilter(""); setCardPlanFilter(""); setCardFreeFilter(""); setCardOffset(0); setSelectedCardIds([]); setCardManagementTab("all"); setPage("cards"); loadCards("", 0, batch.batch_id, "", "", "").catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل كروت الدفعة")); }}>عرض الكروت</button></td>
             </tr>)}</tbody>
           </table>
           {cardBatches.length === 0 && <div className="empty-state">لا توجد دفعات كروت مسجلة بعد.</div>}
