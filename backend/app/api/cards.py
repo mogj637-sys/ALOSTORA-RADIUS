@@ -124,6 +124,7 @@ def list_cards(
     status_filter: str | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None, min_length=1, max_length=120),
     plan_id: int | None = Query(default=None, gt=0),
+    batch_id: UUID | None = Query(default=None),
     is_free: bool | None = None,
     db: Session = Depends(get_db),
 ):
@@ -137,6 +138,8 @@ def list_cards(
         )
     if plan_id is not None:
         query = query.filter(Card.plan_id == plan_id)
+    if batch_id is not None:
+        query = query.filter(Card.batch_id == batch_id)
     if is_free is not None:
         query = query.filter(Card.is_free.is_(is_free))
     return query.order_by(Card.created_at.desc()).offset(offset).limit(limit).all()
