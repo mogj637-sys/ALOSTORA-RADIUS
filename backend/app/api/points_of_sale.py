@@ -21,7 +21,6 @@ from app.schemas.points_of_sale import (
 router = APIRouter(
     prefix="/api/v1/points-of-sale",
     tags=["points-of-sale"],
-    dependencies=[Depends(require_permission("pos.view"))],
 )
 
 
