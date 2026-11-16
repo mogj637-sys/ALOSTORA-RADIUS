@@ -18,6 +18,14 @@ type CurrentUser = {
   display_name: string;
   roles: string[];
 };
+type AdminRole = { code: string; name: string; description: string | null };
+type AdminAccount = { id: number; username: string; display_name: string; is_active: boolean; roles: string[]; last_login_at: string | null; created_at: string };
+
+  id: number;
+  username: string;
+  display_name: string;
+  roles: string[];
+};
 
 type Plan = {
   id: number;
@@ -409,8 +417,12 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
 }
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
-  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
+  const [adminRoles, setAdminRoles] = useState<AdminRole[]>([]);
+  const [adminDraft, setAdminDraft] = useState({ username: "", displayName: "", password: "", roleCode: "operator" });
+
   const [routers, setRouters] = useState<RouterRecord[]>([]);
   const [userManagerProbe, setUserManagerProbe] = useState<UserManagerProbe | null>(null);
   const [probingRouterId, setProbingRouterId] = useState<number | null>(null);
@@ -490,6 +502,53 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }, [cardTemplates, plans, printTemplate]);
 
   async function loadPlans() {
+  async function loadAdminAccounts() {
+    const [accounts, roles] = await Promise.all([
+      apiRequest<AdminAccount[]>(token, "/api/v1/admins"),
+      apiRequest<AdminRole[]>(token, "/api/v1/admins/roles"),
+    ]);
+    setAdminAccounts(accounts);
+    setAdminRoles(roles);
+    if (roles.length && !roles.some((role) => role.code === adminDraft.roleCode)) {
+      setAdminDraft((draft) => ({ ...draft, roleCode: roles[0].code }));
+    }
+  }
+
+  async function createAdminAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<AdminAccount>(token, "/api/v1/admins", {
+        method: "POST",
+        body: JSON.stringify({
+          username: adminDraft.username.trim(),
+          display_name: adminDraft.displayName.trim(),
+          password: adminDraft.password,
+          role_codes: [adminDraft.roleCode],
+        }),
+      });
+      setAdminDraft((draft) => ({ ...draft, username: "", displayName: "", password: "" }));
+      await loadAdminAccounts();
+      setNotice("تم إنشاء حساب الإدارة بنجاح.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر إنشاء حساب الإدارة");
+    } finally { setBusy(false); }
+  }
+
+  async function updateAdminAccount(account: AdminAccount, changes: { role_codes?: string[]; is_active?: boolean }) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<AdminAccount>(token, `/api/v1/admins/${account.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(changes),
+      });
+      await loadAdminAccounts();
+      setNotice("تم تحديث حساب الإدارة.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تحديث حساب الإدارة");
+    } finally { setBusy(false); }
+  }
+
     const result = await apiRequest<Plan[]>(token, "/api/v1/plans?include_inactive=true");
     setPlans(result);
     const firstActive = result.find((plan) => plan.is_active);
@@ -980,7 +1039,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   useEffect(() => {
     if (page !== "pos") setPrintPreviewCards([]);
-    if (page === "overview") {
+    if (page === "admins" && user.roles.includes("owner")) {\n      setError("");\n      loadAdminAccounts().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل حسابات الإدارة"));\n    }\n    if (page === "overview") {
       setError("");
       loadRadiusOverview().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل لوحة المعلومات"));
     }
@@ -1180,6 +1239,40 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderOverview() {
+  function renderAdmins() {
+    return (
+      <div className="admin-management-workspace">
+        <div className="section-heading">
+          <div><h2>حسابات الإدارة والموظفين</h2><p>إنشاء حسابات دخول مستقلة وتحديد الدور الإداري لكل حساب.</p></div>
+          <span className="count-tag">{adminAccounts.length.toLocaleString("ar")} حساب</span>
+        </div>
+        <div className="notice">إدارة الحسابات متاحة لمدير النظام فقط. الأدوار الحالية تحدد تصنيف الحساب؛ توزيع الصلاحيات التفصيلية على كل قسم سيُستكمل في المرحلة التالية.</div>
+        <form className="panel form-grid admin-create-form" onSubmit={createAdminAccount}>
+          <div className="section-heading"><div><h3>إضافة حساب جديد</h3><p>كلمة المرور يجب ألا تقل عن 12 حرفاً.</p></div></div>
+          <label>اسم المستخدم<input value={adminDraft.username} onChange={(event) => setAdminDraft({ ...adminDraft, username: event.target.value })} minLength={3} maxLength={80} pattern="[A-Za-z0-9_.-]+" autoComplete="off" required /></label>
+          <label>اسم الموظف<input value={adminDraft.displayName} onChange={(event) => setAdminDraft({ ...adminDraft, displayName: event.target.value })} minLength={2} maxLength={150} required /></label>
+          <label>كلمة المرور<input type="password" value={adminDraft.password} onChange={(event) => setAdminDraft({ ...adminDraft, password: event.target.value })} minLength={12} maxLength={256} autoComplete="new-password" required /></label>
+          <label>الدور الإداري<select value={adminDraft.roleCode} onChange={(event) => setAdminDraft({ ...adminDraft, roleCode: event.target.value })} required>{adminRoles.map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}</select></label>
+          <div className="form-actions"><button type="submit" disabled={busy || adminRoles.length === 0}>{busy ? "جارٍ الحفظ..." : "إنشاء حساب"}</button></div>
+        </form>
+        <section className="panel admin-directory">
+          <div className="section-heading"><div><h3>الحسابات المسجلة</h3><p>يمكن تغيير دور الحساب أو إيقافه دون حذف سجله.</p></div><button type="button" className="table-action" onClick={() => loadAdminAccounts().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث الحسابات"))}>تحديث</button></div>
+          <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>المستخدم</th><th>اسم الموظف</th><th>الدور الحالي</th><th>آخر دخول</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+            <tbody>{adminAccounts.map((account) => <tr key={account.id}>
+              <td><strong dir="ltr">{account.username}</strong></td><td>{account.display_name}</td>
+              <td><select aria-label={`دور ${account.username}`} defaultValue={account.roles[0] ?? "viewer"} onChange={(event) => updateAdminAccount(account, { role_codes: [event.target.value] })} disabled={busy || account.id === user.id}>
+                {adminRoles.map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}
+              </select></td>
+              <td>{account.last_login_at ? new Date(account.last_login_at).toLocaleString("ar") : "لم يسجل الدخول"}</td>
+              <td><span className={account.is_active ? "admin-status active" : "admin-status inactive"}>{account.is_active ? "نشط" : "متوقف"}</span></td>
+              <td><button type="button" className="table-action" disabled={busy || account.id === user.id} onClick={() => updateAdminAccount(account, { is_active: !account.is_active })}>{account.is_active ? "إيقاف الحساب" : "تفعيل الحساب"}</button></td>
+            </tr>)}</tbody></table></div>
+          {adminAccounts.length === 0 && <div className="empty-state">لا توجد حسابات إدارة مسجلة.</div>}
+        </section>
+      </div>
+    );
+  }
+
     const statusCount = (status: string) => radiusOverview?.cards_by_status[status] ?? 0;
     return (
       <>
@@ -2172,6 +2265,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <div className="side-label">القائمة الرئيسية</div>
         <nav>
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
+          {user.roles.includes("owner") && <button className={page === "admins" ? "nav-item active" : "nav-item"} onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات</button>}
+
           <div className="nav-group"><span>نظام اليوزرمنجر</span>
             <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>
             <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>
@@ -2189,12 +2284,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "الطباعة والدفعات" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "reports" ? "تقارير اليوزرمنجر والمالية" : page === "templates" ? "استديو تصميم الكروت" : "إدارة أجهزة MikroTik"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "الطباعة والدفعات" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "reports" ? "تقارير اليوزرمنجر والمالية" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : "إدارة أجهزة MikroTik"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "card-create" ? renderCardCreate() : page === "pos" ? renderPos() : page === "pos-management" ? renderPosManagement() : page === "batches" ? renderBatches() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
+        {page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "card-create" ? renderCardCreate() : page === "pos" ? renderPos() : page === "pos-management" ? renderPosManagement() : page === "batches" ? renderBatches() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
