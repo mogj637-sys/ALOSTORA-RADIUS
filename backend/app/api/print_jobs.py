@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -277,18 +276,25 @@ def create_print_job(
                 )
 
     commission_total = sum(commission_by_plan.values(), Decimal("0.00"))
-    if not payload.is_reprint and point_of_sale.debt_limit is not None:
+    if point_of_sale.debt_limit is not None:
         current_due = get_pos_balance_due(db, point_of_sale.id)
-        projected_due = current_due + commercial_total - commission_total
-        if projected_due > Decimal(point_of_sale.debt_limit):
+        debt_limit = Decimal(point_of_sale.debt_limit)
+        if current_due >= debt_limit:
             raise HTTPException(
                 status_code=409,
-                detail=(
-                    "ستتجاوز هذه العملية سقف المديونية لنقطة البيع. "
-                    f"الرصيد الحالي {current_due:.2f} ريال، "
-                    f"والسقف {Decimal(point_of_sale.debt_limit):.2f} ريال"
-                ),
+                detail="بلغت نقطة البيع سقف المديونية؛ يجب تسجيل سداد قبل تنفيذ عمليات طباعة جديدة",
             )
+        if not payload.is_reprint:
+            projected_due = current_due + commercial_total - commission_total
+            if projected_due > debt_limit:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "ستتجاوز هذه العملية سقف المديونية لنقطة البيع. "
+                        f"الرصيد الحالي {current_due:.2f} ريال، "
+                        f"والسقف {debt_limit:.2f} ريال"
+                    ),
+                )
 
     job = PrintJob(
         idempotency_key=payload.idempotency_key,
