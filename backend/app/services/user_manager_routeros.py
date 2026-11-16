@@ -150,11 +150,11 @@ def inspect_routeros_user_manager(
             "تعذر الاتصال بالراوتر أو فشل التحقق من بيانات API. تحقق من العنوان والمنفذ والصلاحيات والجدار الناري."
         ) from exc
     finally:
-        if api is not None or getattr(pool, "connected", False):
-            try:
-                pool.disconnect()
-            except Exception:
-                pass
+        # Close the socket even when TLS/login fails before connected becomes True.
+        try:
+            pool.disconnect()
+        except Exception:
+            pass
 
 
 def _query_one(api: Any, path: str, field: str, value: str, properties: str) -> dict[str, Any] | None:
@@ -332,8 +332,8 @@ def inspect_user_manager_user(
             "تعذر قراءة سجل المستخدم أو علاقات البروفايل من User Manager. تحقق من صلاحيات القراءة وحقول الإصدار."
         ) from exc
     finally:
-        if api is not None or getattr(pool, "connected", False):
-            try:
-                pool.disconnect()
-            except Exception:
-                pass
+        # Close the socket even when TLS/login fails before connected becomes True.
+        try:
+            pool.disconnect()
+        except Exception:
+            pass
