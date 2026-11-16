@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import get_current_owner
 from app.db.session import get_db
 from app.models.auth import AdminUser, Role, Permission
+from app.models.core import PointOfSale
 from app.schemas.admins import AdminRoleCreate, AdminRoleResponse, AdminUserCreate, AdminUserResponse, AdminUserUpdate
 from app.security import hash_password
 from app.services.audit import record_audit
@@ -18,6 +19,7 @@ def _user_response(user: AdminUser) -> AdminUserResponse:
         display_name=user.display_name,
         is_active=user.is_active,
         roles=sorted(role.code for role in user.roles),
+        point_of_sale_ids=sorted(point.id for point in user.point_of_sales),
         last_login_at=user.last_login_at,
         created_at=user.created_at,
     )
@@ -32,6 +34,14 @@ def _resolve_roles(db: Session, role_codes: list[str]) -> list[Role]:
     if missing:
         raise HTTPException(status_code=422, detail=f"الأدوار غير معروفة: {', '.join(missing)}")
     return roles
+
+
+def _resolve_points_of_sale(db: Session, point_ids: list[int]) -> list[PointOfSale]:
+    normalized = list(dict.fromkeys(point_ids))
+    points = db.query(PointOfSale).filter(PointOfSale.id.in_(normalized)).all() if normalized else []
+    if len(points) != len(normalized):
+        raise HTTPException(status_code=422, detail="تتضمن قائمة نقاط البيع اختياراً غير صحيح")
+    return points
 
 
 @router.get("/roles", response_model=list[AdminRoleResponse])
@@ -91,6 +101,7 @@ def create_admin(
     if db.query(AdminUser).filter(AdminUser.username == payload.username).first():
         raise HTTPException(status_code=409, detail="اسم المستخدم مستخدم بالفعل")
     roles = _resolve_roles(db, payload.role_codes)
+    points = _resolve_points_of_sale(db, payload.point_of_sale_ids)
     try:
         password_hash = hash_password(payload.password)
     except ValueError as exc:
@@ -101,6 +112,7 @@ def create_admin(
         password_hash=password_hash,
         is_active=True,
         roles=roles,
+        point_of_sales=points,
     )
     db.add(user)
     db.flush()
@@ -128,6 +140,7 @@ def update_admin(
 
     next_roles = _resolve_roles(db, payload.role_codes) if payload.role_codes is not None else user.roles
     next_active = payload.is_active if payload.is_active is not None else user.is_active
+    next_points = _resolve_points_of_sale(db, payload.point_of_sale_ids) if payload.point_of_sale_ids is not None else user.point_of_sales
     keeps_owner = any(role.code == "owner" for role in next_roles)
 
     if user.id == current_user.id and (not next_active or not keeps_owner):
@@ -153,8 +166,10 @@ def update_admin(
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     if payload.role_codes is not None:
         user.roles = next_roles
+    if payload.point_of_sale_ids is not None:
+        user.point_of_sales = next_points
     user.is_active = next_active
-    record_audit(db, current_user, "admin.updated", "admin_user", f"تحديث حساب إداري: {user.username}", entity_id=user.id, details={"before": before, "after": {"display_name": user.display_name, "is_active": user.is_active, "role_codes": sorted(role.code for role in user.roles)}, "password_changed": bool(payload.password)})
+    record_audit(db, current_user, "admin.updated", "admin_user", f"تحديث حساب إداري: {user.username}", entity_id=user.id, details={"before": before, "after": {"display_name": user.display_name, "is_active": user.is_active, "role_codes": sorted(role.code for role in user.roles), "point_of_sale_ids": sorted(point.id for point in user.point_of_sales)}, "password_changed": bool(payload.password)})
     db.commit()
     db.refresh(user)
     return _user_response(user)
