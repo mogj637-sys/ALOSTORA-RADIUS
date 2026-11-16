@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_owner
+from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import Card, CardBatch, CardEvent, CardTemplate, Plan, PointOfSale, RadiusSession, Router
@@ -24,7 +24,7 @@ from app.schemas.cards import (
 from app.services.card_generator import generate_password, generate_username
 from app.services.credentials import CredentialEncryptionNotConfigured, encrypt_credential
 
-router = APIRouter(prefix="/api/v1/cards", tags=["cards"], dependencies=[Depends(get_current_owner)])
+router = APIRouter(prefix="/api/v1/cards", tags=["cards"], dependencies=[Depends(require_permission("cards.view"))])
 
 
 def _plan_snapshot(plan: Plan) -> dict:
@@ -252,12 +252,12 @@ def list_cards(
     return cards
 
 
-@router.patch("/{card_id}/status", response_model=CardListItem)
+@router.patch("/{card_id}/status", response_model=CardListItem, dependencies=[Depends(require_permission("cards.manage"))])
 def update_card_status(
     card_id: str,
     payload: CardStatusUpdate,
     db: Session = Depends(get_db),
-    user: AdminUser = Depends(get_current_owner),
+    user: AdminUser = Depends(require_permission("cards.manage")),
 ):
     from uuid import UUID
 
@@ -330,8 +330,8 @@ def update_card_status(
     return card
 
 
-@router.post("/single", response_model=CardCreateResponse, status_code=status.HTTP_201_CREATED)
-def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db), user: AdminUser = Depends(get_current_owner)):
+@router.post("/single", response_model=CardCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.manage"))])
+def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.manage"))):
     plan = db.get(Plan, payload.plan_id)
     if plan is None or not plan.is_active:
         raise HTTPException(status_code=404, detail="الباقة غير موجودة أو غير مفعلة")
@@ -394,8 +394,8 @@ def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db),
     )
 
 
-@router.post("/batch", response_model=CardBatchResponse, status_code=status.HTTP_201_CREATED)
-def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), user: AdminUser = Depends(get_current_owner)):
+@router.post("/batch", response_model=CardBatchResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.manage"))])
+def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.manage"))):
     plan = db.get(Plan, payload.plan_id)
     if plan is None or not plan.is_active:
         raise HTTPException(status_code=404, detail="الباقة غير موجودة أو غير مفعلة")
