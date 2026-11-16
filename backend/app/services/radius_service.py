@@ -303,6 +303,7 @@ def authorize_card(
             )
         )
         db.commit()
+        _attempt_disconnect_all_active(db, card, "انتهت صلاحية الكرت")
         return {"accepted": False, "reason": "انتهت صلاحية الكرت", "reply": {}}
 
     remaining_time, remaining_data = _remaining_limits(card, now)
