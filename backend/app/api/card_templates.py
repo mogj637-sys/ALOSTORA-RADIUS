@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -44,7 +46,14 @@ def update_template(template_id: int, payload: CardTemplateUpdate, db: Session =
         plan = db.get(Plan, changes["plan_id"])
         if plan is None or not plan.is_active:
             raise HTTPException(status_code=422, detail="اختر باقة موجودة ومفعلة لربطها بالقالب")
-    before = {key: getattr(item, key) for key in changes}
+    before = {
+        key: str(getattr(item, key)) if isinstance(getattr(item, key), Decimal) else getattr(item, key)
+        for key in changes
+    }
+    audit_changes = {
+        key: str(value) if isinstance(value, Decimal) else value
+        for key, value in changes.items()
+    }
     if changes.get("is_default"):
         db.query(CardTemplate).filter(CardTemplate.id != item.id).update({CardTemplate.is_default: False})
     for key, value in changes.items():
@@ -56,7 +65,7 @@ def update_template(template_id: int, payload: CardTemplateUpdate, db: Session =
         "card_template",
         f"تعديل قالب {item.name}",
         entity_id=item.id,
-        details={"before": before, "after": changes},
+        details={"before": before, "after": audit_changes},
     )
     db.commit()
     db.refresh(item)
