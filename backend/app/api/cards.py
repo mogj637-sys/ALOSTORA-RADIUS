@@ -24,6 +24,7 @@ from app.schemas.cards import (
 )
 from app.services.card_generator import generate_password, generate_username
 from app.services.credentials import CredentialEncryptionNotConfigured, encrypt_credential
+from app.services.pos_credit import ensure_pos_card_creation_allowed
 
 router = APIRouter(prefix="/api/v1/cards", tags=["cards"], dependencies=[Depends(require_permission("cards.view"))])
 
@@ -462,9 +463,17 @@ def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db),
         raise HTTPException(status_code=409, detail="اسم المستخدم مستخدم من قبل")
 
     password = _credential_for(payload.card_type, payload.username, payload.password)
-    point = db.get(PointOfSale, payload.point_of_sale_id) if payload.point_of_sale_id else None
-    if payload.point_of_sale_id and (point is None or not point.is_active):
+    point = (
+        db.query(PointOfSale)
+        .filter(PointOfSale.id == payload.point_of_sale_id)
+        .with_for_update()
+        .first()
+        if payload.point_of_sale_id else None
+    )
+    if payload.point_of_sale_id and point is None:
         raise HTTPException(status_code=422, detail="اختر نقطة بيع موجودة ومفعلة")
+    if point is not None:
+        ensure_pos_card_creation_allowed(db, point)
     template = db.query(CardTemplate).filter(CardTemplate.code == payload.template_code).first() if payload.template_code else None
     if payload.template_code and template is None:
         raise HTTPException(status_code=404, detail="قالب الطباعة غير موجود")
@@ -530,9 +539,15 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
 
     point = None
     if payload.point_of_sale_id is not None:
-        point = db.get(PointOfSale, payload.point_of_sale_id)
-        if point is None or not point.is_active:
+        point = (
+            db.query(PointOfSale)
+            .filter(PointOfSale.id == payload.point_of_sale_id)
+            .with_for_update()
+            .first()
+        )
+        if point is None:
             raise HTTPException(status_code=422, detail="اختر نقطة بيع موجودة ومفعلة")
+        ensure_pos_card_creation_allowed(db, point)
     template = None
     if payload.template_code:
         template = db.query(CardTemplate).filter(CardTemplate.code == payload.template_code).first()
