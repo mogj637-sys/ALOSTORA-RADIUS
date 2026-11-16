@@ -80,8 +80,7 @@ def test_radius_authorize_starts_first_use_and_returns_mikrotik_limits(owner_cli
     assert accepted.status_code == 200, accepted.text
     result = accepted.json()
     assert result["control:Auth-Type"] == "Accept"
-    assert "reply:Port-Limit" in result
-    assert result["reply:Port-Limit"] == 1
+    assert "reply:Port-Limit" not in result  # blank shared-user limit means unlimited
     assert result["reply:Acct-Interim-Interval"] == 60
     assert result["reply:Session-Timeout"] == 300
     assert result["reply:Mikrotik-Total-Limit"] == 2000
@@ -142,7 +141,7 @@ def test_radius_accounting_is_idempotent_and_counts_connected_time_and_both_dire
         headers=internal_headers,
         json={"nas_identifier": router["nas_identifier"], "username": card["username"], "password": password},
     )
-    assert second_auth.status_code == 401
+    assert second_auth.status_code == 200  # blank shared-user limit permits another active user
 
     interim = {
         **base,
@@ -481,7 +480,7 @@ def test_freeradius_attribute_json_envelope_is_normalized(owner_client):
         },
     )
     assert auth.status_code == 200
-    assert auth.json()["reply:Port-Limit"] == 1
+    assert "reply:Port-Limit" not in auth.json()
 
     started_at = datetime.now(timezone.utc)
     accounting = client.post(
@@ -534,7 +533,7 @@ def test_radius_authorize_supports_chap_challenge_response(owner_client):
         },
     )
     assert accepted.status_code == 200
-    assert accepted.json()["reply:Port-Limit"] == 1
+    assert "reply:Port-Limit" not in accepted.json()
 
 
 def test_authorize_splits_mikrotik_total_limit_into_gigawords(owner_client):
@@ -781,4 +780,140 @@ def test_plan_rate_settings_are_snapshotted_and_applied_to_radius_reply(owner_cl
     assert saved.plan_snapshot["settings"]["shared_users"] == 2
     assert saved.plan_snapshot["settings"]["schedule"]["enabled"] is True
     assert saved.plan_snapshot["settings"]["notifications"]["enabled"] is True
+    db.close()
+
+
+
+
+def test_radius_enforces_plan_concurrent_user_limit_and_restores_card_status(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    code = "SHARE-" + secrets.token_hex(4).upper()
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "code": code,
+            "name": "باقة مستخدمين متزامنين",
+            "price": "15.00",
+            "settings": {"shared_users": 2},
+        },
+    )
+    assert plan.status_code == 201, plan.text
+    username = "SHARE" + secrets.token_hex(5).upper()
+    password = "share-password-" + secrets.token_hex(4)
+    created = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": username,
+            "card_type": "separate_credentials",
+            "password": password,
+        },
+    )
+    assert created.status_code == 201, created.text
+    internal_headers = _radius_headers()
+
+    first_auth = client.post(
+        "/internal/radius/authorize",
+        headers=internal_headers,
+        json={"nas_identifier": router["nas_identifier"], "username": username, "password": password},
+    )
+    assert first_auth.status_code == 200
+    assert first_auth.json()["reply:Port-Limit"] == 2
+
+    started_at = datetime.now(timezone.utc)
+    first_id = "shared-one-" + secrets.token_hex(4)
+    first_start = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": username,
+            "acct_session_id": first_id,
+            "status_type": "Start",
+            "event_timestamp": started_at.isoformat(),
+        },
+    )
+    assert first_start.status_code == 200
+    assert first_start.json()["processed"] is True
+
+    second_auth = client.post(
+        "/internal/radius/authorize",
+        headers=internal_headers,
+        json={"nas_identifier": router["nas_identifier"], "username": username, "password": password},
+    )
+    assert second_auth.status_code == 200, second_auth.text
+    assert second_auth.json()["reply:Port-Limit"] == 2
+
+    second_id = "shared-two-" + secrets.token_hex(4)
+    second_start = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": username,
+            "acct_session_id": second_id,
+            "status_type": "Start",
+            "event_timestamp": (started_at + timedelta(seconds=1)).isoformat(),
+        },
+    )
+    assert second_start.status_code == 200
+    assert second_start.json()["processed"] is True
+
+    third_auth = client.post(
+        "/internal/radius/authorize",
+        headers=internal_headers,
+        json={"nas_identifier": router["nas_identifier"], "username": username, "password": password},
+    )
+    assert third_auth.status_code == 401
+
+    db = SessionLocal()
+    saved = db.get(Card, UUID(created.json()["id"]))
+    assert saved.status == "active"
+    assert db.query(RadiusSession).filter(
+        RadiusSession.card_id == saved.id,
+        RadiusSession.stopped_at.is_(None),
+    ).count() == 2
+    db.close()
+
+    first_stop = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": username,
+            "acct_session_id": first_id,
+            "status_type": "Stop",
+            "event_timestamp": (started_at + timedelta(seconds=10)).isoformat(),
+            "session_time_seconds": 10,
+        },
+    )
+    assert first_stop.status_code == 200
+    db = SessionLocal()
+    saved = db.get(Card, UUID(created.json()["id"]))
+    assert saved.status == "active"
+    db.close()
+
+    second_stop = client.post(
+        "/internal/radius/accounting",
+        headers=internal_headers,
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": username,
+            "acct_session_id": second_id,
+            "status_type": "Stop",
+            "event_timestamp": (started_at + timedelta(seconds=20)).isoformat(),
+            "session_time_seconds": 20,
+        },
+    )
+    assert second_stop.status_code == 200
+    db = SessionLocal()
+    saved = db.get(Card, UUID(created.json()["id"]))
+    assert saved.status == "generated"
+    assert db.query(RadiusSession).filter(
+        RadiusSession.card_id == saved.id,
+        RadiusSession.stopped_at.is_(None),
+    ).count() == 0
     db.close()
