@@ -210,6 +210,21 @@ def list_radius_sessions(
     }
 
 
+@router.post("/sessions/{session_id}/disconnect", dependencies=[Depends(require_permission("sessions.disconnect"))])
+def disconnect_radius_session(session_id: int, db: Session = Depends(get_db)):
+    session = db.query(RadiusSession).filter(RadiusSession.id == session_id).first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="جلسة المستخدم غير موجودة")
+    if session.stopped_at is not None:
+        raise HTTPException(status_code=409, detail="الجلسة منتهية بالفعل")
+    result = send_disconnect_for_session(db, session)
+    if result is None:
+        raise HTTPException(status_code=503, detail="خدمة فصل الجلسات RADIUS CoA غير مفعلة")
+    if not result:
+        raise HTTPException(status_code=502, detail="لم يؤكد الراوتر فصل الجلسة")
+    return {"session_id": session.id, "disconnect_acknowledged": True, "message": "أكد الراوتر استلام طلب فصل الجلسة"}
+
+
 @router.get("", response_model=list[CardListItem])
 def list_cards(
     offset: int = Query(default=0, ge=0),
