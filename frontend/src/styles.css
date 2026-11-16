@@ -4825,3 +4825,118 @@ button:disabled { cursor: not-allowed; }
   }
 }
 
+/* Reports workspace: date range context and responsive controls */
+.report-period-filter {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 14px;
+  padding: 17px;
+  border: 1px solid #e2ebe5;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #ffffff, #f8fcf9);
+}
+.report-period-filter label {
+  display: grid;
+  gap: 7px;
+  color: #52695c;
+  font-size: 11px;
+  font-weight: 700;
+}
+.report-period-filter input[type="date"] {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 11px;
+  border: 1px solid #d8e5dc;
+  border-radius: 8px;
+  background: #fff;
+  color: #294b39;
+  font: inherit;
+}
+.report-period-filter .form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-start;
+}
+.report-period-filter .form-actions button {
+  min-width: 150px;
+}
+.report-period-indicator {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 12px 0 4px;
+  padding: 10px 13px;
+  border: 1px solid #dcebe1;
+  border-radius: 10px;
+  background: #f2faf5;
+  color: #315c45;
+}
+.report-period-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #e0f2e7;
+  color: #18734d;
+  font-size: 19px;
+}
+.report-period-indicator > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.report-period-indicator span:not(.report-period-mark) {
+  color: #718779;
+  font-size: 10px;
+}
+.report-period-indicator strong {
+  color: #24563a;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.report-tabs {
+  position: relative;
+  gap: 7px;
+  padding: 7px;
+}
+.report-tabs button {
+  min-height: 39px;
+  transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+}
+.report-tabs button:not(.active):hover {
+  border-color: #dce9e1;
+  background: #edf6f0;
+  color: #236748;
+}
+.report-section > .panel,
+.report-split > .panel {
+  min-width: 0;
+}
+.report-section .table-wrap {
+  border: 1px solid #e5ede7;
+  border-radius: 11px;
+}
+@media (max-width: 620px) {
+  .report-period-filter {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 13px;
+  }
+  .report-period-filter .form-actions {
+    grid-column: auto;
+  }
+  .report-period-filter .form-actions button {
+    width: 100%;
+  }
+  .report-period-indicator {
+    width: 100%;
+  }
+  .report-tabs button {
+    flex-basis: 100%;
+  }
+}
+
