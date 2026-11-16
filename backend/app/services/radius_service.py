@@ -37,8 +37,11 @@ def _snapshot_shared_users(card: Card) -> int | None:
     value = settings.get("shared_users")
     if value in (None, ""):
         return None
-    limit = int(value)
-    return limit if limit > 0 else None
+    try:
+        limit = int(value)
+    except (TypeError, ValueError):
+        return 1
+    return max(1, limit)
 
 
 def _restore_status_after_sessions(card: Card, sessions: list[RadiusSession]) -> None:
@@ -163,6 +166,8 @@ def authorize_card(
         return {"accepted": False, "reason": "الكرت غير موجود", "reply": {}}
 
     if card.status in BLOCKED_CARD_STATES:
+        if card.status in {"suspended", "expired", "exhausted"}:
+            _attempt_disconnect_all_active(db, card, "الكرت موقوف أو منتهي")
         return {"accepted": False, "reason": "الكرت موقوف أو منتهي", "reply": {}}
 
     if card.radius_auth_reserved_until is not None:
@@ -305,11 +310,13 @@ def authorize_card(
         card.status = "exhausted"
         card.radius_auth_reserved_until = None
         db.commit()
+        _attempt_disconnect_all_active(db, card, "انتهى رصيد وقت الاستخدام")
         return {"accepted": False, "reason": "انتهى رصيد وقت الاستخدام", "reply": {}}
     if remaining_data is not None and remaining_data <= 0:
         card.status = "exhausted"
         card.radius_auth_reserved_until = None
         db.commit()
+        _attempt_disconnect_all_active(db, card, "انتهى رصيد البيانات")
         return {"accepted": False, "reason": "انتهى رصيد البيانات", "reply": {}}
 
     # Reserve the card atomically before Access-Accept. Accounting-Start consumes this lease.
@@ -441,6 +448,7 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
                 RadiusSession.card_id == card.id,
                 RadiusSession.stopped_at.is_(None),
             )
+            .order_by(RadiusSession.started_at.asc())
             .with_for_update()
             .all()
         )
@@ -537,7 +545,7 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         db.commit()
         reason = "بدأت الجلسة؛ يجب الفصل فوراً لتجاوز أحد الحدود" if disconnect_required else "بدأت الجلسة"
         disconnect_sent = (
-            _attempt_disconnect(db, session, card, reason)
+            _attempt_disconnect_all_active(db, card, reason)
             if disconnect_required
             else None
         )
