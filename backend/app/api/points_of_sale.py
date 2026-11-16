@@ -57,6 +57,8 @@ def update_point_of_sale(
     db: Session = Depends(get_db),
     user: AdminUser = Depends(require_permission("pos.manage")),
 ):
+    if not any(role.code == "owner" for role in user.roles) and point_id not in {point.id for point in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة نقطة البيع هذه")
     point = db.get(PointOfSale, point_id)
     if point is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
