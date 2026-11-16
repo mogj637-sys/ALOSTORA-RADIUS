@@ -45,6 +45,24 @@ h1 { margin: 7px 0 0; font-size: 25px; }
 .section-heading h2 { font-size: 18px; margin: 0 0 7px; }
 .section-heading p { margin: 0; color: #788397; font-size: 12px; }
 .phase-tag { border: 1px solid #bfe8d9; background: #e8f7f1; color: #147858; padding: 7px 11px; border-radius: 20px; font-size: 10px; }
+
+.overview-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:18px 0 8px; padding:11px 14px; border:1px solid #e4eee8; border-radius:11px; background:#fff; color:#718078; font-size:11px; }
+.overview-toolbar > div { display:flex; align-items:center; gap:8px; }
+.overview-live-dot { width:8px; height:8px; border-radius:50%; background:#20a477; box-shadow:0 0 0 3px #e4f6ee; }
+.overview-stat-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; }
+.overview-stat-grid article { display:grid; gap:8px; min-height:112px; padding:17px 19px; border:1px solid #e5ece8; border-radius:13px; background:linear-gradient(145deg,#fff,#f8fcfa); }
+.overview-stat-grid article span { color:#657568; font-size:11px; }
+.overview-stat-grid article strong { color:#176b51; font-size:27px; line-height:1.2; }
+.overview-stat-grid article small { color:#929d98; font-size:10px; }
+.overview-lower-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:15px; }
+.overview-status-panel { padding:18px; }
+.overview-status-panel h3 { margin:0 0 13px; color:#285b47; font-size:14px; }
+.overview-status-row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #edf1ee; color:#68766e; font-size:11px; }
+.overview-status-row strong { color:#34483d; font-size:11px; }
+.overview-status-row .status-ok { color:#16815e; }
+.overview-status-row .status-unknown { color:#a16b18; }
+.overview-disclaimer { margin:12px 0 0; color:#89948e; font-size:10px; line-height:1.8; }
+
 .module-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 15px; }
 .module-card { background: #fff; border: 1px solid #e9edf3; border-radius: 13px; padding: 20px; min-height: 175px; }
 .module-icon { width: 37px; height: 37px; display: grid; place-items: center; border-radius: 10px; background: #eaf6f1; color: #13815f; font-size: 19px; }
@@ -69,6 +87,9 @@ footer { text-align: center; color: #9aa3b2; font-size: 10px; margin: 35px 0 10p
   .welcome-card h2 { font-size: 19px; }
   .welcome-symbol { font-size: 75px; }
   .module-grid { grid-template-columns: 1fr; }
+  .overview-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .overview-lower-grid { grid-template-columns:1fr; }
+  .overview-toolbar { align-items:flex-start; flex-direction:column; }
   .section-heading { align-items: flex-start; gap: 10px; }
 }
 
