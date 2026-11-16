@@ -35,12 +35,15 @@ def has_permission(user: AdminUser, permission_code: str) -> bool:
         return True
     module, _, action = permission_code.partition(".")
     if action == "view":
-        if f"{module}.view" in overrides:
-            return False
         if f"{module}.manage" in granted or (
             module == "sessions" and "sessions.disconnect" in granted
         ):
             return True
+    if action in {"create", "update", "delete", "reprint"}:
+        if f"{module}.manage" in overrides:
+            return overrides[f"{module}.manage"]
+        return f"{module}.manage" in granted
+    # Credential disclosure is intentionally never implied by a broad manage grant.
     return False
 
 
