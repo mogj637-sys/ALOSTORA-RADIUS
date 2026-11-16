@@ -2326,11 +2326,22 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderBatches() {
+    const batchSummary = cardBatches.reduce((summary, batch) => ({
+      quantity: summary.quantity + Number(batch.quantity || 0),
+      printed: summary.printed + Number(batch.printed_count || 0),
+      online: summary.online + (batch.is_online_sale ? 1 : 0),
+    }), { quantity: 0, printed: 0, online: 0 });
     return (
       <section className="card-batches-workspace">
         <div className="section-heading card-batches-heading">
           <div><h2>دفعات الكروت</h2><p>سجل الدفعات المحفوظة مع الباقة والقالب ونقطة البيع ونوع البيع والملاحظات.</p></div>
           <button type="button" className="table-action" disabled={busy} onClick={() => loadCardBatches().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث الدفعات"))}>تحديث</button>
+        </div>
+        <div className="batch-summary-grid" aria-label="ملخص دفعات الكروت">
+          <article className="batch-summary-card"><span>إجمالي الدفعات</span><strong>{cardBatches.length.toLocaleString("ar")}</strong><small>دفعة محفوظة</small></article>
+          <article className="batch-summary-card"><span>إجمالي الكروت</span><strong>{batchSummary.quantity.toLocaleString("ar")}</strong><small>ضمن الدفعات المحمّلة</small></article>
+          <article className="batch-summary-card"><span>الكروت المطبوعة</span><strong>{batchSummary.printed.toLocaleString("ar")}</strong><small>حسب سجل الطباعة</small></article>
+          <article className="batch-summary-card"><span>دفعات البيع أونلاين</span><strong>{batchSummary.online.toLocaleString("ar")}</strong><small>دفعة مخصصة للبيع الإلكتروني</small></article>
         </div>
         <div className="table-wrap card-batches-table-wrap">
           <table className="card-batches-table"><thead><tr><th>رقم الدفعة</th><th>الباقة</th><th>القالب</th><th>نقطة البيع</th><th>عدد الكروت</th><th>المطبوع</th><th>نوع البيع</th><th>ملاحظة</th><th>التاريخ</th><th>الإجراء</th></tr></thead>
