@@ -39,7 +39,18 @@ def _create_card(client, headers, point_id, label):
         },
     )
     assert created.status_code == 201, created.text
-    return created.json()
+    card = created.json()
+    printed = client.post(
+        "/api/v1/print-jobs",
+        headers=headers,
+        json={
+            "idempotency_key": f"scope-print-{secrets.token_hex(8)}",
+            "point_of_sale_id": point_id,
+            "card_ids": [card["id"]],
+        },
+    )
+    assert printed.status_code == 201, printed.text
+    return card
 
 
 def test_employee_can_search_any_pos_card_but_cannot_browse_all_cards_or_pos_finances(owner_client):
