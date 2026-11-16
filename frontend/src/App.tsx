@@ -458,6 +458,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [selectedPermissionRole, setSelectedPermissionRole] = useState("manager");
   const [rolePermissionCodes, setRolePermissionCodes] = useState<string[]>([]);
   const [adminDraft, setAdminDraft] = useState({ username: "", displayName: "", password: "", roleCode: "operator" });
+  const [roleDraft, setRoleDraft] = useState({ code: "", name: "", description: "" });
 
   const [routers, setRouters] = useState<RouterRecord[]>([]);
   const [userManagerProbe, setUserManagerProbe] = useState<UserManagerProbe | null>(null);
@@ -634,6 +635,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       "admin.created": "إنشاء حساب إداري",
       "admin.updated": "تعديل حساب إداري",
       "role.permissions_updated": "تعديل صلاحيات دور",
+      "role.created": "إنشاء دور إداري",
       "card.created": "إنشاء كرت",
       "card.suspended": "إيقاف كرت",
       "card.reactivated": "إعادة تفعيل كرت",
@@ -726,6 +728,27 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setNotice("تم حفظ مصفوفة الصلاحيات بنجاح.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر حفظ الصلاحيات");
+    } finally { setBusy(false); }
+  }
+
+  async function createAdminRole(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const created = await apiRequest<AdminRole>(token, "/api/v1/admins/roles", {
+        method: "POST",
+        body: JSON.stringify({
+          code: roleDraft.code.trim().toLowerCase(),
+          name: roleDraft.name.trim(),
+          description: roleDraft.description.trim() || null,
+        }),
+      });
+      setRoleDraft({ code: "", name: "", description: "" });
+      await loadAdminAccounts();
+      await selectPermissionRole(created.code);
+      setNotice("تم إنشاء الدور. اختر صلاحياته ثم احفظها قبل إسناده للموظفين.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر إنشاء الدور الإداري");
     } finally { setBusy(false); }
   }
 
@@ -1492,7 +1515,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div><h2>حسابات الإدارة والموظفين</h2><p>إنشاء حسابات دخول مستقلة وتحديد الدور الإداري لكل حساب.</p></div>
           <span className="count-tag">{adminAccounts.length.toLocaleString("ar")} حساب</span>
         </div>
-        <div className="notice">يمكنك تخصيص صلاحيات كل دور أدناه. الصلاحيات تُفحص في الخادم، ومدير النظام يظل بصلاحيات كاملة ثابتة.</div>
+        <div className="notice">يمكنك إنشاء دور مستقل لكل وظيفة، ثم تحديد صلاحياته. صلاحية «عرض نقاط البيع» تتيح الوصول إلى جميع نقاط البيع، وفق اختيارك.</div>
+        <form className="panel form-grid admin-create-form" onSubmit={createAdminRole}>
+          <div className="section-heading"><div><h3>إنشاء دور وظيفي جديد</h3><p>مثال: موظف نقاط البيع، محاسب، مسؤول طباعة.</p></div></div>
+          <label>رمز الدور بالإنجليزية<input value={roleDraft.code} onChange={(event) => setRoleDraft({ ...roleDraft, code: event.target.value })} minLength={3} maxLength={60} pattern="[a-z][a-z0-9_]+" placeholder="pos_staff" required /></label>
+          <label>اسم الدور بالعربية<input value={roleDraft.name} onChange={(event) => setRoleDraft({ ...roleDraft, name: event.target.value })} minLength={2} maxLength={120} required /></label>
+          <label>وصف العمل<input value={roleDraft.description} onChange={(event) => setRoleDraft({ ...roleDraft, description: event.target.value })} maxLength={500} placeholder="المهام المسموحة لهذا الدور" /></label>
+          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "إنشاء الدور"}</button></div>
+        </form>
         <form className="panel form-grid admin-create-form" onSubmit={createAdminAccount}>
           <div className="section-heading"><div><h3>إضافة حساب جديد</h3><p>كلمة المرور يجب ألا تقل عن 12 حرفاً.</p></div></div>
           <label>اسم المستخدم<input value={adminDraft.username} onChange={(event) => setAdminDraft({ ...adminDraft, username: event.target.value })} minLength={3} maxLength={80} pattern="[A-Za-z0-9_.-]+" autoComplete="off" required /></label>
