@@ -520,6 +520,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   async function loadPlans() {
     const result = await apiRequest<Plan[]>(token, "/api/v1/plans?include_inactive=true");
     setPlans(result);
+    const firstActive = result.find((plan) => plan.is_active);
+    if (firstActive) {
+      if (!batchDraft.planId) setBatchDraft((current) => ({ ...current, planId: String(firstActive.id) }));
+      if (!singleDraft.planId) setSingleDraft((current) => ({ ...current, planId: String(firstActive.id) }));
+    }
   }
 
   async function loadAuditLogs(offset = 0) {
@@ -732,15 +737,6 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تحديث حساب الإدارة");
     } finally { setBusy(false); }
-  }
-
-    const result = await apiRequest<Plan[]>(token, "/api/v1/plans?include_inactive=true");
-    setPlans(result);
-    const firstActive = result.find((plan) => plan.is_active);
-    if (firstActive) {
-      if (!batchDraft.planId) setBatchDraft((current) => ({ ...current, planId: String(firstActive.id) }));
-      if (!singleDraft.planId) setSingleDraft((current) => ({ ...current, planId: String(firstActive.id) }));
-    }
   }
 
   async function loadCardBatches() {
