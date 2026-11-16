@@ -6,7 +6,7 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_permission
+from app.api.deps import get_current_user, require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import (
@@ -165,19 +165,25 @@ def list_print_jobs(
     ]
 
 
-@router.post("", response_model=PrintJobResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("printing.view")), Depends(require_permission("cards.view")), Depends(require_permission("pos.view"))])
-def create_print_job(
-    payload: PrintJobCreate,
-    response: Response,
-    db: Session = Depends(get_db),
-    user: AdminUser = Depends(require_permission("printing.view")),
-):
+def require_print_job_permission(payload: PrintJobCreate, user: AdminUser = Depends(get_current_user)) -> AdminUser:
     required_action = "printing.reprint" if payload.is_reprint else "printing.create"
     if not has_permission(user, required_action):
         message = "ليست لديك صلاحية إعادة الطباعة" if payload.is_reprint else "ليست لديك صلاحية تنفيذ الطباعة"
         raise HTTPException(status_code=403, detail=message)
     if not has_permission(user, "printing.credentials"):
         raise HTTPException(status_code=403, detail="تتطلب الطباعة صلاحية مستقلة لعرض بيانات دخول الكروت")
+    if not has_permission(user, "cards.view") or not has_permission(user, "pos.view"):
+        raise HTTPException(status_code=403, detail="تتطلب الطباعة صلاحية عرض الكروت ونقاط البيع")
+    return user
+
+
+@router.post("", response_model=PrintJobResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.view")), Depends(require_permission("pos.view"))])
+def create_print_job(
+    payload: PrintJobCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_print_job_permission),
+):
     # Voucher credentials are returned only to accounts explicitly granted credential access.
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
     response.headers["Pragma"] = "no-cache"
