@@ -137,7 +137,7 @@ class Router(TimestampMixin, Base):
     nas_identifier: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
     management_host: Mapped[str] = mapped_column(String(255), nullable=False)
     radius_client_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    api_port: Mapped[int] = mapped_column(Integer, nullable=False, default=8728)
+    api_port: Mapped[int] = mapped_column(Integer, nullable=False, default=8729)
     api_username: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # Router API and RADIUS shared secrets are stored only as ciphertext.
     api_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
