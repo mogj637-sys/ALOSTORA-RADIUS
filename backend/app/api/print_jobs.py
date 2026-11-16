@@ -70,6 +70,7 @@ def _response(job: PrintJob, db: Session) -> PrintJobResponse:
         idempotency_key=job.idempotency_key,
         point_of_sale_id=job.point_of_sale_id,
         template_code=job.template_code,
+        print_options=job.print_options or {},
         card_count=job.card_count,
         is_reprint=job.is_reprint,
         commercial_card_count=len(commercial),
@@ -104,6 +105,7 @@ def _existing_job(
         job.point_of_sale_id != payload.point_of_sale_id
         or job.template_code != payload.template_code
         or job.is_reprint != payload.is_reprint
+        or (job.print_options or {}) != payload.print_options.model_dump()
         or existing_ids != set(payload.card_ids)
     ):
         raise HTTPException(
@@ -133,6 +135,7 @@ def list_print_jobs(
         PrintJobHistoryResponse(
             id=job.id,
             template_code=job.template_code,
+            print_options=job.print_options or {},
             card_count=job.card_count,
             is_reprint=job.is_reprint,
             created_at=job.created_at,
@@ -228,6 +231,7 @@ def create_print_job(
         idempotency_key=payload.idempotency_key,
         point_of_sale_id=payload.point_of_sale_id,
         template_code=payload.template_code,
+        print_options=payload.print_options.model_dump(),
         card_count=len(cards),
         is_reprint=payload.is_reprint,
         requested_by=user.username,
