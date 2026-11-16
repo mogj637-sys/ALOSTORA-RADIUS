@@ -4473,3 +4473,64 @@ button:disabled { cursor: not-allowed; }
     flex-direction: column;
   }
 }
+
+
+/* Plans directory is the landing view; open the editor only on demand */
+.workspace .plans-page-heading {
+  align-items: center;
+  gap: 16px;
+}
+.workspace .plans-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.workspace .plans-add-button {
+  min-height: 41px;
+  padding: 9px 17px;
+  border: 1px solid #167a59;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #168767, #116b4d);
+  color: #fff;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 850;
+  box-shadow: 0 4px 11px rgba(22, 112, 78, .15);
+  cursor: pointer;
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.workspace .plans-add-button:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #117957, #0d6045);
+  box-shadow: 0 6px 14px rgba(22, 112, 78, .2);
+}
+.workspace .plans-add-button:focus-visible {
+  outline: 3px solid rgba(22, 135, 103, .2);
+  outline-offset: 2px;
+}
+.workspace .plans-editor-panel {
+  max-width: 100%;
+}
+.workspace .plans-form-actions .secondary-button {
+  border: 1px solid #dce8e0;
+  background: #f5f9f6;
+  color: #42634f;
+}
+@media (max-width: 680px) {
+  .workspace .plans-page-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .workspace .plans-heading-actions {
+    justify-content: stretch;
+  }
+  .workspace .plans-heading-actions > * {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+  .workspace .plans-add-button {
+    width: 100%;
+  }
+}
