@@ -21,6 +21,7 @@ from app.models.core import (
 )
 from app.services.credentials import CredentialEncryptionNotConfigured, decrypt_credential
 from app.services.audit import record_audit
+from app.services.permissions import has_permission
 from app.services.pos_credit import ensure_pos_printing_allowed, get_pos_balance_due
 from app.schemas.print_jobs import (
     PrintJobCreate,
@@ -33,11 +34,10 @@ from app.schemas.print_jobs import (
 router = APIRouter(
     prefix="/api/v1/print-jobs",
     tags=["print-jobs"],
-    dependencies=[Depends(require_permission("cards.view"))],
 )
 
 
-def _response(job: PrintJob, db: Session) -> PrintJobResponse:
+def _response(job: PrintJob, db: Session, include_credentials: bool) -> PrintJobResponse:
     items = (
         db.query(PrintJobItem)
         .filter(PrintJobItem.print_job_id == job.id)
@@ -57,7 +57,7 @@ def _response(job: PrintJob, db: Session) -> PrintJobResponse:
                 card_id=item.card_id,
                 serial_number=item.serial_number_snapshot,
                 username=item.username_snapshot,
-                password=decrypt_credential(cards_by_id[item.card_id].credential_ciphertext),
+                password=decrypt_credential(cards_by_id[item.card_id].credential_ciphertext) if include_credentials else None,
                 is_free=item.is_free,
                 price_snapshot=item.price_snapshot,
                 plan_name=plans_by_id[cards_by_id[item.card_id].plan_id].name,
@@ -93,6 +93,7 @@ def _response(job: PrintJob, db: Session) -> PrintJobResponse:
 def _existing_job(
     db: Session,
     payload: PrintJobCreate,
+    include_credentials: bool,
 ) -> PrintJobResponse | None:
     job = (
         db.query(PrintJob)
@@ -119,15 +120,15 @@ def _existing_job(
             status_code=409,
             detail="مفتاح العملية مستخدم سابقاً لطلب طباعة مختلف",
         )
-    return _response(job, db)
+    return _response(job, db, include_credentials)
 
 
-@router.get("", response_model=list[PrintJobHistoryResponse])
+@router.get("", response_model=list[PrintJobHistoryResponse], dependencies=[Depends(require_permission("pos.view"))])
 def list_print_jobs(
     point_of_sale_id: int = Query(gt=0),
     limit: int = Query(default=30, ge=1, le=100),
     db: Session = Depends(get_db),
-    user: AdminUser = Depends(require_permission("cards.view")),
+    user: AdminUser = Depends(require_permission("printing.view")),
 ):
     if not any(role.code == "owner" for role in user.roles) and point_of_sale_id not in {point.id for point in user.point_of_sales}:
         raise HTTPException(status_code=403, detail="لا تملك صلاحية الاطلاع على عمليات نقطة البيع هذه")
@@ -163,17 +164,21 @@ def list_print_jobs(
     ]
 
 
-@router.post("", response_model=PrintJobResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("printing.manage"))])
+@router.post("", response_model=PrintJobResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("printing.create")), Depends(require_permission("cards.view")), Depends(require_permission("pos.view"))])
 def create_print_job(
     payload: PrintJobCreate,
     response: Response,
     db: Session = Depends(get_db),
-    user: AdminUser = Depends(require_permission("printing.manage")),
+    user: AdminUser = Depends(require_permission("printing.create")),
 ):
-    # Voucher credentials are returned only to authenticated owners and must not be cached.
+    if not has_permission(user, "printing.credentials"):
+        raise HTTPException(status_code=403, detail="تتطلب الطباعة صلاحية مستقلة لعرض بيانات دخول الكروت")
+    if payload.is_reprint and not has_permission(user, "printing.reprint"):
+        raise HTTPException(status_code=403, detail="ليست لديك صلاحية إعادة الطباعة")
+    # Voucher credentials are returned only to accounts explicitly granted credential access.
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
     response.headers["Pragma"] = "no-cache"
-    existing = _existing_job(db, payload)
+    existing = _existing_job(db, payload, include_credentials=True)
     if existing is not None:
         return existing
 
@@ -209,7 +214,7 @@ def create_print_job(
                 raise HTTPException(status_code=409, detail=f"يجب استخدام قالب الدفعة {batch.template_code}")
 
     # A concurrent retry may have committed while this request waited for card locks.
-    existing = _existing_job(db, payload)
+    existing = _existing_job(db, payload, include_credentials=True)
     if existing is not None:
         return existing
 
@@ -396,9 +401,9 @@ def create_print_job(
         db.refresh(job)
     except IntegrityError:
         db.rollback()
-        existing = _existing_job(db, payload)
+        existing = _existing_job(db, payload, include_credentials=True)
         if existing is not None:
             return existing
         raise HTTPException(status_code=409, detail="تعذر تسجيل عملية الطباعة بسبب تعارض؛ لم يتم ترحيل المخزون")
 
-    return _response(job, db)
+    return _response(job, db, include_credentials=True)
