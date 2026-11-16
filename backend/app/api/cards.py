@@ -1,18 +1,19 @@
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_owner
 from app.db.session import get_db
 from app.models.auth import AdminUser
-from app.models.core import Card, CardEvent, Plan, RadiusSession
+from app.models.core import Card, CardBatch, CardEvent, CardTemplate, Plan, PointOfSale, RadiusSession
 from app.services.radius_disconnect import send_disconnect_for_session
 from app.schemas.cards import (
     CardBatchCreate,
     CardBatchResponse,
+    CardBatchListItem,
     CardCreatedSecret,
     CardCreateResponse,
     CardListItem,
@@ -65,7 +66,7 @@ def _ensure_encryption_ready() -> None:
         raise HTTPException(status_code=503, detail=str(exc))
 
 
-def _build_card(plan: Plan, username: str, password: str, card_type: str, is_free: bool = False) -> Card:
+def _build_card(plan: Plan, username: str, password: str, card_type: str, is_free: bool = False, batch_id=None) -> Card:
     return Card(
         serial_number=_new_serial(),
         username=username,
@@ -75,9 +76,45 @@ def _build_card(plan: Plan, username: str, password: str, card_type: str, is_fre
         status="generated",
         is_free=is_free,
         plan_id=plan.id,
+        batch_id=batch_id,
         plan_snapshot=_plan_snapshot(plan),
         price_snapshot=0 if is_free else plan.price,
     )
+
+
+@router.get("/batches", response_model=list[CardBatchListItem])
+def list_card_batches(
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(CardBatch, Plan, PointOfSale)
+        .join(Plan, Plan.id == CardBatch.plan_id)
+        .outerjoin(PointOfSale, PointOfSale.id == CardBatch.point_of_sale_id)
+        .order_by(CardBatch.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    results = []
+    for batch, plan, point in rows:
+        printed = db.query(func.count(Card.id)).filter(
+            Card.batch_id == batch.id,
+            Card.status.in_(["allocated", "printed_free", "active", "expired", "exhausted"]),
+        ).scalar() or 0
+        results.append(CardBatchListItem(
+            batch_id=batch.id,
+            batch_number=batch.batch_number,
+            plan_id=batch.plan_id,
+            plan_name=plan.name,
+            template_code=batch.template_code,
+            point_of_sale_id=batch.point_of_sale_id,
+            point_of_sale_name=point.name if point else None,
+            quantity=batch.quantity,
+            card_type=batch.card_type,
+            created_at=batch.created_at,
+            printed_count=printed,
+        ))
+    return results
 
 
 @router.get("", response_model=list[CardListItem])
@@ -230,6 +267,19 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
     if len(payload.prefix) >= payload.username_length:
         raise HTTPException(status_code=422, detail="طول البادئة يجب أن يكون أقل من طول اسم المستخدم")
 
+    point = None
+    if payload.point_of_sale_id is not None:
+        point = db.get(PointOfSale, payload.point_of_sale_id)
+        if point is None or not point.is_active:
+            raise HTTPException(status_code=422, detail="اختر نقطة بيع موجودة ومفعلة")
+    template = None
+    if payload.template_code:
+        template = db.query(CardTemplate).filter(CardTemplate.code == payload.template_code).first()
+        if template is None:
+            raise HTTPException(status_code=404, detail="قالب الطباعة غير موجود")
+        if template.plan_id is not None and template.plan_id != plan.id:
+            raise HTTPException(status_code=422, detail="الباقة لا تطابق الباقة المرتبطة بقالب الطباعة")
+
     _ensure_encryption_ready()
     existing: set[str] = set()
     credentials: list[tuple[str, str]] = []
@@ -258,7 +308,22 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
     cards: list[Card] = []
     response_cards: list[CardCreatedSecret] = []
     generated_passwords: list[str] = []
+    batch = CardBatch(
+        batch_number="BAT" + secrets.token_hex(5).upper(),
+        plan_id=plan.id,
+        point_of_sale_id=point.id if point else None,
+        template_code=payload.template_code,
+        quantity=payload.quantity,
+        card_type=payload.card_type,
+        generation_mode=payload.generation_mode,
+        username_length=payload.username_length,
+        password_length=payload.password_length,
+        prefix=payload.prefix,
+        requested_by=user.username,
+    )
     try:
+        db.add(batch)
+        db.flush()
         for username, _ in credentials:
             if payload.card_type == "username_only":
                 password = ""
@@ -267,7 +332,7 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
             else:
                 password = generate_password(payload.password_length)
 
-            card = _build_card(plan, username, password, payload.card_type)
+            card = _build_card(plan, username, password, payload.card_type, batch_id=batch.id)
             cards.append(card)
             generated_passwords.append(password)
         db.add_all(cards)
@@ -285,7 +350,7 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
             CardEvent(
                 card_id=card.id,
                 event_type="created",
-                details={"plan_id": plan.id, "is_free": False, "card_type": payload.card_type, "batch": True},
+                details={"plan_id": plan.id, "is_free": False, "card_type": payload.card_type, "batch": True, "batch_id": str(batch.id)},
                 actor=user.username,
             )
             for card in cards
@@ -295,4 +360,4 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
         db.rollback()
         raise HTTPException(status_code=409, detail="حدث تعارض أثناء إنشاء الدفعة؛ لم يتم حفظ أي كرت")
 
-    return CardBatchResponse(created_count=len(response_cards), cards=response_cards)
+    return CardBatchResponse(batch_id=batch.id, batch_number=batch.batch_number, plan_id=plan.id, template_code=batch.template_code, point_of_sale_id=batch.point_of_sale_id, created_count=len(response_cards), cards=response_cards)
