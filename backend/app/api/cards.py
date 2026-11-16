@@ -31,7 +31,7 @@ from app.services.credentials import CredentialEncryptionNotConfigured, encrypt_
 from app.services.pos_credit import ensure_pos_card_creation_allowed
 from app.services.permissions import card_visibility, is_owner
 
-router = APIRouter(prefix="/api/v1/cards", tags=["cards"], dependencies=[Depends(require_permission("cards.view"))])
+router = APIRouter(prefix="/api/v1/cards", tags=["cards"])
 
 
 def _plan_snapshot(plan: Plan) -> dict:
