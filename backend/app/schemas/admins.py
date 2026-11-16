@@ -49,3 +49,9 @@ class AdminUserUpdate(BaseModel):
         if not normalized:
             raise ValueError("يجب اختيار دور واحد على الأقل")
         return normalized
+
+class AdminRoleCreate(BaseModel):
+    code: str = Field(min_length=3, max_length=60, pattern=r"^[a-z][a-z0-9_]+$")
+    name: str = Field(min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+
