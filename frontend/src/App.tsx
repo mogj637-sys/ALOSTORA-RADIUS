@@ -22,6 +22,7 @@ type CurrentUser = {
 type AdminRole = { code: string; name: string; description: string | null };
 type AdminPermission = { code: string; name: string; module: string; description: string | null };
 type AdminAccount = { id: number; username: string; display_name: string; is_active: boolean; roles: string[]; last_login_at: string | null; created_at: string };
+type AuditLogRecord = { id: number; actor_username: string; action: string; entity_type: string; entity_id: string | null; summary: string; details: Record<string, unknown>; ip_address: string | null; created_at: string };
 
 type Plan = {
   id: number;
@@ -414,9 +415,12 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
   const can = (permission: string) => user.roles.includes("owner") || user.permissions.includes(permission);
-  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditOffset, setAuditOffset] = useState(0);
   const [adminRoles, setAdminRoles] = useState<AdminRole[]>([]);
   const [adminPermissions, setAdminPermissions] = useState<AdminPermission[]>([]);
   const [selectedPermissionRole, setSelectedPermissionRole] = useState("manager");
@@ -502,6 +506,57 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }, [cardTemplates, plans, printTemplate]);
 
   async function loadPlans() {
+  async function loadAuditLogs(offset = 0) {
+    const result = await apiRequest<{ total: number; items: AuditLogRecord[] }>(
+      token, `/api/v1/audit-logs?offset=${offset}&limit=50`
+    );
+    setAuditLogs(result.items);
+    setAuditTotal(result.total);
+    setAuditOffset(offset);
+  }
+
+  function renderAuditLogs() {
+    const actionNames: Record<string, string> = {
+      "admin.created": "إنشاء حساب إداري",
+      "admin.updated": "تعديل حساب إداري",
+      "role.permissions_updated": "تعديل صلاحيات دور",
+      "card.created": "إنشاء كرت",
+      "card.suspended": "إيقاف كرت",
+      "card.reactivated": "إعادة تفعيل كرت",
+      "card.cancelled": "إلغاء كرت",
+      "cards.batch_created": "إنشاء دفعة كروت",
+      "session.disconnect_requested": "طلب فصل جلسة",
+    };
+    return (
+      <section className="panel audit-log-panel">
+        <div className="section-heading">
+          <div><h2>سجل عمليات النظام</h2><p>سجل زمني للعمليات الإدارية والتشغيلية المسجلة داخل النظام.</p></div>
+          <div className="audit-toolbar"><span className="count-tag">{auditTotal.toLocaleString("ar")} عملية</span><button type="button" className="secondary-button" onClick={() => loadAuditLogs(0)}>تحديث السجل</button></div>
+        </div>
+        <div className="table-wrap">
+          <table className="data-table audit-log-table">
+            <thead><tr><th>التاريخ والوقت</th><th>المستخدم الإداري</th><th>العملية</th><th>القسم</th><th>المعرف</th><th>التفاصيل</th><th>عنوان IP</th></tr></thead>
+            <tbody>
+              {auditLogs.map((item) => (
+                <tr key={item.id}>
+                  <td>{new Date(item.created_at).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" })}</td>
+                  <td>{item.actor_username}</td>
+                  <td><strong>{actionNames[item.action] ?? item.action}</strong></td>
+                  <td>{item.entity_type}</td>
+                  <td>{item.entity_id ?? "—"}</td>
+                  <td>{item.summary}</td>
+                  <td>{item.ip_address ?? "—"}</td>
+                </tr>
+              ))}
+              {auditLogs.length === 0 && <tr><td colSpan={7} className="empty-state">لا توجد عمليات مسجلة في هذه الصفحة.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div className="audit-pagination"><span>عرض {(auditOffset + 1).toLocaleString("ar")}–{Math.min(auditOffset + auditLogs.length, auditTotal).toLocaleString("ar")} من {auditTotal.toLocaleString("ar")}</span><div><button type="button" className="secondary-button" disabled={auditOffset === 0} onClick={() => loadAuditLogs(Math.max(0, auditOffset - 50))}>السابق</button><button type="button" className="secondary-button" disabled={auditOffset + 50 >= auditTotal} onClick={() => loadAuditLogs(auditOffset + 50)}>التالي</button></div></div>
+      </section>
+    );
+  }
+
   async function loadAdminAccounts() {
     const [accounts, roles, permissions] = await Promise.all([
       apiRequest<AdminAccount[]>(token, "/api/v1/admins"),
@@ -1089,6 +1144,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   useEffect(() => {
     if (page !== "pos") setPrintPreviewCards([]);
+    if (page === "audit" && can("audit.view")) {
+      setError("");
+      loadAuditLogs(0).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل سجل العمليات"));
+    }
     if (page === "admins" && user.roles.includes("owner")) {
       setError("");
       loadAdminAccounts().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل حسابات الإدارة"));
@@ -2357,6 +2416,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           {can("printing.manage") && <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>}
           {can("cards.view") && <button className={page === "batches" ? "nav-item active" : "nav-item"} onClick={() => setPage("batches")}>دفعات الكروت</button>}
           {can("cards.manage") && <button className={page === "templates" ? "nav-item active" : "nav-item"} onClick={() => setPage("templates")}>تصاميم الكروت</button>}
+          {can("audit.view") && <button className={page === "audit" ? "nav-item active" : "nav-item"} onClick={() => setPage("audit")}>سجل عمليات النظام</button>}
           <div className="nav-group muted"><span>أقسام قيد التطوير</span><small>نظام الهوتسبوت · الكفتيريا والهوست · أجهزة البث · محرر الصفحات · الخدمات الإضافية · الإعدادات والصيانة</small></div>
         </nav>
         <div className="sidebar-foot">ALOSTORA-RADIUS · 0.4.0</div>
@@ -2368,7 +2428,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "card-create" ? renderCardCreate() : page === "pos" ? renderPos() : page === "pos-management" ? renderPosManagement() : page === "batches" ? renderBatches() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
+        {page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "card-create" ? renderCardCreate() : page === "pos" ? renderPos() : page === "pos-management" ? renderPosManagement() : page === "batches" ? renderBatches() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
