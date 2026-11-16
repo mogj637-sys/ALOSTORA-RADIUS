@@ -21,6 +21,9 @@ from app.schemas.cards import (
     CardListItem,
     CardSingleCreate,
     CardStatusUpdate,
+    CardPrintSelectionResolveRequest,
+    CardPrintSelectionResolveResponse,
+    CardPrintSelectionItem,
 )
 from app.services.card_generator import generate_password, generate_username
 from app.services.credentials import CredentialEncryptionNotConfigured, encrypt_credential
@@ -340,6 +343,83 @@ def list_cards(
     for card in cards:
         card.active_sessions_count = int(session_counts.get(card.id, 0))
     return cards
+
+
+@router.post(
+    "/print-selection/resolve",
+    response_model=CardPrintSelectionResolveResponse,
+    dependencies=[Depends(require_permission("printing.manage"))],
+)
+def resolve_print_selection(
+    payload: CardPrintSelectionResolveRequest,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("printing.manage")),
+):
+    point = db.get(PointOfSale, payload.point_of_sale_id)
+    if point is None:
+        raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
+    if not point.is_active or not point.allow_printing:
+        raise HTTPException(status_code=409, detail="الطباعة متوقفة لهذه النقطة")
+    if not is_owner(user) and point.id not in {item.id for item in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية الطباعة في نقطة البيع المحددة")
+
+    identifiers = list(dict.fromkeys(value.strip() for value in payload.identifiers if value.strip()))
+    normalized = [value.lower() for value in identifiers]
+    query = db.query(Card).filter(
+        Card.status == "generated",
+        Card.assigned_pos_id.is_(None),
+        or_(
+            func.lower(Card.username).in_(normalized),
+            func.lower(Card.serial_number).in_(normalized),
+        ),
+    )
+
+    batch_ids_for_point = db.query(CardBatch.id).filter(CardBatch.point_of_sale_id == point.id)
+    if card_visibility(user) == "assigned":
+        query = query.filter(Card.batch_id.in_(batch_ids_for_point))
+    else:
+        allowed_batch_ids = db.query(CardBatch.id).filter(
+            or_(
+                CardBatch.point_of_sale_id == point.id,
+                CardBatch.point_of_sale_id.is_(None),
+            )
+        )
+        query = query.filter(
+            or_(
+                Card.batch_id.is_(None),
+                Card.batch_id.in_(allowed_batch_ids),
+            )
+        )
+
+    matches = query.all()
+    by_identifier: dict[str, Card] = {}
+    for card in matches:
+        by_identifier[card.username.lower()] = card
+        by_identifier[card.serial_number.lower()] = card
+
+    items = []
+    unmatched = []
+    seen_card_ids = set()
+    for identifier in identifiers:
+        card = by_identifier.get(identifier.lower())
+        if card is None:
+            unmatched.append(identifier)
+        elif card.id not in seen_card_ids:
+            items.append(CardPrintSelectionItem(
+                id=card.id,
+                username=card.username,
+                serial_number=card.serial_number,
+                plan_id=card.plan_id,
+                is_free=card.is_free,
+            ))
+            seen_card_ids.add(card.id)
+
+    return CardPrintSelectionResolveResponse(
+        total_requested=len(identifiers),
+        matched_count=len(items),
+        items=items,
+        unmatched=unmatched,
+    )
 
 
 @router.get("/{card_id}/sessions", dependencies=[Depends(require_permission("sessions.view"))])
