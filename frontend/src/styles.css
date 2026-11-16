@@ -425,3 +425,10 @@ tbody tr:hover { background: #fbfdfc; }
   .plan-form-section { padding: 11px; }
   .day-selector { gap: 9px 12px; }
 }
+
+
+/* Voucher print option details */
+.voucher-plan, .voucher-limits { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 10px; text-align: center; }
+.voucher-plan strong { font-size: 12px; }
+.voucher-limits { line-height: 1.5; }
+.sequential-vouchers { grid-auto-flow: row; }
