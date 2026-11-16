@@ -152,6 +152,40 @@ def test_count_only_uses_empty_string_compatible_with_pinned_routeros_resource()
     assert communicator.queries == {"username": b"voucher-100"}
 
 
+
+def test_probe_disconnects_socket_when_login_fails_before_connected(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+
+    def fail_before_connected(self):
+        raise RuntimeError("login rejected")
+
+    monkeypatch.setattr(FakePool, "get_api", fail_before_connected)
+    with pytest.raises(adapter.UserManagerConnectionError):
+        adapter.inspect_routeros_user_manager(
+            host="192.0.2.10", port=8729, username="reader", password="secret"
+        )
+
+    assert FakePool.last.connected is False
+    assert FakePool.last.disconnected is True
+
+
+def test_user_inspection_disconnects_socket_when_login_fails_before_connected(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+
+    def fail_before_connected(self):
+        raise RuntimeError("login rejected")
+
+    monkeypatch.setattr(FakePool, "get_api", fail_before_connected)
+    with pytest.raises(adapter.UserManagerConnectionError):
+        adapter.inspect_user_manager_user(
+            host="192.0.2.10", port=8729, username="reader",
+            password="secret", target_username="voucher-100",
+        )
+
+    assert FakePool.last.connected is False
+    assert FakePool.last.disconnected is True
+
+
 def test_v7_is_not_misreported_as_legacy_v6(monkeypatch):
     monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
     api = FakeApi(_fake_resources(version="7.18"))
