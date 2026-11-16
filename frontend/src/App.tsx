@@ -2251,6 +2251,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           {selectedPoint && can("pos.manage") && <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOfSale(selectedPoint)}>{selectedPoint.is_active ? "إيقاف النقطة" : "تفعيل النقطة"}</button>}
         </div>
 
+        {selectedPosId && selectedPoint && !selectedPoint.allow_printing && (
+          <div className="notice">الطباعة متوقفة لهذه النقطة بقرار من الإدارة. يمكنك مراجعة السجلات، لكن لن تُقبل أي عملية طباعة جديدة.</div>
+        )}
+        {selectedPosId && selectedPoint && !selectedPoint.allow_card_creation && (
+          <div className="notice">إنشاء الكروت متوقف لهذه النقطة بقرار من الإدارة.</div>
+        )}
         {selectedPosId && posInventory && (
           <div className="pos-stats">
             <div><span>الكروت المخصصة</span><strong>{posInventory.allocated_cards}</strong></div>
@@ -2268,6 +2274,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <div><span>إجمالي المديونية</span><strong>{Number(posAccount.total_debit).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</strong></div>
               <div><span>إجمالي السداد والخصومات</span><strong>{Number(posAccount.total_credit).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</strong></div>
               <div><span>الرصيد المستحق</span><strong>{Number(posAccount.balance_due).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</strong></div>
+              <div><span>سقف المديونية</span><strong>{selectedPoint?.debt_limit === null || selectedPoint?.debt_limit === undefined ? "غير محدد" : Number(selectedPoint.debt_limit).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " ريال"}</strong></div>
+              <div><span>المتاح قبل السقف</span><strong>{selectedPoint?.debt_limit === null || selectedPoint?.debt_limit === undefined ? "غير محدود" : Math.max(0, Number(selectedPoint.debt_limit) - Number(posAccount.balance_due)).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " ريال"}</strong></div>
             </div>
             {can("finance.manage") && <form className="panel form-grid account-entry-form" onSubmit={createAccountEntry}>
               <label>نوع الحركة<select value={accountDraft.entryType} onChange={(e) => setAccountDraft({ ...accountDraft, entryType: e.target.value, direction: e.target.value === "payment" || e.target.value === "commission" || e.target.value === "return" ? "credit" : accountDraft.direction })}>
@@ -2342,7 +2350,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 </div>
               </div>
               <div className="pos-print-summary">تم اختيار {selectedPrintCardIds.length} كرت. الكروت المجانية تظهر في القسائم ولا تدخل في قيمة نقطة البيع.</div>
-              <button type="button" disabled={busy || selectedPrintCardIds.length === 0 || !selectedPoint?.is_active} onClick={printSelectedCards}>{busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة وتخصيص الكروت"}</button>
+              <button type="button" disabled={busy || selectedPrintCardIds.length === 0 || !selectedPoint?.is_active || !selectedPoint?.allow_printing} onClick={printSelectedCards}>{busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة وتخصيص الكروت"}</button>
             </div>
             {printPreviewCards.length > 0 && (
               <section className="voucher-print-preview">
@@ -2372,7 +2380,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <table><thead><tr><th>التاريخ</th><th>القالب</th><th>عدد الكروت</th><th>النوع</th><th>الإجراء</th></tr></thead>
                 <tbody>{printHistory.map((job) => <tr key={job.id}>
                   <td>{new Date(job.created_at).toLocaleString("ar")}</td><td>{job.template_code || "افتراضي"}</td><td>{job.card_count}</td><td>{job.is_reprint ? "إعادة طباعة" : "طباعة أصلية"}</td>
-                  <td><button type="button" className="table-action" disabled={busy || !selectedPoint?.is_active} onClick={() => reprintJob(job)}>إعادة طباعة</button></td>
+                  <td><button type="button" className="table-action" disabled={busy || !selectedPoint?.is_active || !selectedPoint?.allow_printing} onClick={() => reprintJob(job)}>إعادة طباعة</button></td>
                 </tr>)}</tbody>
               </table>
               {printHistory.length === 0 && <div className="empty-state">لا توجد عمليات طباعة لهذه النقطة.</div>}
