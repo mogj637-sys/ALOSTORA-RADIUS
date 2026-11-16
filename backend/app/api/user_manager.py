@@ -345,12 +345,34 @@ def list_user_manager_previews(
         ).first()
 
     if run is None:
-        return {"run": None, "items": [], "total": 0, "offset": offset, "limit": limit}
+        return {
+            "run": None,
+            "items": [],
+            "total": 0,
+            "classification_counts": {},
+            "offset": offset,
+            "limit": limit,
+            "read_only": True,
+            "imported": False,
+            "credentials_read": False,
+        }
 
     previews_query = db.query(UserManagerImportPreview).filter(
         UserManagerImportPreview.sync_run_id == run.id
     )
     total = previews_query.count()
+    classification_counts = {
+        classification: count
+        for classification, count in (
+            db.query(
+                UserManagerImportPreview.classification,
+                func.count(UserManagerImportPreview.id),
+            )
+            .filter(UserManagerImportPreview.sync_run_id == run.id)
+            .group_by(UserManagerImportPreview.classification)
+            .all()
+        )
+    }
     rows = (
         previews_query
         .order_by(UserManagerImportPreview.id.asc())
@@ -383,6 +405,7 @@ def list_user_manager_previews(
             for row in rows
         ],
         "total": total,
+        "classification_counts": classification_counts,
         "offset": offset,
         "limit": limit,
         "read_only": True,
