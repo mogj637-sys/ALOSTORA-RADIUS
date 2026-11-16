@@ -41,6 +41,13 @@ class AdminUser(TimestampMixin, Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     roles = relationship("Role", secondary=user_roles, back_populates="users", lazy="selectin")
     point_of_sales = relationship("PointOfSale", secondary=admin_user_points_of_sale, lazy="selectin")
+    card_visibility: Mapped[str] = mapped_column(String(20), nullable=False, default="search_any")
+    permission_overrides = relationship(
+        "AdminUserPermissionOverride",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
 
 class Role(TimestampMixin, Base):
@@ -63,5 +70,16 @@ class Permission(Base):
     module: Mapped[str] = mapped_column(String(80), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     roles = relationship("Role", secondary=role_permissions, back_populates="permissions")
+    user_overrides = relationship("AdminUserPermissionOverride", back_populates="permission")
+
+
+class AdminUserPermissionOverride(Base):
+    __tablename__ = "admin_user_permission_overrides"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("admin_users.id", ondelete="CASCADE"), primary_key=True)
+    permission_id: Mapped[int] = mapped_column(ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True)
+    allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    user = relationship("AdminUser", back_populates="permission_overrides")
+    permission = relationship("Permission", back_populates="user_overrides")
 
 
