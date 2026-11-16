@@ -1862,7 +1862,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 {adminRoles.filter((role) => role.code !== "owner" || account.roles.includes("owner")).map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}
               </select></td>
               <td>{account.card_visibility === "all" ? "جميع الكروت" : account.card_visibility === "assigned" ? "نقاطه فقط" : "بحث عن كرت محدد"}</td>
-              <td><select aria-label={`نقاط البيع المسموحة لـ ${account.username}`} multiple size={Math.min(4, Math.max(2, points.length))} value={account.point_of_sale_ids.map(String)} onChange={(event) => updateAdminAccount(account, { point_of_sale_ids: Array.from(event.target.selectedOptions, (option) => Number(option.value)) })} disabled={busy || account.id === user.id}>{posReport.points.map((point) => <option key={point.point_of_sale_id} value={point.point_of_sale_id}>{point.point_of_sale_name}</option>)}</select></td>
+              <td><select aria-label={`نقاط البيع المسموحة لـ ${account.username}`} multiple size={Math.min(4, Math.max(2, points.length))} value={account.point_of_sale_ids.map(String)} onChange={(event) => updateAdminAccount(account, { point_of_sale_ids: Array.from(event.target.selectedOptions, (option) => Number(option.value)) })} disabled={busy || account.id === user.id}>{points.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></td>
               <td>{account.last_login_at ? new Date(account.last_login_at).toLocaleString("ar") : "لم يسجل الدخول"}</td>
               <td><span className={account.is_active ? "admin-status active" : "admin-status inactive"}>{account.is_active ? "نشط" : "متوقف"}</span></td>
               <td className="actions-cell">
