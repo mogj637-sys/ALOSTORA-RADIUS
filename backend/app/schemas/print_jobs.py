@@ -37,6 +37,7 @@ class PrintJobItemResponse(BaseModel):
     password: str
     is_free: bool
     price_snapshot: Decimal
+    plan_snapshot: dict
 
 
 class PrintJobResponse(BaseModel):
