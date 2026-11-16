@@ -1,4 +1,6 @@
 from app.models.auth import AdminUser, Role
+from app.models.user_manager import UserManagerCardSource, UserManagerSyncRun
+from app.models.user_manager_preview import UserManagerImportPreview
 from app.models.core import (
     Card,
     CardEvent,
@@ -25,4 +27,7 @@ __all__ = [
     "PosAccountEntry",
     "RadiusSession",
     "Router",
+    "UserManagerCardSource",
+    "UserManagerImportPreview",
+    "UserManagerSyncRun",
 ]
