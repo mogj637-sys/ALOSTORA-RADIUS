@@ -631,6 +631,7 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         stop_time = max(event_time, _utc(session.last_update_at))
         session.stopped_at = stop_time
         card.radius_auth_reserved_until = None
+        db.flush()
         if card.expires_at is not None and _utc(card.expires_at) <= stop_time:
             card.status = "expired"
         elif card.status == "active":
