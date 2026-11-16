@@ -5,7 +5,7 @@ from sqlalchemy import func, case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_owner
+from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import PointOfSale, PosAccountEntry
@@ -18,7 +18,7 @@ from app.schemas.pos_accounts import (
 router = APIRouter(
     prefix="/api/v1/points-of-sale/{point_id}/account",
     tags=["point-of-sale-accounting"],
-    dependencies=[Depends(get_current_owner)],
+    dependencies=[Depends(require_permission("finance.view"))],
 )
 
 
@@ -58,11 +58,12 @@ def list_account_entries(
 
 
 @router.post("/entries", response_model=PosAccountEntryResponse, status_code=status.HTTP_201_CREATED)
+    dependencies=[Depends(require_permission("finance.manage"))],
 def create_account_entry(
     point_id: int,
     payload: PosAccountEntryCreate,
     db: Session = Depends(get_db),
-    user: AdminUser = Depends(get_current_owner),
+    user: AdminUser = Depends(require_permission("finance.manage")),
 ):
     point = db.get(PointOfSale, point_id)
     if point is None:
