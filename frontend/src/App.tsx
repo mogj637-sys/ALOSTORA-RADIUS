@@ -418,6 +418,24 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
   );
 }
 
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0 بايت";
+  const units = ["بايت", "KB", "MB", "GB", "TB"];
+  const unitIndex = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+  const amount = value / (1024 ** unitIndex);
+  return amount.toLocaleString("ar", { maximumFractionDigits: 2 }) + " " + units[unitIndex];
+}
+
+function formatDuration(value: number): string {
+  const seconds = Math.max(0, Math.floor(Number(value) || 0));
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days) return days + " يوم و" + hours + " ساعة";
+  if (hours) return hours + " ساعة و" + minutes + " دقيقة";
+  return minutes + " دقيقة";
+}
+
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
   const can = (permission: string) => user.roles.includes("owner") || user.permissions.includes(permission);
   const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
@@ -1460,7 +1478,6 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
   }
 
-  function renderOverview() {
   function renderAdmins() {
     return (
       <div className="admin-management-workspace">
@@ -1520,6 +1537,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  function renderOverview() {
     const statusCount = (status: string) => radiusOverview?.cards_by_status[status] ?? 0;
     return (
       <>
