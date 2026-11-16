@@ -57,8 +57,7 @@ def list_account_entries(
     )
 
 
-@router.post("/entries", response_model=PosAccountEntryResponse, status_code=status.HTTP_201_CREATED)
-    dependencies=[Depends(require_permission("finance.manage"))],
+@router.post("/entries", response_model=PosAccountEntryResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("finance.manage"))])
 def create_account_entry(
     point_id: int,
     payload: PosAccountEntryCreate,
