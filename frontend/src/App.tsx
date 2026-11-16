@@ -1803,6 +1803,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <span className="count-tag">{adminAccounts.length.toLocaleString("ar")} حساب</span>
         </div>
         <div className="notice">يمكنك إنشاء أدوار وظيفية، ثم تخصيص صلاحيات كل موظف على حدة: السماح أو المنع أو اتباع صلاحيات الدور، مع تحديد نطاق ظهور الكروت ونقاط البيع.</div>
+        <div className="admin-summary-grid">
+          <article><span>إجمالي الحسابات</span><strong>{adminAccounts.length.toLocaleString("ar")}</strong><small>حسابات الإدارة المسجلة</small></article>
+          <article><span>حسابات مفعّلة</span><strong>{adminAccounts.filter((account) => account.is_active).length.toLocaleString("ar")}</strong><small>يمكنها تسجيل الدخول</small></article>
+          <article><span>حسابات متوقفة</span><strong>{adminAccounts.filter((account) => !account.is_active).length.toLocaleString("ar")}</strong><small>لا يمكنها تسجيل الدخول</small></article>
+          <article><span>الأدوار الوظيفية</span><strong>{adminRoles.length.toLocaleString("ar")}</strong><small>الأدوار المعرفة في النظام</small></article>
+        </div>
         <form className="panel form-grid admin-create-form" onSubmit={createAdminRole}>
           <div className="section-heading"><div><h3>إنشاء دور وظيفي جديد</h3><p>مثال: موظف نقاط البيع، محاسب، مسؤول طباعة.</p></div></div>
           <label>رمز الدور بالإنجليزية<input value={roleDraft.code} onChange={(event) => setRoleDraft({ ...roleDraft, code: event.target.value })} minLength={3} maxLength={60} pattern="[a-z][a-z0-9_]+" placeholder="pos_staff" required /></label>
