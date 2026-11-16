@@ -21,7 +21,7 @@ type CurrentUser = {
 };
 type AdminRole = { code: string; name: string; description: string | null };
 type AdminPermission = { code: string; name: string; module: string; description: string | null };
-type AdminAccount = { id: number; username: string; display_name: string; is_active: boolean; roles: string[]; last_login_at: string | null; created_at: string };
+type AdminAccount = { id: number; username: string; display_name: string; is_active: boolean; roles: string[]; point_of_sale_ids: number[]; last_login_at: string | null; created_at: string };
 type AuditLogRecord = { id: number; actor_username: string; action: string; entity_type: string; entity_id: string | null; summary: string; details: Record<string, unknown>; ip_address: string | null; created_at: string };
 
 type Plan = {
@@ -457,7 +457,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [adminPermissions, setAdminPermissions] = useState<AdminPermission[]>([]);
   const [selectedPermissionRole, setSelectedPermissionRole] = useState("manager");
   const [rolePermissionCodes, setRolePermissionCodes] = useState<string[]>([]);
-  const [adminDraft, setAdminDraft] = useState({ username: "", displayName: "", password: "", roleCode: "operator" });
+  const [adminDraft, setAdminDraft] = useState({ username: "", displayName: "", password: "", roleCode: "operator", pointOfSaleIds: [] as number[] });
   const [roleDraft, setRoleDraft] = useState({ code: "", name: "", description: "" });
 
   const [routers, setRouters] = useState<RouterRecord[]>([]);
@@ -683,11 +683,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function loadAdminAccounts() {
-    const [accounts, roles, permissions] = await Promise.all([
+    const [accounts, roles, permissions, pointOptions] = await Promise.all([
       apiRequest<AdminAccount[]>(token, "/api/v1/admins"),
       apiRequest<AdminRole[]>(token, "/api/v1/admins/roles"),
       apiRequest<AdminPermission[]>(token, "/api/v1/admins/permissions"),
+      apiRequest<PointOfSale[]>(token, "/api/v1/points-of-sale?include_inactive=true"),
     ]);
+    setPoints(pointOptions);
     setAdminAccounts(accounts);
     setAdminRoles(roles);
     setAdminPermissions(permissions);
@@ -763,9 +765,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           display_name: adminDraft.displayName.trim(),
           password: adminDraft.password,
           role_codes: [adminDraft.roleCode],
+          point_of_sale_ids: adminDraft.pointOfSaleIds,
         }),
       });
-      setAdminDraft((draft) => ({ ...draft, username: "", displayName: "", password: "" }));
+      setAdminDraft((draft) => ({ ...draft, username: "", displayName: "", password: "", pointOfSaleIds: [] }));
       await loadAdminAccounts();
       setNotice("تم إنشاء حساب الإدارة بنجاح.");
     } catch (err) {
@@ -773,7 +776,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } finally { setBusy(false); }
   }
 
-  async function updateAdminAccount(account: AdminAccount, changes: { role_codes?: string[]; is_active?: boolean }) {
+  async function updateAdminAccount(account: AdminAccount, changes: { role_codes?: string[]; is_active?: boolean; point_of_sale_ids?: number[] }) {
     setBusy(true); setError(""); setNotice("");
     try {
       await apiRequest<AdminAccount>(token, `/api/v1/admins/${account.id}`, {
@@ -1529,6 +1532,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <label>اسم الموظف<input value={adminDraft.displayName} onChange={(event) => setAdminDraft({ ...adminDraft, displayName: event.target.value })} minLength={2} maxLength={150} required /></label>
           <label>كلمة المرور<input type="password" value={adminDraft.password} onChange={(event) => setAdminDraft({ ...adminDraft, password: event.target.value })} minLength={12} maxLength={256} autoComplete="new-password" required /></label>
           <label>الدور الإداري<select value={adminDraft.roleCode} onChange={(event) => setAdminDraft({ ...adminDraft, roleCode: event.target.value })} required>{adminRoles.filter((role) => role.code !== "owner").map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}</select></label>
+          <label>نقاط البيع المسموح بها <small>يمكن اختيار أكثر من نقطة، والموظف يرى كروتها فقط.</small><select multiple value={adminDraft.pointOfSaleIds.map(String)} onChange={(event) => setAdminDraft({ ...adminDraft, pointOfSaleIds: Array.from(event.target.selectedOptions, (option) => Number(option.value)) })} size={Math.min(5, Math.max(2, points.length))}>{points.map((point) => <option key={point.id} value={point.id} disabled={!point.is_active}>{point.name}{point.is_active ? "" : " (متوقفة)"}</option>)}</select></label>
           <div className="form-actions"><button type="submit" disabled={busy || adminRoles.length === 0}>{busy ? "جارٍ الحفظ..." : "إنشاء حساب"}</button></div>
         </form>
         <section className="panel admin-permission-matrix">
@@ -1558,12 +1562,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </section>
         <section className="panel admin-directory">
           <div className="section-heading"><div><h3>الحسابات المسجلة</h3><p>يمكن تغيير دور الحساب أو إيقافه دون حذف سجله.</p></div><button type="button" className="table-action" onClick={() => loadAdminAccounts().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث الحسابات"))}>تحديث</button></div>
-          <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>المستخدم</th><th>اسم الموظف</th><th>الدور الحالي</th><th>آخر دخول</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+          <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>المستخدم</th><th>اسم الموظف</th><th>الدور الحالي</th><th>نقاط البيع المسموحة</th><th>آخر دخول</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
             <tbody>{adminAccounts.map((account) => <tr key={account.id}>
               <td><strong dir="ltr">{account.username}</strong></td><td>{account.display_name}</td>
               <td><select aria-label={`دور ${account.username}`} defaultValue={account.roles[0] ?? "viewer"} onChange={(event) => updateAdminAccount(account, { role_codes: [event.target.value] })} disabled={busy || account.id === user.id}>
                 {adminRoles.filter((role) => role.code !== "owner" || account.roles.includes("owner")).map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}
               </select></td>
+              <td><select aria-label={`نقاط البيع المسموحة لـ ${account.username}`} multiple size={Math.min(4, Math.max(2, points.length))} value={account.point_of_sale_ids.map(String)} onChange={(event) => updateAdminAccount(account, { point_of_sale_ids: Array.from(event.target.selectedOptions, (option) => Number(option.value)) })} disabled={busy || account.id === user.id}>{points.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></td>
               <td>{account.last_login_at ? new Date(account.last_login_at).toLocaleString("ar") : "لم يسجل الدخول"}</td>
               <td><span className={account.is_active ? "admin-status active" : "admin-status inactive"}>{account.is_active ? "نشط" : "متوقف"}</span></td>
               <td><button type="button" className="table-action" disabled={busy || account.id === user.id} onClick={() => updateAdminAccount(account, { is_active: !account.is_active })}>{account.is_active ? "إيقاف الحساب" : "تفعيل الحساب"}</button></td>
