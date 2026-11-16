@@ -283,6 +283,7 @@ def test_preview_listing_is_paginated_read_only_and_scoped_to_router(owner_clien
     assert first.status_code == 200, first.text
     data = first.json()
     assert data["total"] == 3
+    assert data["classification_counts"] == {"new": 3}
     assert len(data["items"]) == 2
     assert data["read_only"] is True
     assert data["imported"] is False
