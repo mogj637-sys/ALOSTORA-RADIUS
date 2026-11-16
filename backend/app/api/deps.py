@@ -62,6 +62,9 @@ def require_permission(permission_code: str):
             for permission in role.permissions
         }
         if permission_code not in granted:
+            module, _, action = permission_code.partition(".")
+            if action == "view" and (f"{module}.manage" in granted or (module == "sessions" and "sessions.disconnect" in granted)):
+                return user
             raise HTTPException(
                 status_code=403,
                 detail=f"ليست لديك صلاحية تنفيذ هذه العملية ({permission_code})",
