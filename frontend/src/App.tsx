@@ -1614,7 +1614,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div><h2>حسابات الإدارة والموظفين</h2><p>إنشاء حسابات دخول مستقلة وتحديد الدور الإداري لكل حساب.</p></div>
           <span className="count-tag">{adminAccounts.length.toLocaleString("ar")} حساب</span>
         </div>
-        <div className="notice">يمكنك إنشاء دور مستقل لكل وظيفة، ثم تحديد صلاحياته. حدد نقاط البيع المسموح بها لكل حساب؛ الموظف يرى كروت النقاط المرتبطة به فقط، ويمكن ربط الحساب بأكثر من نقطة.</div>
+        <div className="notice">يمكنك إنشاء أدوار وظيفية، ثم تخصيص صلاحيات كل موظف على حدة: السماح أو المنع أو اتباع صلاحيات الدور، مع تحديد نطاق ظهور الكروت ونقاط البيع.</div>
         <form className="panel form-grid admin-create-form" onSubmit={createAdminRole}>
           <div className="section-heading"><div><h3>إنشاء دور وظيفي جديد</h3><p>مثال: موظف نقاط البيع، محاسب، مسؤول طباعة.</p></div></div>
           <label>رمز الدور بالإنجليزية<input value={roleDraft.code} onChange={(event) => setRoleDraft({ ...roleDraft, code: event.target.value })} minLength={3} maxLength={60} pattern="[a-z][a-z0-9_]+" placeholder="pos_staff" required /></label>
@@ -1629,6 +1629,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <label>كلمة المرور<input type="password" value={adminDraft.password} onChange={(event) => setAdminDraft({ ...adminDraft, password: event.target.value })} minLength={12} maxLength={256} autoComplete="new-password" required /></label>
           <label>الدور الإداري<select value={adminDraft.roleCode} onChange={(event) => setAdminDraft({ ...adminDraft, roleCode: event.target.value })} required>{adminRoles.filter((role) => role.code !== "owner").map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}</select></label>
           <label>نقاط البيع المسموح بها <small>يمكن اختيار أكثر من نقطة، والموظف يرى كروتها فقط.</small><select multiple value={adminDraft.pointOfSaleIds.map(String)} onChange={(event) => setAdminDraft({ ...adminDraft, pointOfSaleIds: Array.from(event.target.selectedOptions, (option) => Number(option.value)) })} size={Math.min(5, Math.max(2, points.length))}>{points.map((point) => <option key={point.id} value={point.id} disabled={!point.is_active}>{point.name}{point.is_active ? "" : " (متوقفة)"}</option>)}</select></label>
+          <label>نطاق ظهور الكروت
+            <select value={adminDraft.cardVisibility} onChange={(event) => setAdminDraft({ ...adminDraft, cardVisibility: event.target.value as CardVisibility })}>
+              <option value="search_any">البحث عن كرت محدد من أي نقطة بيع</option>
+              <option value="assigned">كروت نقاط البيع المرتبطة فقط</option>
+              <option value="all">جميع كروت النظام</option>
+            </select>
+          </label>
           <div className="form-actions"><button type="submit" disabled={busy || adminRoles.length === 0}>{busy ? "جارٍ الحفظ..." : "إنشاء حساب"}</button></div>
         </form>
         <section className="panel admin-permission-matrix">
@@ -1658,19 +1665,67 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </section>
         <section className="panel admin-directory">
           <div className="section-heading"><div><h3>الحسابات المسجلة</h3><p>يمكن تغيير دور الحساب أو إيقافه دون حذف سجله.</p></div><button type="button" className="table-action" onClick={() => loadAdminAccounts().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث الحسابات"))}>تحديث</button></div>
-          <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>المستخدم</th><th>اسم الموظف</th><th>الدور الحالي</th><th>نقاط البيع المسموحة</th><th>آخر دخول</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+          <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>المستخدم</th><th>اسم الموظف</th><th>الدور الحالي</th><th>نطاق الكروت</th><th>نقاط البيع المسموحة</th><th>آخر دخول</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
             <tbody>{adminAccounts.map((account) => <tr key={account.id}>
               <td><strong dir="ltr">{account.username}</strong></td><td>{account.display_name}</td>
               <td><select aria-label={`دور ${account.username}`} defaultValue={account.roles[0] ?? "viewer"} onChange={(event) => updateAdminAccount(account, { role_codes: [event.target.value] })} disabled={busy || account.id === user.id}>
                 {adminRoles.filter((role) => role.code !== "owner" || account.roles.includes("owner")).map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}
               </select></td>
+              <td>{account.card_visibility === "all" ? "جميع الكروت" : account.card_visibility === "assigned" ? "نقاطه فقط" : "بحث عن كرت محدد"}</td>
               <td><select aria-label={`نقاط البيع المسموحة لـ ${account.username}`} multiple size={Math.min(4, Math.max(2, points.length))} value={account.point_of_sale_ids.map(String)} onChange={(event) => updateAdminAccount(account, { point_of_sale_ids: Array.from(event.target.selectedOptions, (option) => Number(option.value)) })} disabled={busy || account.id === user.id}>{points.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></td>
               <td>{account.last_login_at ? new Date(account.last_login_at).toLocaleString("ar") : "لم يسجل الدخول"}</td>
               <td><span className={account.is_active ? "admin-status active" : "admin-status inactive"}>{account.is_active ? "نشط" : "متوقف"}</span></td>
-              <td><button type="button" className="table-action" disabled={busy || account.id === user.id} onClick={() => updateAdminAccount(account, { is_active: !account.is_active })}>{account.is_active ? "إيقاف الحساب" : "تفعيل الحساب"}</button></td>
+              <td className="actions-cell">
+                <button type="button" className="table-action" disabled={busy || account.roles.includes("owner")} onClick={() => selectAdminForIndividualSettings(account)}>تخصيص الصلاحيات</button>
+                <button type="button" className="table-action" disabled={busy || account.id === user.id} onClick={() => updateAdminAccount(account, { is_active: !account.is_active })}>{account.is_active ? "إيقاف الحساب" : "تفعيل الحساب"}</button>
+              </td>
             </tr>)}</tbody></table></div>
           {adminAccounts.length === 0 && <div className="empty-state">لا توجد حسابات إدارة مسجلة.</div>}
         </section>
+        {selectedAdminId !== null && (() => {
+          const selectedAccount = adminAccounts.find((item) => item.id === selectedAdminId);
+          if (!selectedAccount || selectedAccount.roles.includes("owner")) return null;
+          return (
+            <section className="panel admin-individual-permissions">
+              <div className="section-heading">
+                <div><h3>تخصيص صلاحيات الموظف: {selectedAccount.display_name}</h3><p>كل صلاحية يمكن أن تتبع الدور أو تسمح بها لهذا الموظف أو تمنعها عنه بشكل مستقل.</p></div>
+                <button type="button" className="table-action" onClick={() => setSelectedAdminId(null)}>إغلاق</button>
+              </div>
+              <label>نطاق ظهور الكروت
+                <select value={adminVisibilityDraft} onChange={(event) => setAdminVisibilityDraft(event.target.value as CardVisibility)}>
+                  <option value="search_any">البحث عن كرت محدد من أي نقطة بيع</option>
+                  <option value="assigned">كروت نقاط البيع المرتبطة فقط</option>
+                  <option value="all">جميع كروت النظام</option>
+                </select>
+              </label>
+              <div className="notice">نطاق الكروت لا يمنح الموظف صلاحية الطباعة أو إنشاء الكروت تلقائياً؛ يجب فتح صلاحية كل عملية بصورة مستقلة وربط نقطة البيع المناسبة.</div>
+              <div className="permission-groups">
+                {Object.entries(adminPermissions.reduce<Record<string, AdminPermission[]>>((groups, permission) => {
+                  (groups[permission.module] ??= []).push(permission); return groups;
+                }, {})).map(([module, permissions]) => (
+                  <div className="permission-group" key={module}>
+                    <h4>{{cards:"الكروت والقوالب",sessions:"الجلسات",plans:"الباقات",routers:"الراوترات",pos:"نقاط البيع",finance:"الحسابات المالية",reports:"التقارير",printing:"الطباعة"}[module] ?? module}</h4>
+                    {permissions.map((permission) => (
+                      <label className="permission-option" key={permission.code}>
+                        <span><strong>{permission.name}</strong><small>{permission.description}</small></span>
+                        <select aria-label={`صلاحية ${permission.name} للموظف ${selectedAccount.username}`} value={adminOverrideDraft[permission.code] ?? "inherit"} disabled={busy}
+                          onChange={(event) => setAdminOverrideDraft((current) => ({ ...current, [permission.code]: event.target.value as "inherit" | "allow" | "deny" }))}>
+                          <option value="inherit">اتباع الدور</option>
+                          <option value="allow">سماح لهذا الموظف</option>
+                          <option value="deny">منع هذا الموظف</option>
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div className="form-actions">
+                <button type="button" onClick={saveAdminIndividualSettings} disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ إعدادات الموظف"}</button>
+                <button type="button" className="secondary-button" disabled={busy} onClick={() => { setAdminOverrideDraft({}); setAdminVisibilityDraft("search_any"); }}>إعادة إلى الافتراضي</button>
+              </div>
+            </section>
+          );
+        })()}
       </div>
     );
   }
