@@ -2164,15 +2164,67 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     return (
       <>
         <div className="section-heading">
-          <div><h2>تقارير نقاط البيع</h2><p>ملخص التسليمات والعمولات والسدادات والأرصدة خلال الفترة المحددة.</p></div>
-          <span className="count-tag">{posReport?.point_count ?? 0} نقطة بيع</span>
+          <div><h2>التقارير الشاملة</h2><p>تقارير الكروت والاستهلاك والجلسات والدفعات والطباعة والحسابات حسب الفترة.</p></div>
         </div>
         <form className="panel form-grid" onSubmit={(event) => { event.preventDefault(); setBusy(true); setError(""); loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقرير")).finally(() => setBusy(false)); }}>
           <label>من تاريخ<input type="date" value={reportFrom} max={reportTo} onChange={(event) => setReportFrom(event.target.value)} required /></label>
           <label>إلى تاريخ<input type="date" value={reportTo} min={reportFrom} onChange={(event) => setReportTo(event.target.value)} required /></label>
           <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ إعداد التقرير..." : "عرض التقرير"}</button></div>
         </form>
-        {posReport && (
+        <div className="report-tabs" role="tablist" aria-label="أقسام التقارير">
+          {can("cards.view") && <button type="button" className={reportTab === "cards" ? "active" : ""} onClick={() => setReportTab("cards")}>الكروت والمبيعات</button>}
+          {can("sessions.view") && <button type="button" className={reportTab === "usage" ? "active" : ""} onClick={() => setReportTab("usage")}>الاستهلاك والوقت</button>}
+          {can("cards.view") && <button type="button" className={reportTab === "batches" ? "active" : ""} onClick={() => setReportTab("batches")}>دفعات الكروت</button>}
+          {can("cards.view") && <button type="button" className={reportTab === "printing" ? "active" : ""} onClick={() => setReportTab("printing")}>عمليات الطباعة</button>}
+          {can("finance.view") && <button type="button" className={reportTab === "finance" ? "active" : ""} onClick={() => setReportTab("finance")}>نقاط البيع والحسابات</button>}
+        </div>
+        {reportTab === "cards" && can("cards.view") && (
+          <section className="report-section">
+            <div className="stats-grid">
+              <article className="stat-card"><span>إجمالي الكروت</span><strong>{(cardsReport?.total_cards ?? 0).toLocaleString("ar")}</strong></article>
+              <article className="stat-card"><span>القيمة الاسمية</span><strong>{money(cardsReport?.total_value)} ريال</strong></article>
+              <article className="stat-card"><span>إجمالي الرفع</span><strong>{formatBytes(cardsReport?.upload_bytes ?? 0)}</strong></article>
+              <article className="stat-card"><span>إجمالي التنزيل</span><strong>{formatBytes(cardsReport?.download_bytes ?? 0)}</strong></article>
+            </div>
+            <div className="report-split">
+              <div className="panel"><h3>توزيع الكروت حسب الحالة</h3><div className="report-list">{(cardsReport?.by_status ?? []).map((item) => <div key={item.status}><span>{item.status}</span><strong>{item.count.toLocaleString("ar")}</strong></div>)}</div></div>
+              <div className="panel"><h3>توزيع الكروت حسب الباقة</h3><div className="report-list">{(cardsReport?.by_plan ?? []).map((item) => <div key={item.plan_name}><span>{item.plan_name}</span><strong>{item.count.toLocaleString("ar")}</strong></div>)}</div></div>
+            </div>
+          </section>
+        )}
+        {reportTab === "usage" && can("sessions.view") && (
+          <section className="report-section">
+            <div className="stats-grid">
+              <article className="stat-card"><span>إجمالي الجلسات</span><strong>{(sessionsReport?.total_sessions ?? 0).toLocaleString("ar")}</strong></article>
+              <article className="stat-card"><span>المستخدمون دون تكرار</span><strong>{(sessionsReport?.unique_users ?? 0).toLocaleString("ar")}</strong></article>
+              <article className="stat-card"><span>الجلسات النشطة الآن</span><strong>{(sessionsReport?.active_sessions ?? 0).toLocaleString("ar")}</strong></article>
+              <article className="stat-card"><span>مدة الاتصال المسجلة</span><strong>{formatDuration(sessionsReport?.session_seconds ?? 0)}</strong></article>
+              <article className="stat-card"><span>إجمالي الرفع</span><strong>{formatBytes(sessionsReport?.upload_bytes ?? 0)}</strong></article>
+              <article className="stat-card"><span>إجمالي التنزيل</span><strong>{formatBytes(sessionsReport?.download_bytes ?? 0)}</strong></article>
+            </div>
+            <div className="panel"><h3>الجلسات حسب الراوتر</h3><div className="report-list">{(sessionsReport?.by_router ?? []).map((item) => <div key={item.router_name}><span>{item.router_name}</span><strong>{item.sessions.toLocaleString("ar")}</strong></div>)}</div></div>
+          </section>
+        )}
+        {reportTab === "batches" && can("cards.view") && (
+          <section className="panel report-section"><div className="section-heading"><h3>تقرير دفعات الكروت</h3><span className="count-tag">{batchesReport?.total_batches ?? 0} دفعة · {batchesReport?.total_cards ?? 0} كرت</span></div>
+            <div className="table-wrap"><table><thead><tr><th>رقم الدفعة</th><th>التاريخ</th><th>الباقة</th><th>نقطة البيع</th><th>الكمية المطلوبة</th><th>الكروت المنشأة</th></tr></thead><tbody>
+              {(batchesReport?.items ?? []).map((item) => <tr key={item.batch_id}><td>{item.batch_number}</td><td>{new Date(item.created_at).toLocaleString("ar")}</td><td>{item.plan_name}</td><td>{item.point_of_sale_name ?? "—"}</td><td>{item.quantity}</td><td>{item.generated_cards}</td></tr>)}
+              {(batchesReport?.items.length ?? 0) === 0 && <tr><td colSpan={6} className="empty-state">لا توجد دفعات خلال الفترة المحددة.</td></tr>}
+            </tbody></table></div>
+          </section>
+        )}
+        {reportTab === "printing" && can("cards.view") && (
+          <section className="panel report-section"><div className="stats-grid">
+            <article className="stat-card"><span>عمليات الطباعة</span><strong>{(printingReport?.total_jobs ?? 0).toLocaleString("ar")}</strong></article>
+            <article className="stat-card"><span>الكروت المطبوعة</span><strong>{(printingReport?.total_cards_printed ?? 0).toLocaleString("ar")}</strong></article>
+            <article className="stat-card"><span>عمليات إعادة الطباعة</span><strong>{(printingReport?.reprint_jobs ?? 0).toLocaleString("ar")}</strong></article>
+          </div><div className="table-wrap"><table><thead><tr><th>التاريخ</th><th>نقطة البيع</th><th>عدد الكروت</th><th>نوع العملية</th><th>القالب</th></tr></thead><tbody>
+            {(printingReport?.items ?? []).map((item) => <tr key={item.id}><td>{new Date(item.created_at).toLocaleString("ar")}</td><td>{item.point_of_sale_name}</td><td>{item.card_count}</td><td>{item.is_reprint ? "إعادة طباعة" : "طباعة"}</td><td>{item.template_code ?? "—"}</td></tr>)}
+            {(printingReport?.items.length ?? 0) === 0 && <tr><td colSpan={5} className="empty-state">لا توجد عمليات طباعة خلال الفترة المحددة.</td></tr>}
+          </tbody></table></div></section>
+        )}
+        {reportTab === "finance" && can("finance.view") && posReport && (
+
           <>
             <div className="report-actions">
               <button type="button" disabled={busy} onClick={() => downloadProtectedFile(`/api/v1/reports/points-of-sale/export.xlsx?date_from=${encodeURIComponent(reportFrom)}&date_to=${encodeURIComponent(reportTo)}`, `pos-report-${reportFrom}-${reportTo}.xlsx`).catch((err) => setError(err instanceof Error ? err.message : "تعذر تنزيل Excel"))}>تنزيل التقرير Excel</button>
