@@ -2467,9 +2467,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         )}
         {reportTab === "batches" && can("cards.view") && (
           <section className="panel report-section"><div className="section-heading"><h3>تقرير دفعات الكروت</h3><span className="count-tag">{batchesReport?.total_batches ?? 0} دفعة · {batchesReport?.total_cards ?? 0} كرت</span></div>
-            <div className="table-wrap"><table><thead><tr><th>رقم الدفعة</th><th>التاريخ</th><th>الباقة</th><th>نقطة البيع</th><th>الكمية المطلوبة</th><th>الكروت المنشأة</th></tr></thead><tbody>
-              {(batchesReport?.items ?? []).map((item) => <tr key={item.batch_id}><td>{item.batch_number}</td><td>{new Date(item.created_at).toLocaleString("ar")}</td><td>{item.plan_name}</td><td>{item.point_of_sale_name ?? "—"}</td><td>{item.quantity}</td><td>{item.generated_cards}</td></tr>)}
-              {(batchesReport?.items.length ?? 0) === 0 && <tr><td colSpan={6} className="empty-state">لا توجد دفعات خلال الفترة المحددة.</td></tr>}
+            <div className="table-wrap"><table><thead><tr><th>رقم الدفعة</th><th>التاريخ</th><th>الباقة</th><th>نقطة البيع</th><th>الكمية المطلوبة</th><th>الكروت المنشأة</th><th>نوع البيع</th><th>ملاحظة</th></tr></thead><tbody>
+              {(batchesReport?.items ?? []).map((item) => <tr key={item.batch_id}><td>{item.batch_number}</td><td>{new Date(item.created_at).toLocaleString("ar")}</td><td>{item.plan_name}</td><td>{item.point_of_sale_name ?? "—"}</td><td>{item.quantity}</td><td>{item.generated_cards}</td><td>{item.is_online_sale ? "أونلاين" : "عادي"}</td><td>{item.note || "—"}</td></tr>)}
+              {(batchesReport?.items.length ?? 0) === 0 && <tr><td colSpan={8} className="empty-state">لا توجد دفعات خلال الفترة المحددة.</td></tr>}
             </tbody></table></div>
           </section>
         )}
