@@ -1,3 +1,5 @@
+import secrets
+
 from app.services import routeros_probe
 
 
@@ -110,7 +112,7 @@ def test_router_connection_endpoint_uses_saved_credentials_read_only(owner_clien
         headers=headers,
         json={
             "name": "CI Router Probe",
-            "nas_identifier": "ci-probe-" + __import__("secrets").token_hex(4),
+            "nas_identifier": "ci-probe-" + secrets.token_hex(4),
             "management_host": "192.0.2.10",
             "radius_client_address": "192.0.2.10",
             "api_port": 8729,
