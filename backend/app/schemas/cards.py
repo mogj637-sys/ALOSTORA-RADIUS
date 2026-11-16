@@ -32,6 +32,9 @@ class CardBatchCreate(BaseModel):
     prefix: str = Field(default="", max_length=20, pattern=r"^[A-Za-z0-9]*$")
     template_code: str | None = Field(default=None, max_length=80)
     point_of_sale_id: int | None = Field(default=None, gt=0)
+    existing_batch_id: UUID | None = None
+    is_online_sale: bool = False
+    note: str | None = Field(default=None, max_length=500)
 
 
 class CardCreatedSecret(BaseModel):
@@ -61,6 +64,8 @@ class CardBatchResponse(BaseModel):
     plan_id: int
     template_code: str | None
     point_of_sale_id: int | None
+    is_online_sale: bool = False
+    note: str | None = None
     created_count: int
     cards: list[CardCreatedSecret]
 
@@ -77,6 +82,8 @@ class CardBatchListItem(BaseModel):
     card_type: str
     created_at: datetime
     printed_count: int
+    is_online_sale: bool = False
+    note: str | None = None
 
 
 class CardStatusUpdate(BaseModel):
