@@ -10,7 +10,7 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_owner
+from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.core import PointOfSale, PosAccountEntry
 from app.schemas.reports import (
@@ -21,7 +21,7 @@ from app.schemas.reports import (
 router = APIRouter(
     prefix="/api/v1/reports",
     tags=["reports"],
-    dependencies=[Depends(get_current_owner)],
+    dependencies=[Depends(require_permission("reports.view"))],
 )
 
 
