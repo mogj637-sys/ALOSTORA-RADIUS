@@ -3199,3 +3199,68 @@ button:disabled { cursor: not-allowed; }
   .workspace .audit-toolbar button { justify-content: center; flex: 1 1 auto; }
   .workspace .audit-log-panel > .section-heading h2 { font-size: 16px; }
 }
+
+
+/* Audit log refinement: stronger scan hierarchy and accessible interaction states */
+.workspace .audit-log-panel {
+  gap: 17px;
+  background: linear-gradient(180deg, #ffffff 0%, #fcfefc 100%);
+}
+.workspace .audit-log-panel > .section-heading > div:first-child {
+  min-width: 0;
+  position: relative;
+  padding-inline-start: 13px;
+}
+.workspace .audit-log-panel > .section-heading > div:first-child::before {
+  position: absolute;
+  inset-block: 4px 5px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #168767, #9acdaf);
+  content: "";
+}
+.workspace .audit-toolbar .count-tag {
+  gap: 6px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+.workspace .audit-log-table tbody tr:nth-child(even) td {
+  background: #fcfefc;
+}
+.workspace .audit-log-table tbody tr:nth-child(even):hover td,
+.workspace .audit-log-table tbody tr:hover td {
+  background: #f1f8f3;
+}
+.workspace .audit-log-table td:nth-child(2) {
+  overflow-wrap: anywhere;
+}
+.workspace .audit-log-table td:nth-child(3) strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.75);
+}
+.workspace .audit-log-table td:nth-child(4) {
+  max-width: 150px;
+  overflow-wrap: anywhere;
+}
+.workspace .audit-log-table td:nth-child(5),
+.workspace .audit-log-table td:nth-child(7) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.workspace .audit-pagination > span {
+  line-height: 1.9;
+}
+.workspace .audit-toolbar button:focus-visible,
+.workspace .audit-pagination button:focus-visible {
+  outline: 3px solid rgba(22, 135, 103, .2);
+  outline-offset: 2px;
+}
+@media (max-width: 700px) {
+  .workspace .audit-log-panel > .section-heading > div:first-child {
+    padding-inline-start: 11px;
+  }
+  .workspace .audit-toolbar {
+    flex-wrap: wrap;
+  }
+}
