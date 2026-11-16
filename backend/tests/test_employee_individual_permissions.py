@@ -159,7 +159,11 @@ def test_employee_card_visibility_and_direct_permission_overrides(owner_client):
         assert all_result.status_code == 200, all_result.text
         all_ids = {item["id"] for item in all_result.json()}
         assert card_a["id"] in all_ids
+        assert unprinted_batch_card["id"] in all_ids
         assert card_b["id"] in all_ids
+        # Global card visibility does not grant foreign POS inventory or finance access.
+        assert client.get(f"/api/v1/points-of-sale/{point_b['id']}/inventory", headers=headers).status_code == 403
+        assert client.get(f"/api/v1/points-of-sale/{point_b['id']}/account", headers=headers).status_code == 403
 
         denied_view = client.patch(
             f"/api/v1/admins/{staff_id}",
