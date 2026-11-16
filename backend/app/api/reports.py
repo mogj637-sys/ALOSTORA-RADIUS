@@ -10,19 +10,26 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_permission
+from app.api.deps import get_current_user, require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import Card, CardBatch, Plan, PointOfSale, PosAccountEntry, PrintJob, RadiusSession, Router
-from app.services.permissions import card_visibility
+from app.services.permissions import card_visibility, has_permission
 from app.schemas.reports import (
     PosReportResponse, PosReportRow, PosReportTotals,
     PosStatementEntry, PosStatementResponse,
 )
 
+def require_report_access(user: AdminUser = Depends(get_current_user)) -> AdminUser:
+    if not (has_permission(user, "reports.view") or has_permission(user, "finance.view")):
+        raise HTTPException(status_code=403, detail="تتطلب التقارير صلاحية عرض التقارير أو الحسابات المالية")
+    return user
+
+
 router = APIRouter(
     prefix="/api/v1/reports",
     tags=["reports"],
+    dependencies=[Depends(require_report_access)],
 )
 
 
