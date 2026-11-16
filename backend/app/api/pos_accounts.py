@@ -9,6 +9,7 @@ from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import PointOfSale, PosAccountEntry
+from app.services.audit import record_audit
 from app.schemas.pos_accounts import (
     PosAccountEntryCreate,
     PosAccountEntryResponse,
@@ -95,6 +96,8 @@ def create_account_entry(
     )
     db.add(entry)
     try:
+        db.flush()
+        record_audit(db, user, "finance.entry_created", "pos_account_entry", f"تسجيل حركة مالية لنقطة البيع {point.name}", entity_id=entry.id, details={"entry_type": entry.entry_type, "direction": entry.direction, "amount": str(entry.amount), "reference": entry.reference})
         db.commit()
     except IntegrityError:
         db.rollback()
