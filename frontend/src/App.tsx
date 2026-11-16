@@ -1203,6 +1203,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     if (can("sessions.view")) { keys.push("sessions"); requests.push(apiRequest<SessionsReportData>(token, "/api/v1/reports/sessions?" + query)); }
     if (can("cards.view")) {
       keys.push("batches"); requests.push(apiRequest<BatchesReportData>(token, "/api/v1/reports/batches?" + query));
+    }
+    if (can("printing.view")) {
       keys.push("printing"); requests.push(apiRequest<PrintingReportData>(token, "/api/v1/reports/printing?" + query));
     }
     if (can("finance.view")) {
@@ -1293,7 +1295,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       ? selectedPosId
       : (result.find((point) => point.is_active)?.id ?? result[0]?.id)?.toString() ?? "";
     setSelectedPosId(current);
-    await Promise.all([loadPosInventory(current), loadPrintHistory(current), loadPosAccount(current)]);
+    const requests: Promise<unknown>[] = [];
+    if (can("pos.view")) requests.push(loadPosInventory(current));
+    if (can("printing.view")) requests.push(loadPrintHistory(current));
+    if (can("finance.view")) requests.push(loadPosAccount(current));
+    await Promise.all(requests);
   }
 
   async function createPointOfSale(event: FormEvent<HTMLFormElement>) {
@@ -1463,33 +1469,33 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setError("");
       loadAdminAccounts().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل حسابات الإدارة"));
     }
-    if (page === "overview") {
+    if (page === "overview" && can("cards.view")) {
       setError("");
       loadRadiusOverview().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل لوحة المعلومات"));
     }
-    if (page === "pos" || page === "pos-management" || page === "templates" || page === "card-create") {
+    if ((page === "pos" || page === "templates" || page === "card-create") && can("templates.view")) {
       loadCardTemplates().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل قوالب الطباعة"));
     }
     if (page === "templates") setError("");
-    if (page === "batches") {
+    if (page === "batches" && can("cards.view")) {
       setError("");
       loadCardBatches().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل دفعات الكروت"));
     }
-    if (page === "card-create") {
+    if (page === "card-create" && can("cards.view")) {
       loadCardBatches().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الدفعات السابقة"));
     }
-    if (page === "reports") {
+    if (page === "reports" && can("reports.view")) {
       setError("");
-      loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقارير المالية"));
+      loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقارير"));
     }
-    if (page === "plans" || page === "cards" || page === "card-create" || page === "pos" || page === "pos-management" || page === "templates" || page === "routers") {
+    const requests: Promise<unknown>[] = [];
+    if ((page === "plans" || page === "templates" || page === "card-create" || page === "pos") && can("plans.view")) requests.push(loadPlans());
+    if (page === "cards" && can("cards.view")) requests.push(loadCards());
+    if ((page === "pos" || page === "pos-management" || page === "card-create") && can("pos.view")) requests.push(loadPointsOfSale());
+    if (page === "routers" && can("routers.view")) requests.push(loadRouters());
+    if (requests.length) {
       setError("");
-      Promise.all([
-        loadPlans(),
-        page === "cards" || page === "card-create" || page === "pos" ? loadCards() : Promise.resolve(),
-        page === "pos" || page === "pos-management" || page === "card-create" ? loadPointsOfSale() : Promise.resolve(),
-        page === "routers" ? loadRouters() : Promise.resolve(),
-      ]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل البيانات"));
+      Promise.all(requests).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل البيانات"));
     }
     // Data is refreshed when the selected section changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
