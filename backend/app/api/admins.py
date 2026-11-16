@@ -174,6 +174,10 @@ def update_admin(
     )
     if user is None:
         raise HTTPException(status_code=404, detail="حساب الإدارة غير موجود")
+    if any(role.code == "owner" for role in user.roles) and (
+        payload.permission_overrides is not None or payload.card_visibility is not None
+    ):
+        raise HTTPException(status_code=400, detail="صلاحيات ونطاق مدير النظام ثابتة ولا تُدار من شاشة الموظفين")
 
     next_roles = _resolve_roles(db, payload.role_codes) if payload.role_codes is not None else user.roles
     next_active = payload.is_active if payload.is_active is not None else user.is_active
