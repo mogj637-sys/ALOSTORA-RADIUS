@@ -3264,3 +3264,249 @@ button:disabled { cursor: not-allowed; }
     flex-wrap: wrap;
   }
 }
+
+
+/* Plans workspace refinement: clearer package setup flow and compact catalogue scanning */
+.workspace .plans-workspace {
+  gap: 19px;
+}
+.workspace .plans-page-heading {
+  align-items: center;
+  gap: 14px;
+  padding: 17px 19px;
+  border: 1px solid #e0ebe4;
+  border-radius: 14px;
+  background: linear-gradient(115deg, #fff, #f6fbf7);
+  box-shadow: 0 5px 17px rgba(24, 65, 43, .035);
+}
+.workspace .plans-page-heading h2 {
+  color: #244e3b;
+}
+.workspace .plans-page-heading .count-tag,
+.workspace .plans-directory .count-tag {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border: 1px solid #d8e9de;
+  border-radius: 9px;
+  background: #edf7f1;
+  color: #176b50;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.workspace .plans-summary article {
+  position: relative;
+  min-height: 112px;
+  align-content: center;
+  overflow: hidden;
+  border-color: #e0ebe4;
+  box-shadow: 0 5px 16px rgba(24, 65, 43, .035);
+}
+.workspace .plans-summary article::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #168767, #a6d9ba);
+  content: "";
+}
+.workspace .plans-summary article strong {
+  font-variant-numeric: tabular-nums;
+}
+.workspace .plans-editor-panel {
+  padding: 20px;
+  border: 1px solid #dfeae3;
+  border-radius: 15px;
+  box-shadow: 0 7px 22px rgba(24, 65, 43, .045);
+}
+.workspace .plans-editor-title {
+  padding-bottom: 13px;
+  border-bottom: 1px solid #edf2ee;
+}
+.workspace .plans-editor-title h3 {
+  color: #244e3b;
+}
+.workspace .plans-editor-title p {
+  line-height: 1.8;
+}
+.workspace .plans-editor-symbol {
+  flex: 0 0 44px;
+  border: 1px solid #d9ece0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+.workspace .plans-editor-panel .plan-form-section {
+  border-color: #e2ece5;
+  border-radius: 12px;
+  background: linear-gradient(150deg, #fff, #fcfefc);
+}
+.workspace .plans-editor-panel .plan-section-title {
+  padding-bottom: 11px;
+  border-bottom: 1px solid #edf2ee;
+}
+.workspace .plans-editor-panel .plan-section-title > span {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+.workspace .plans-editor-panel .plan-section-title p {
+  line-height: 1.7;
+}
+.workspace .plans-editor-panel .plan-feature-toggle {
+  border: 1px solid #e3eee7;
+  color: #426451;
+  line-height: 1.8;
+}
+.workspace .plans-editor-panel .day-selector {
+  gap: 8px;
+  margin: 12px 0;
+}
+.workspace .plans-editor-panel .day-selector label {
+  min-height: 37px;
+  padding: 7px 10px;
+  border: 1px solid #e3ece6;
+  border-radius: 8px;
+  background: #f8fbf9;
+  color: #587063;
+  font-size: 10px;
+}
+.workspace .plans-editor-panel .day-selector label:has(input:checked) {
+  border-color: #b9d9c5;
+  background: #edf7f1;
+  color: #216348;
+}
+.workspace .plans-form-actions {
+  padding-top: 5px;
+}
+.workspace .plans-form-actions button {
+  min-width: 130px;
+  border-radius: 9px;
+}
+.workspace .plans-directory {
+  gap: 13px;
+  padding: 18px;
+  border: 1px solid #e1ebe4;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(24, 65, 43, .035);
+}
+.workspace .plans-directory > .section-heading {
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #edf2ee;
+}
+.workspace .plans-table-wrap {
+  border: 1px solid #e3ece6;
+  border-radius: 11px;
+  scrollbar-width: thin;
+  scrollbar-color: #c5d9cc transparent;
+}
+.workspace .plans-table-wrap table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.workspace .plans-table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 13px 11px;
+  border-bottom: 1px solid #dfeae3;
+  background: #f1f7f3;
+  color: #526d5d;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.workspace .plans-table-wrap td {
+  padding: 11px;
+  border-bottom: 1px solid #edf2ee;
+  color: #586d60;
+  font-size: 10px;
+  vertical-align: middle;
+}
+.workspace .plans-table-wrap tbody tr:nth-child(even) td {
+  background: #fcfefc;
+}
+.workspace .plans-table-wrap tbody tr:hover td {
+  background: #f1f8f3;
+}
+.workspace .plans-table-wrap tbody tr:last-child td {
+  border-bottom: 0;
+}
+.workspace .plans-table-wrap td strong {
+  color: #315943;
+  font-size: 11px;
+}
+.workspace .plans-table-wrap .plan-code {
+  border: 1px solid #e2ebe5;
+  background: #f5f9f6;
+  font-variant-numeric: tabular-nums;
+}
+.workspace .plans-table-wrap .plan-status {
+  min-width: 64px;
+  justify-content: center;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.workspace .plans-table-wrap .plan-status.active {
+  border-color: #cfe9d8;
+  background: #edf8f0;
+  color: #16734f;
+}
+.workspace .plans-table-wrap .plan-status.inactive {
+  border-color: #f0dfce;
+  background: #fff6ed;
+  color: #98613a;
+}
+.workspace .plans-table-wrap .table-action {
+  min-height: 30px;
+  margin: 2px;
+  padding: 5px 9px;
+  border: 1px solid #dce9e0;
+  border-radius: 7px;
+  background: #f7fbf8;
+  color: #286248;
+  font-size: 9px;
+}
+.workspace .plans-table-wrap .table-action:hover:not(:disabled) {
+  border-color: #b5d8c2;
+  background: #edf7f0;
+}
+.workspace .plans-table-wrap .danger-action {
+  border-color: #f0d9d5;
+  background: #fff7f5;
+  color: #a34c42;
+}
+.workspace .plans-table-wrap .empty-state {
+  padding: 34px 16px;
+  color: #819087;
+  text-align: center;
+}
+@media (max-width: 760px) {
+  .workspace .plans-page-heading,
+  .workspace .plans-directory > .section-heading {
+    align-items: flex-start;
+  }
+  .workspace .plans-editor-panel,
+  .workspace .plans-directory {
+    padding: 15px;
+  }
+}
+@media (max-width: 520px) {
+  .workspace .plans-page-heading {
+    flex-direction: column;
+  }
+  .workspace .plans-page-heading .count-tag {
+    align-self: flex-start;
+  }
+  .workspace .plans-editor-title {
+    align-items: flex-start;
+  }
+  .workspace .plans-form-actions button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .workspace .plans-directory > .section-heading {
+    flex-direction: column;
+  }
+}
