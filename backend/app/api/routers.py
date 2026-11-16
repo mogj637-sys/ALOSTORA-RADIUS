@@ -16,7 +16,6 @@ from app.services.router_secrets import (
 router = APIRouter(
     prefix="/api/v1/routers",
     tags=["routers"],
-    dependencies=[Depends(require_permission("routers.view"))],
 )
 
 
@@ -27,7 +26,7 @@ def _encrypt(value: str) -> str:
         raise HTTPException(status_code=503, detail=str(exc))
 
 
-@router.get("", response_model=list[RouterResponse])
+@router.get("", response_model=list[RouterResponse], dependencies=[Depends(require_permission("routers.view"))])
 def list_routers(include_inactive: bool = False, db: Session = Depends(get_db)):
     query = db.query(Router)
     if not include_inactive:
