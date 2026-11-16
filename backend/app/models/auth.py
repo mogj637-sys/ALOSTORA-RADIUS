@@ -14,6 +14,14 @@ user_roles = Table(
 )
 
 
+role_permissions = Table(
+    "role_permissions",
+    Base.metadata,
+    Column("role_id", ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 class AdminUser(TimestampMixin, Base):
     __tablename__ = "admin_users"
 
@@ -35,14 +43,6 @@ class Role(TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     users = relationship("AdminUser", secondary=user_roles, back_populates="roles")
     permissions = relationship("Permission", secondary=role_permissions, back_populates="roles", lazy="selectin")
-
-
-role_permissions = Table(
-    "role_permissions",
-    Base.metadata,
-    Column("role_id", ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
-    Column("permission_id", ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
-)
 
 
 class Permission(Base):
