@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,7 @@ from app.models.core import (
 )
 from app.services.credentials import CredentialEncryptionNotConfigured, decrypt_credential
 from app.services.audit import record_audit
+from app.services.pos_credit import ensure_pos_printing_allowed, get_pos_balance_due
 from app.schemas.print_jobs import (
     PrintJobCreate,
     PrintJobHistoryCardResponse,
@@ -178,9 +180,15 @@ def create_print_job(
 
     if not any(role.code == "owner" for role in user.roles) and payload.point_of_sale_id not in {point.id for point in user.point_of_sales}:
         raise HTTPException(status_code=403, detail="لا تملك صلاحية الطباعة لنقطة البيع هذه")
-    point_of_sale = db.get(PointOfSale, payload.point_of_sale_id)
-    if point_of_sale is None or not point_of_sale.is_active:
-        raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة أو غير مفعلة")
+    point_of_sale = (
+        db.query(PointOfSale)
+        .filter(PointOfSale.id == payload.point_of_sale_id)
+        .with_for_update()
+        .first()
+    )
+    if point_of_sale is None:
+        raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
+    ensure_pos_printing_allowed(point_of_sale)
 
     cards = (
         db.query(Card)
@@ -237,6 +245,50 @@ def create_print_job(
                     status_code=409,
                     detail=f"الكرت {card.username} سبق تخصيصه أو لا يقبل الطباعة التجارية",
                 )
+
+    commercial_cards = [card for card in cards if not card.is_free] if not payload.is_reprint else []
+    commercial_total = sum(
+        (card.price_snapshot for card in commercial_cards),
+        Decimal("0.00"),
+    )
+    commission_by_plan: dict[int, Decimal] = {}
+    plans_by_id: dict[int, Plan] = {}
+    if commercial_cards:
+        plan_ids = {card.plan_id for card in commercial_cards}
+        plans_by_id = {
+            plan.id: plan
+            for plan in db.query(Plan).filter(Plan.id.in_(plan_ids)).all()
+        }
+        for card in commercial_cards:
+            plan = plans_by_id.get(card.plan_id)
+            if plan is None or plan.commission_type == "none":
+                continue
+            if plan.commission_type == "percentage":
+                commission = (
+                    card.price_snapshot * plan.commission_value / Decimal("100")
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            elif plan.commission_type == "fixed":
+                commission = min(plan.commission_value, card.price_snapshot)
+            else:
+                continue
+            if commission > 0:
+                commission_by_plan[plan.id] = (
+                    commission_by_plan.get(plan.id, Decimal("0.00")) + commission
+                )
+
+    commission_total = sum(commission_by_plan.values(), Decimal("0.00"))
+    if not payload.is_reprint and point_of_sale.debt_limit is not None:
+        current_due = get_pos_balance_due(db, point_of_sale.id)
+        projected_due = current_due + commercial_total - commission_total
+        if projected_due > Decimal(point_of_sale.debt_limit):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "ستتجاوز هذه العملية سقف المديونية لنقطة البيع. "
+                    f"الرصيد الحالي {current_due:.2f} ريال، "
+                    f"والسقف {Decimal(point_of_sale.debt_limit):.2f} ريال"
+                ),
+            )
 
     job = PrintJob(
         idempotency_key=payload.idempotency_key,
@@ -305,11 +357,6 @@ def create_print_job(
         # Original commercial allocation creates a debit for delivered cards
         # and a credit for configured commissions. Free cards and reprints are excluded.
         if not payload.is_reprint:
-            commercial_cards = [card for card in cards if not card.is_free]
-            commercial_total = sum(
-                (card.price_snapshot for card in commercial_cards),
-                Decimal("0.00"),
-            )
             if commercial_total > 0:
                 db.add(
                     PosAccountEntry(
@@ -323,30 +370,6 @@ def create_print_job(
                         created_by=user.username,
                     )
                 )
-
-            plan_ids = {card.plan_id for card in commercial_cards}
-            plans_by_id = {
-                plan.id: plan
-                for plan in db.query(Plan).filter(Plan.id.in_(plan_ids)).all()
-            } if plan_ids else {}
-            commission_by_plan: dict[int, Decimal] = {}
-            for card in commercial_cards:
-                plan = plans_by_id.get(card.plan_id)
-                if plan is None or plan.commission_type == "none":
-                    continue
-                if plan.commission_type == "percentage":
-                    commission = (
-                        card.price_snapshot * plan.commission_value / Decimal("100")
-                    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-                elif plan.commission_type == "fixed":
-                    # A card's historical price snapshot is the hard upper bound.
-                    commission = min(plan.commission_value, card.price_snapshot)
-                else:
-                    continue
-                if commission > 0:
-                    commission_by_plan[plan.id] = (
-                        commission_by_plan.get(plan.id, Decimal("0.00")) + commission
-                    )
 
             for plan_id, commission_total in commission_by_plan.items():
                 db.add(
