@@ -32,6 +32,20 @@ def _snapshot_limit(card: Card, key: str) -> int | None:
     return int(value) if value is not None else None
 
 
+def _snapshot_rate_limit(card: Card) -> str | None:
+    snapshot = card.plan_snapshot or {}
+    configured = snapshot.get("speed_profile")
+    if configured:
+        return str(configured)
+    settings = snapshot.get("settings") or {}
+    rx = settings.get("rate_limit_rx")
+    tx = settings.get("rate_limit_tx")
+    if rx in (None, "") or tx in (None, ""):
+        return None
+    unit = str(settings.get("rate_limit_unit") or "Kbps")
+    return f"{rx}{unit}/{tx}{unit}"
+
+
 def _remaining_limits(card: Card, now: datetime) -> tuple[int | None, int | None]:
     time_limit = _snapshot_limit(card, "session_time_limit_seconds")
     data_limit = _snapshot_limit(card, "data_limit_bytes")
@@ -261,9 +275,9 @@ def authorize_card(
         "Port-Limit": 1,
         "Acct-Interim-Interval": 60,
     }
-    speed_profile = (card.plan_snapshot or {}).get("speed_profile")
-    if speed_profile:
-        reply["Mikrotik-Rate-Limit"] = str(speed_profile)
+    rate_limit = _snapshot_rate_limit(card)
+    if rate_limit:
+        reply["Mikrotik-Rate-Limit"] = rate_limit
     if remaining_time is not None:
         reply["Session-Timeout"] = remaining_time
     if remaining_data is not None:
