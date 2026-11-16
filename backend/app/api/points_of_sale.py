@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_permission
 from app.db.session import get_db
+from app.models.auth import AdminUser
 from app.models.core import Card, PointOfSale, PrintJob, PrintJobItem
+from app.services.audit import record_audit
 from app.schemas.points_of_sale import (
     PointOfSaleCreate,
     PointOfSaleInventoryResponse,
@@ -31,10 +33,12 @@ def list_points_of_sale(include_inactive: bool = False, db: Session = Depends(ge
 
 
 @router.post("", response_model=PointOfSaleResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("pos.manage"))])
-def create_point_of_sale(payload: PointOfSaleCreate, db: Session = Depends(get_db)):
+def create_point_of_sale(payload: PointOfSaleCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("pos.manage"))):
     point = PointOfSale(**payload.model_dump())
     db.add(point)
     try:
+        db.flush()
+        record_audit(db, user, "pos.created", "point_of_sale", f"إنشاء نقطة بيع {point.name}", entity_id=point.id, details={"code": point.code, "is_active": point.is_active})
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -48,6 +52,7 @@ def update_point_of_sale(
     point_id: int,
     payload: PointOfSaleUpdate,
     db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("pos.manage")),
 ):
     point = db.get(PointOfSale, point_id)
     if point is None:
@@ -55,8 +60,10 @@ def update_point_of_sale(
     changes = payload.model_dump(exclude_unset=True)
     if not changes:
         raise HTTPException(status_code=422, detail="يجب إرسال حقل واحد على الأقل")
+    before = {key: getattr(point, key) for key in changes}
     for field, value in changes.items():
         setattr(point, field, value)
+    record_audit(db, user, "pos.updated", "point_of_sale", f"تعديل نقطة بيع {point.name}", entity_id=point.id, details={"before": before, "after": changes})
     db.commit()
     db.refresh(point)
     return point
