@@ -33,7 +33,11 @@ def _snapshot_limit(card: Card, key: str) -> int | None:
 
 
 def _snapshot_shared_users(card: Card) -> int | None:
-    settings = (card.plan_snapshot or {}).get("settings") or {}
+    snapshot = card.plan_snapshot or {}
+    # Legacy snapshots predate configurable sharing and retain the former one-session rule.
+    if "settings" not in snapshot:
+        return 1
+    settings = snapshot.get("settings") or {}
     value = settings.get("shared_users")
     if value in (None, ""):
         return None
