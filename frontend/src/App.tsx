@@ -89,6 +89,7 @@ type RadiusSessionRecord = {
 
 type RadiusSessionsResponse = {
   active_count: number;
+  active_users_count: number;
   total_count: number;
   items: RadiusSessionRecord[];
 };
@@ -412,7 +413,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
   const [cards, setCards] = useState<Card[]>([]);
   const [cardBatches, setCardBatches] = useState<CardBatchRecord[]>([]);
-  const [radiusSessions, setRadiusSessions] = useState<RadiusSessionsResponse>({ active_count: 0, total_count: 0, items: [] });
+  const [radiusSessions, setRadiusSessions] = useState<RadiusSessionsResponse>({ active_count: 0, active_users_count: 0, total_count: 0, items: [] });
   const [cardBatchFilter, setCardBatchFilter] = useState("");
   const [cardTemplates, setCardTemplates] = useState<CardTemplate[]>([]);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
@@ -1518,11 +1519,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     };
     return <>
       <div className="section-heading">
-        <div><h2>جلسات RADIUS النشطة</h2><p>الجلسات التي سجلها خادم RADIUS الجديد من رسائل المحاسبة الواردة من أجهزة الشبكة.</p></div>
-        <button type="button" className="table-action" disabled={busy} onClick={() => loadRadiusSessions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث جلسات RADIUS"))}>تحديث الجلسات</button>
+        <div><h2>جلسات المستخدمين النشطة</h2><p>اتصالات المستخدمين الحالية التي سجلها نظام RADIUS الجديد من أجهزة الشبكة.</p></div>
+        <button type="button" className="table-action" disabled={busy} onClick={() => loadRadiusSessions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث جلسات المستخدمين"))}>تحديث الجلسات</button>
       </div>
       <div className="radius-session-summary">
-        <div><span>الجلسات النشطة الآن</span><strong>{radiusSessions.active_count.toLocaleString("ar")}</strong></div>
+        <div><span>جلسات الاتصال النشطة</span><strong>{radiusSessions.active_count.toLocaleString("ar")}</strong></div>
+        <div><span>المستخدمون المتصلون (اكتف)</span><strong>{radiusSessions.active_users_count.toLocaleString("ar")}</strong></div>
         <div><span>إجمالي الجلسات المسجلة</span><strong>{radiusSessions.total_count.toLocaleString("ar")}</strong></div>
         <div><span>الجلسات المعروضة</span><strong>{radiusSessions.items.length.toLocaleString("ar")}</strong></div>
       </div>
@@ -1536,7 +1538,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <td>{formatDuration(session.session_time_seconds)}</td><td>{formatBytes(session.upload_bytes)}</td><td>{formatBytes(session.download_bytes)}</td>
           </tr>)}</tbody>
         </table>
-        {radiusSessions.items.length === 0 && <div className="empty-state">لا توجد جلسات RADIUS نشطة مسجلة حالياً.</div>}
+        {radiusSessions.items.length === 0 && <div className="empty-state">لا توجد جلسات مستخدمين نشطة مسجلة حالياً.</div>}
       </div>
     </>;
   }
@@ -1549,7 +1551,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <button type="button" role="tab" aria-selected={cardManagementTab === "all"} className={cardManagementTab === "all" ? "active" : ""} onClick={() => { setCardManagementTab("all"); setCardStatusFilter(""); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جميع الكروت")); }}>جميع كروت النظام</button>
         <button type="button" role="tab" aria-selected={cardManagementTab === "expired"} className={cardManagementTab === "expired" ? "active" : ""} onClick={() => { setCardManagementTab("expired"); setCardStatusFilter("expired"); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "expired", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت المنتهية")); }}>الكروت المنتهية</button>
         <button type="button" role="tab" aria-selected={cardManagementTab === "batches"} className={cardManagementTab === "batches" ? "active" : ""} onClick={() => { setCardManagementTab("batches"); loadCardBatches().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل دفعات الكروت")); }}>دفعات الكروت</button>
-        <button type="button" role="tab" aria-selected={cardManagementTab === "sessions"} className={cardManagementTab === "sessions" ? "active" : ""} onClick={() => { setCardManagementTab("sessions"); loadRadiusSessions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جلسات RADIUS")); }}>جلسات RADIUS ({radiusSessions.active_count.toLocaleString("ar")})</button>
+        <button type="button" role="tab" aria-selected={cardManagementTab === "sessions"} className={cardManagementTab === "sessions" ? "active" : ""} onClick={() => { setCardManagementTab("sessions"); loadRadiusSessions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جلسات المستخدمين")); }}>جلسات المستخدمين ({radiusSessions.active_count.toLocaleString("ar")})</button>
       </div>
       {cardManagementTab === "batches" ? renderBatches() : cardManagementTab === "sessions" ? renderRadiusSessions() : <>
       <p className="card-source-note">هذه القائمة تعرض الكروت المسجلة في قاعدة بيانات RADIUS. جلب كروت MikroTik مباشرة سيُضاف عند تنفيذ ربط مزامنة الراوتر.</p>
