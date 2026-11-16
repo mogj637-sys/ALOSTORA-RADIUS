@@ -21,12 +21,6 @@ type CurrentUser = {
 type AdminRole = { code: string; name: string; description: string | null };
 type AdminAccount = { id: number; username: string; display_name: string; is_active: boolean; roles: string[]; last_login_at: string | null; created_at: string };
 
-  id: number;
-  username: string;
-  display_name: string;
-  roles: string[];
-};
-
 type Plan = {
   id: number;
   code: string;
@@ -1039,7 +1033,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   useEffect(() => {
     if (page !== "pos") setPrintPreviewCards([]);
-    if (page === "admins" && user.roles.includes("owner")) {\n      setError("");\n      loadAdminAccounts().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل حسابات الإدارة"));\n    }\n    if (page === "overview") {
+    if (page === "admins" && user.roles.includes("owner")) {
+      setError("");
+      loadAdminAccounts().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل حسابات الإدارة"));
+    }\n    if (page === "overview") {
       setError("");
       loadRadiusOverview().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل لوحة المعلومات"));
     }
