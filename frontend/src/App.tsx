@@ -1328,7 +1328,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setEditingPosId(null);
       await loadPointsOfSale();
       setSelectedPosId(String(point.id));
-      await Promise.all([loadPosInventory(String(point.id)), loadPrintHistory(String(point.id)), loadPosAccount(String(point.id))]);
+      const refreshes: Promise<unknown>[] = [loadPosInventory(String(point.id))];
+      if (can("printing.view")) refreshes.push(loadPrintHistory(String(point.id)));
+      if (can("finance.view")) refreshes.push(loadPosAccount(String(point.id)));
+      await Promise.all(refreshes);
       setNotice(editingPosId ? "تم تحديث نقطة البيع." : "تم إنشاء نقطة البيع بنجاح.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر إنشاء نقطة البيع");
@@ -1641,7 +1644,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setGeneratedCards([{ id: result.id, serial_number: result.serial_number, username: result.username, password: result.password }]);
       setGeneratedBatchNumber(result.batch_number);
       setSelectedPrintCardIds([result.id]);
-      await loadCards();
+      if (can("cards.view")) await loadCards();
       setNotice("تم إنشاء الكرت. احفظ بيانات الدخول الآن؛ لن تظهر كلمة المرور مرة أخرى.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر إنشاء الكرت");
@@ -1678,7 +1681,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setGeneratedCards(result.cards);
       setGeneratedBatchNumber(result.batch_number);
       setSelectedPrintCardIds(result.cards.map((card) => card.id));
-      await Promise.all([loadCards(), loadCardBatches()]);
+      if (can("cards.view")) await Promise.all([loadCards(), loadCardBatches()]);
       setNotice(`تم إنشاء ${result.created_count} كرت ${batchDraft.batchMode === "existing" ? "وربطها بالدفعة السابقة" : "في دفعة جديدة"}. احفظ بيانات الدخول الآن؛ لن تظهر كلمات المرور مرة أخرى.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر إنشاء الدفعة");
