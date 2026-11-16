@@ -1348,7 +1348,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       });
       const matched = result.items.map((item) => item.id);
       setSelectedPrintCardIds(matched);
-      setPrintImportSummary(`تم العثور على ${result.matched_count} كرت من أصل ${result.total_requested} قيمة بعد البحث في قاعدة البيانات كاملة. غير المطابق أو غير المؤهل للطباعة: ${result.unmatched.length}.`);
+      const unmatchedPreview = result.unmatched.slice(0, 10).join("، ");
+      setPrintImportSummary(`تم العثور على ${result.matched_count} كرت من أصل ${result.total_requested} قيمة بعد البحث في قاعدة البيانات كاملة. غير المطابق أو غير المؤهل للطباعة: ${result.unmatched.length}.${unmatchedPreview ? ` أول القيم غير المطابقة: ${unmatchedPreview}` : ""}`);
       setPrintMode("file");
       if (matched.length === 0) setError("لم يتم العثور على كروت مؤهلة للطباعة في نقطة البيع المحددة.");
     } catch (err) {
