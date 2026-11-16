@@ -560,7 +560,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [sessionsReport, setSessionsReport] = useState<SessionsReportData | null>(null);
   const [batchesReport, setBatchesReport] = useState<BatchesReportData | null>(null);
   const [printingReport, setPrintingReport] = useState<PrintingReportData | null>(null);
-  const [reportTab, setReportTab] = useState<"cards" | "usage" | "batches" | "printing" | "finance">(can("cards.view") ? "cards" : can("sessions.view") ? "usage" : "finance");
+  const [reportTab, setReportTab] = useState<"cards" | "usage" | "batches" | "printing" | "finance">(can("cards.view") ? "cards" : can("sessions.view") ? "usage" : can("printing.view") ? "printing" : "finance");
   const [statementPointId, setStatementPointId] = useState("");
   const [posStatement, setPosStatement] = useState<PosStatement | null>(null);
   const [reportFrom, setReportFrom] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
@@ -1741,7 +1741,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               (groups[permission.module] ??= []).push(permission); return groups;
             }, {})).map(([module, permissions]) => (
               <div className="permission-group" key={module}>
-                <h4>{{cards:"الكروت والقوالب",sessions:"الجلسات",plans:"الباقات",routers:"الراوترات",pos:"نقاط البيع",finance:"الحسابات المالية",reports:"التقارير",printing:"الطباعة"}[module] ?? module}</h4>
+                <h4>{{cards:"الكروت",templates:"تصاميم الكروت",audit:"سجل العمليات",sessions:"الجلسات",plans:"الباقات",routers:"الراوترات",pos:"نقاط البيع",finance:"الحسابات المالية",reports:"التقارير",printing:"الطباعة"}[module] ?? module}</h4>
                 {permissions.map((permission) => (
                   <label className="permission-option" key={permission.code}>
                     <input type="checkbox" checked={rolePermissionCodes.includes(permission.code)} disabled={busy}
@@ -1795,7 +1795,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   (groups[permission.module] ??= []).push(permission); return groups;
                 }, {})).map(([module, permissions]) => (
                   <div className="permission-group" key={module}>
-                    <h4>{{cards:"الكروت والقوالب",sessions:"الجلسات",plans:"الباقات",routers:"الراوترات",pos:"نقاط البيع",finance:"الحسابات المالية",reports:"التقارير",printing:"الطباعة"}[module] ?? module}</h4>
+                    <h4>{{cards:"الكروت",templates:"تصاميم الكروت",audit:"سجل العمليات",sessions:"الجلسات",plans:"الباقات",routers:"الراوترات",pos:"نقاط البيع",finance:"الحسابات المالية",reports:"التقارير",printing:"الطباعة"}[module] ?? module}</h4>
                     {permissions.map((permission) => (
                       <label className="permission-option" key={permission.code}>
                         <span><strong>{permission.name}</strong><small>{permission.description}</small></span>
@@ -2281,7 +2281,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       </div>}
       {user.card_visibility !== "search_any" && cardManagementTab === "batches" ? renderBatches() : user.card_visibility !== "search_any" && cardManagementTab === "sessions" ? renderRadiusSessions() : <>
       <p className="card-source-note">هذه القائمة تعرض الكروت المسجلة في قاعدة بيانات RADIUS. جلب كروت MikroTik مباشرة سيُضاف عند تنفيذ ربط مزامنة الراوتر.</p>
-      {(can("printing.create") && can("printing.credentials")) && user.card_visibility !== "search_any" && <div className="card-selection-toolbar">
+      {(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <div className="card-selection-toolbar">
         <label><input type="checkbox" checked={cards.length > 0 && cards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? [...new Set([...selectedCardIds, ...cards.map((card) => card.id)])] : selectedCardIds.filter((id) => !cards.some((card) => card.id === id)))} /> تحديد كروت الصفحة الحالية</label>
         <span>تم تحديد {selectedCardIds.length} كرت</span><button type="button" disabled={!selectedCardIds.length} onClick={prepareSelectedCardsForPrinting}>تجهيز المحدد للطباعة</button>
       </div>}
@@ -2293,7 +2293,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button type="button" className="table-action" onClick={() => { setCardSearch(""); setCardStatusFilter(""); setCardPlanFilter(""); setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards("", 0, "", "", "").catch((err) => setError(err instanceof Error ? err.message : "تعذر إعادة ضبط الفلاتر")); }}>مسح الفلاتر</button>
         </>}
       </div>
-      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>آخر استخدام</th><th>تاريخ الانتهاء</th><th>الوقت المستخدم / المتبقي</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.update") && <th>الإجراءات</th>}</tr></thead><tbody>
+      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>آخر استخدام</th><th>تاريخ الانتهاء</th><th>الوقت المستخدم / المتبقي</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.update") && <th>الإجراءات</th>}</tr></thead><tbody>
         {cards.map((card) => {
           const snapshot = card.plan_snapshot ?? {};
           const timeLimit = typeof snapshot.session_time_limit_seconds === "number" ? snapshot.session_time_limit_seconds : null;
@@ -2319,7 +2319,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             return mb >= 1024 ? `${(mb / 1024).toFixed(2)} جيجابايت` : `${mb.toFixed(1)} ميجابايت`;
           };
           return <tr key={card.id}>
-            {(can("printing.create") && can("printing.credentials")) && user.card_visibility !== "search_any" && <td><input type="checkbox" aria-label={`تحديد ${card.username}`} checked={selectedCardIds.includes(card.id)} onChange={() => toggleSelectedCard(card.id)} /></td>}
+            {(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <td><input type="checkbox" aria-label={`تحديد ${card.username}`} checked={selectedCardIds.includes(card.id)} onChange={() => toggleSelectedCard(card.id)} /></td>}
             <td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td>
             <td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td>
             <td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td>
@@ -2575,7 +2575,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 </div>
               </div>
               <div className="pos-print-summary">تم اختيار {selectedPrintCardIds.length} كرت. الكروت المجانية تظهر في القسائم ولا تدخل في قيمة نقطة البيع.</div>
-              <button type="button" disabled={busy || selectedPrintCardIds.length === 0 || !selectedPoint?.is_active || !selectedPoint?.allow_printing || atDebtLimit} onClick={printSelectedCards}>{busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة وتخصيص الكروت"}</button>
+              <button type="button" disabled={busy || selectedPrintCardIds.length === 0 || !selectedPoint?.is_active || !selectedPoint?.allow_printing || atDebtLimit || !can("printing.create") || !can("printing.credentials") || !can("templates.view")} onClick={printSelectedCards}>{busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة وتخصيص الكروت"}</button>
             </div>
             {printPreviewCards.length > 0 && (
               <section className="voucher-print-preview">
@@ -2605,7 +2605,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <table><thead><tr><th>التاريخ</th><th>القالب</th><th>عدد الكروت</th><th>النوع</th><th>الإجراء</th></tr></thead>
                 <tbody>{printHistory.map((job) => <tr key={job.id}>
                   <td>{new Date(job.created_at).toLocaleString("ar")}</td><td>{job.template_code || "افتراضي"}</td><td>{job.card_count}</td><td>{job.is_reprint ? "إعادة طباعة" : "طباعة أصلية"}</td>
-                  <td><button type="button" className="table-action" disabled={busy || !selectedPoint?.is_active || !selectedPoint?.allow_printing || atDebtLimit} onClick={() => reprintJob(job)}>إعادة طباعة</button></td>
+                  <td>{can("printing.reprint") && can("printing.credentials") && <button type="button" className="table-action" disabled={busy || !selectedPoint?.is_active || !selectedPoint?.allow_printing || atDebtLimit} onClick={() => reprintJob(job)}>إعادة طباعة</button>}</td>
                 </tr>)}</tbody>
               </table>
               {printHistory.length === 0 && <div className="empty-state">لا توجد عمليات طباعة لهذه النقطة.</div>}
@@ -2781,7 +2781,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           {editingRouterId === null && !!routerDraft.apiUsername !== !!routerDraft.apiSecret && <div className="field-hint">أدخل اسم مستخدم API وكلمة مروره معاً، أو اتركهما فارغين.</div>}
         </form>
 )}
-        <section className="panel form-grid">
+        {user.roles.includes("owner") && (
+<section className="panel form-grid">
           <div className="section-heading"><div><h2>فحص كرت واحد من User Manager</h2><p>بحث تشخيصي بالاسم الدقيق؛ لا ينشئ كرتاً ولا يستورده ولا يغيّر بيانات المصدر.</p></div></div>
           <label>جهاز User Manager
             <select value={inspectRouterId} onChange={(event) => { const nextId = event.target.value; setInspectRouterId(nextId); setUserManagerUserInspect(null); setUserManagerPreviews(null); setUserManagerPreviewRuns([]); setSelectedPreviewRunId(""); if (nextId) loadUserManagerPreviewRuns(Number(nextId)).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل سجل المعاينات")); }}>
@@ -2852,6 +2853,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             </div>
           )}
         </section>
+)}
         {(userManagerPreviewRuns.length > 0 || loadingPreviewRuns) && (
           <section className="panel um-probe-panel">
             <div className="section-heading">
@@ -2924,15 +2926,15 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <td>{router.routeros_version || "غير محدد"}</td><td>{router.last_seen_at ? new Date(router.last_seen_at).toLocaleString("ar") : "لم يتصل بعد"}</td>
               <td>{router.is_active ? "مفعل" : "متوقف"}</td>
               <td className="actions-cell">
-                <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => beginEditRouter(router)}>تعديل</button>
-                <button type="button" className="table-action" disabled={busy || probingRouterId !== null || !router.api_username} onClick={() => testRouterUserManager(router)}>{probingRouterId === router.id ? "جارٍ الفحص..." : "فحص User Manager"}</button>
-                <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => toggleRouter(router)}>{router.is_active ? "تعطيل" : "تفعيل"}</button>
+                {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => beginEditRouter(router)}>تعديل</button>}
+                {user.roles.includes("owner") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || !router.api_username} onClick={() => testRouterUserManager(router)}>{probingRouterId === router.id ? "جارٍ الفحص..." : "فحص User Manager"}</button>
+                {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null} onClick={() => toggleRouter(router)}>{router.is_active ? "تعطيل" : "تفعيل"}</button>
               </td>
             </tr>)}</tbody>
           </table>
           {routers.length === 0 && <div className="empty-state">لا توجد راوترات مسجلة. أضف أول راوتر من النموذج أعلاه.</div>}
         </div>
-        {userManagerProbe && (
+        {user.roles.includes("owner") && userManagerProbe && (
           <section className="panel um-probe-panel">
             <div className="section-heading">
               <div><h2>نتيجة فحص User Manager</h2><p>{userManagerProbe.router_name} · {userManagerProbe.identity || "هوية غير متاحة"} · {userManagerProbe.routeros_version || "إصدار غير معروف"}</p></div>
@@ -2961,7 +2963,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
           {user.roles.includes("owner") && <button className={page === "admins" ? "nav-item active" : "nav-item"} onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات</button>}
 
-          {(can("cards.view") || can("cards.update") || can("plans.view") || can("routers.view") || can("reports.view")) && <div className="nav-group"><span>إدارة النظام</span>
+          {(can("cards.view") || can("cards.create") || can("plans.view") || can("routers.view") || can("reports.view") || can("templates.view")) && <div className="nav-group"><span>إدارة النظام</span>
             {can("cards.create") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
             {can("cards.view") && <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>}
             {can("plans.view") && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>}
@@ -2969,7 +2971,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             {can("reports.view") && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
           </div>}
           {can("pos.view") && <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>}
-          {(can("printing.create") && can("printing.credentials")) && can("cards.view") && can("pos.view") && <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>}
+          {can("printing.view") && can("cards.view") && can("pos.view") && <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>}
           {can("cards.view") && user.card_visibility !== "search_any" && <button className={page === "batches" ? "nav-item active" : "nav-item"} onClick={() => setPage("batches")}>دفعات الكروت</button>}
           {can("templates.view") && <button className={page === "templates" ? "nav-item active" : "nav-item"} onClick={() => setPage("templates")}>تصاميم الكروت</button>}
           {can("audit.view") && <button className={page === "audit" ? "nav-item active" : "nav-item"} onClick={() => setPage("audit")}>سجل عمليات النظام</button>}
@@ -2984,7 +2986,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "card-create" ? renderCardCreate() : page === "pos" ? renderPos() : page === "pos-management" ? renderPosManagement() : page === "batches" ? renderBatches() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "pos" && can("printing.view") && can("cards.view") && can("pos.view") ? renderPos() : page === "pos-management" && can("pos.view") ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && can("reports.view") ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
