@@ -733,7 +733,7 @@ tbody tr:hover { background: #fbfdfc; }
   line-height: 1.7;
 }
 @media (max-width: 520px) {
-  .card-management-tabs { display: grid; grid-template-columns: 1fr 1fr; }
+  .card-management-tabs { display: grid; grid-template-columns: 1fr; }
   .card-management-tabs button { padding-inline: 8px; }
 }
 
