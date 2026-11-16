@@ -1,6 +1,12 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+
+class AdminPermissionOverride(BaseModel):
+    permission_code: str = Field(min_length=3, max_length=100)
+    allowed: bool
 
 
 class AdminRoleResponse(BaseModel):
@@ -15,7 +21,9 @@ class AdminUserResponse(BaseModel):
     display_name: str
     is_active: bool
     roles: list[str]
-    point_of_sale_ids: list[int] = []
+    point_of_sale_ids: list[int] = Field(default_factory=list)
+    card_visibility: Literal["all", "assigned", "search_any"] = "search_any"
+    permission_overrides: list[AdminPermissionOverride] = Field(default_factory=list)
     last_login_at: datetime | None = None
     created_at: datetime
 
@@ -26,6 +34,8 @@ class AdminUserCreate(BaseModel):
     password: str = Field(min_length=12, max_length=256)
     role_codes: list[str] = Field(min_length=1)
     point_of_sale_ids: list[int] = Field(default_factory=list)
+    card_visibility: Literal["all", "assigned", "search_any"] = "search_any"
+    permission_overrides: list[AdminPermissionOverride] = Field(default_factory=list)
 
     @field_validator("role_codes")
     @classmethod
@@ -42,6 +52,8 @@ class AdminUserUpdate(BaseModel):
     role_codes: list[str] | None = Field(default=None, min_length=1)
     is_active: bool | None = None
     point_of_sale_ids: list[int] | None = None
+    card_visibility: Literal["all", "assigned", "search_any"] | None = None
+    permission_overrides: list[AdminPermissionOverride] | None = None
 
     @field_validator("role_codes")
     @classmethod
