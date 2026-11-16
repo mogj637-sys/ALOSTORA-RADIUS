@@ -510,12 +510,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [selectedPermissionRole, setSelectedPermissionRole] = useState("manager");
   const [rolePermissionCodes, setRolePermissionCodes] = useState<string[]>([]);
   const managedPermissionActions: Record<string, string[]> = {
-    cards: ["create", "update"],
-    plans: ["create", "update"],
-    routers: ["create", "update"],
-    pos: ["create", "update"],
-    finance: ["create"],
-    templates: ["create", "update", "delete"],
+    cards: ["create", "update", "delete"],
+    plans: ["create", "update", "delete"],
+    routers: ["create", "update", "delete"],
+    pos: ["create", "update", "delete"],
+    finance: ["create", "update", "delete"],
     printing: ["create", "reprint"],
   };
   const isRolePermissionChecked = (permissionCode: string) => {
