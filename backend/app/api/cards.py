@@ -1,8 +1,9 @@
 import secrets
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -315,8 +316,22 @@ def list_cards(
     elif search:
         term = f"%{search.strip()}%"
         query = query.filter(or_(Card.username.ilike(term), Card.serial_number.ilike(term)))
-    if status_filter:
+    now = datetime.now(timezone.utc)
+    if status_filter == "expired":
+        query = query.filter(
+            or_(
+                Card.status == "expired",
+                and_(
+                    Card.expires_at.is_not(None),
+                    Card.expires_at <= now,
+                    Card.status.notin_(["suspended", "cancelled", "exhausted"]),
+                ),
+            )
+        )
+    elif status_filter:
         query = query.filter(Card.status == status_filter)
+        if status_filter not in {"suspended", "cancelled", "exhausted"}:
+            query = query.filter(or_(Card.expires_at.is_(None), Card.expires_at > now))
     if plan_id is not None:
         query = query.filter(Card.plan_id == plan_id)
     if batch_id is not None:
@@ -341,6 +356,12 @@ def list_cards(
         .all()
     )
     for card in cards:
+        if (
+            card.expires_at is not None
+            and card.expires_at <= now
+            and card.status not in {"suspended", "cancelled", "exhausted"}
+        ):
+            card.status = "expired"
         card.active_sessions_count = int(session_counts.get(card.id, 0))
     return cards
 
