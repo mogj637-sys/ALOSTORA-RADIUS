@@ -91,6 +91,36 @@ class CardBatchListItem(BaseModel):
     note: str | None = None
 
 
+class CardPrintSelectionResolveRequest(BaseModel):
+    identifiers: list[str] = Field(min_length=1, max_length=5000)
+    point_of_sale_id: int = Field(gt=0)
+
+    @field_validator("identifiers")
+    @classmethod
+    def validate_identifiers(cls, values: list[str]) -> list[str]:
+        cleaned = [value.strip() for value in values if value and value.strip()]
+        if not cleaned:
+            raise ValueError("أدخل أسماء مستخدمين أو أرقاماً تسلسلية للبحث")
+        if len(cleaned) > 5000:
+            raise ValueError("الحد الأقصى للاستيراد 5000 قيمة")
+        return cleaned
+
+
+class CardPrintSelectionItem(BaseModel):
+    id: UUID
+    username: str
+    serial_number: str
+    plan_id: int
+    is_free: bool
+
+
+class CardPrintSelectionResolveResponse(BaseModel):
+    total_requested: int
+    matched_count: int
+    items: list[CardPrintSelectionItem]
+    unmatched: list[str]
+
+
 class CardStatusUpdate(BaseModel):
     action: CardAction
 
