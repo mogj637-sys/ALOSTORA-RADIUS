@@ -43,6 +43,7 @@ def current_identity(user: AdminUser = Depends(get_current_user)) -> CurrentUser
         username=user.username,
         display_name=user.display_name,
         roles=[role.code for role in user.roles],
+        point_of_sale_ids=sorted(point.id for point in user.point_of_sales),
         permissions=(
             ["*"] if any(role.code == "owner" for role in user.roles)
             else sorted({permission.code for role in user.roles for permission in role.permissions})
