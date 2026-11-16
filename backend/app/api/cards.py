@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import Card, CardBatch, CardEvent, CardTemplate, Plan, PointOfSale, RadiusSession, Router
 from app.services.radius_disconnect import send_disconnect_for_session
+from app.services.audit import record_audit
 from app.schemas.cards import (
     CardBatchCreate,
     CardBatchResponse,
@@ -211,7 +212,7 @@ def list_radius_sessions(
 
 
 @router.post("/sessions/{session_id}/disconnect", dependencies=[Depends(require_permission("sessions.disconnect"))])
-def disconnect_radius_session(session_id: int, db: Session = Depends(get_db)):
+def disconnect_radius_session(session_id: int, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("sessions.disconnect"))):
     session = db.query(RadiusSession).filter(RadiusSession.id == session_id).first()
     if session is None:
         raise HTTPException(status_code=404, detail="جلسة المستخدم غير موجودة")
@@ -222,6 +223,8 @@ def disconnect_radius_session(session_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=503, detail="خدمة فصل الجلسات RADIUS CoA غير مفعلة")
     if not result:
         raise HTTPException(status_code=502, detail="لم يؤكد الراوتر فصل الجلسة")
+    record_audit(db, user, "session.disconnect_requested", "radius_session", f"طلب فصل جلسة المستخدم {session.card.username}", entity_id=session.id, details={"router_id": session.router_id, "acct_session_id": session.acct_session_id})
+    db.commit()
     return {"session_id": session.id, "disconnect_acknowledged": True, "message": "أكد الراوتر استلام طلب فصل الجلسة"}
 
 
@@ -320,6 +323,7 @@ def update_card_status(
         details=details,
         actor=user.username,
     ))
+    record_audit(db, user, f"card.{event_type}", "card", f"{event_type} للكرت {card.username}", entity_id=card.id, details={"serial_number": card.serial_number, **details})
     db.commit()
     if payload.action == "suspend":
         active_sessions = (
@@ -388,6 +392,7 @@ def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db),
             details={"plan_id": plan.id, "is_free": payload.is_free, "card_type": payload.card_type, "batch_id": str(batch.id)},
             actor=user.username,
         ))
+        record_audit(db, user, "card.created", "card", f"إنشاء كرت {card.username}", entity_id=card.id, details={"serial_number": card.serial_number, "plan_id": plan.id, "batch_number": batch.batch_number})
         db.commit()
         db.refresh(card)
     except IntegrityError:
@@ -507,6 +512,7 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
             )
             for card in cards
         ])
+        record_audit(db, user, "cards.batch_created", "card_batch", f"إنشاء دفعة كروت {batch.batch_number}", entity_id=batch.id, details={"quantity": len(cards), "plan_id": plan.id, "point_of_sale_id": batch.point_of_sale_id, "template_code": batch.template_code})
         db.commit()
     except IntegrityError:
         db.rollback()
