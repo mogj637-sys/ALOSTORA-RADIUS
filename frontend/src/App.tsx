@@ -265,6 +265,11 @@ type PosAccountEntry = {
   created_at: string;
 };
 
+type CardsReportData = { total_cards: number; total_value: number; used_seconds: number; upload_bytes: number; download_bytes: number; by_status: { status: string; count: number }[]; by_plan: { plan_name: string; count: number }[] };
+type SessionsReportData = { total_sessions: number; unique_users: number; session_seconds: number; upload_bytes: number; download_bytes: number; active_sessions: number; by_router: { router_name: string; sessions: number }[] };
+type BatchesReportData = { total_batches: number; total_cards: number; items: { batch_id: string; batch_number: string; created_at: string; plan_name: string; point_of_sale_name: string | null; quantity: number; generated_cards: number }[] };
+type PrintingReportData = { total_jobs: number; total_cards_printed: number; reprint_jobs: number; items: { id: string; created_at: string; point_of_sale_name: string; card_count: number; is_reprint: boolean; template_code: string | null }[] };
+
 type PosReportRow = {
   point_of_sale_id: number;
   point_of_sale_name: string;
@@ -466,6 +471,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [posAccount, setPosAccount] = useState<PosAccountSummary | null>(null);
   const [posEntries, setPosEntries] = useState<PosAccountEntry[]>([]);
   const [posReport, setPosReport] = useState<PosReport | null>(null);
+  const [cardsReport, setCardsReport] = useState<CardsReportData | null>(null);
+  const [sessionsReport, setSessionsReport] = useState<SessionsReportData | null>(null);
+  const [batchesReport, setBatchesReport] = useState<BatchesReportData | null>(null);
+  const [printingReport, setPrintingReport] = useState<PrintingReportData | null>(null);
+  const [reportTab, setReportTab] = useState<"cards" | "usage" | "batches" | "printing" | "finance">("cards");
   const [statementPointId, setStatementPointId] = useState("");
   const [posStatement, setPosStatement] = useState<PosStatement | null>(null);
   const [reportFrom, setReportFrom] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
@@ -937,18 +947,34 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function loadReportData(from = reportFrom, to = reportTo) {
-    const [report, availablePoints] = await Promise.all([
-      apiRequest<PosReport>(token, `/api/v1/reports/points-of-sale?date_from=${encodeURIComponent(from)}&date_to=${encodeURIComponent(to)}`),
-      apiRequest<PointOfSale[]>(token, "/api/v1/points-of-sale?include_inactive=true"),
-    ]);
-    setPosReport(report);
-    setPoints(availablePoints);
-    const currentPoint = statementPointId && availablePoints.some((point) => String(point.id) === statementPointId)
-      ? statementPointId
-      : String(availablePoints[0]?.id ?? "");
-    setStatementPointId(currentPoint);
-    if (currentPoint) await loadPosStatement(currentPoint, from, to);
-    else setPosStatement(null);
+    const query = "date_from=" + encodeURIComponent(from) + "&date_to=" + encodeURIComponent(to);
+    const requests: Promise<unknown>[] = [];
+    const keys: string[] = [];
+    if (can("cards.view")) { keys.push("cards"); requests.push(apiRequest<CardsReportData>(token, "/api/v1/reports/cards?" + query)); }
+    if (can("sessions.view")) { keys.push("sessions"); requests.push(apiRequest<SessionsReportData>(token, "/api/v1/reports/sessions?" + query)); }
+    if (can("cards.view")) {
+      keys.push("batches"); requests.push(apiRequest<BatchesReportData>(token, "/api/v1/reports/batches?" + query));
+      keys.push("printing"); requests.push(apiRequest<PrintingReportData>(token, "/api/v1/reports/printing?" + query));
+    }
+    if (can("finance.view")) {
+      keys.push("finance"); requests.push(apiRequest<PosReport>(token, "/api/v1/reports/points-of-sale?" + query));
+      keys.push("points"); requests.push(apiRequest<PointOfSale[]>(token, "/api/v1/points-of-sale?include_inactive=true"));
+    }
+    const results = await Promise.all(requests);
+    const data = Object.fromEntries(keys.map((key, index) => [key, results[index]]));
+    if (data.cards) setCardsReport(data.cards as CardsReportData);
+    if (data.sessions) setSessionsReport(data.sessions as SessionsReportData);
+    if (data.batches) setBatchesReport(data.batches as BatchesReportData);
+    if (data.printing) setPrintingReport(data.printing as PrintingReportData);
+    if (data.finance) setPosReport(data.finance as PosReport);
+    if (data.points) {
+      const availablePoints = data.points as PointOfSale[];
+      setPoints(availablePoints);
+      const currentPoint = statementPointId && availablePoints.some((point) => String(point.id) === statementPointId) ? statementPointId : String(availablePoints[0]?.id ?? "");
+      setStatementPointId(currentPoint);
+      if (currentPoint) await loadPosStatement(currentPoint, from, to);
+      else setPosStatement(null);
+    }
   }
 
   async function downloadProtectedFile(path: string, filename: string) {
@@ -2415,12 +2441,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
           {user.roles.includes("owner") && <button className={page === "admins" ? "nav-item active" : "nav-item"} onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات</button>}
 
-          {(can("cards.view") || can("cards.manage") || can("plans.view") || can("routers.view") || (can("reports.view") && can("finance.view"))) && <div className="nav-group"><span>إدارة النظام</span>
+          {(can("cards.view") || can("cards.manage") || can("plans.view") || can("routers.view") || can("reports.view")) && <div className="nav-group"><span>إدارة النظام</span>
             {can("cards.manage") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
             {can("cards.view") && <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>}
             {can("plans.view") && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>}
             {can("routers.view") && <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات</button>}
-            {can("reports.view") && can("finance.view") && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
+            {can("reports.view") && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
           </div>}
           {can("pos.view") && <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>}
           {can("printing.manage") && <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>}
