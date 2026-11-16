@@ -211,7 +211,7 @@ def export_points_of_sale_report(
     date_from: date = Query(...), date_to: date = Query(...),
     db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("finance.view")),
 ):
-    report = _report_data(date_from, date_to, db)
+    report = _report_data(date_from, date_to, db, user)
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "تقرير نقاط البيع"
@@ -248,7 +248,7 @@ def export_point_of_sale_statement(
     point_id: int, date_from: date = Query(...), date_to: date = Query(...),
     db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("finance.view")),
 ):
-    statement = _statement_data(point_id, date_from, date_to, db)
+    statement = _statement_data(point_id, date_from, date_to, db, user)
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "كشف حساب نقطة البيع"
