@@ -37,7 +37,10 @@ class PrintJobItemResponse(BaseModel):
     password: str
     is_free: bool
     price_snapshot: Decimal
-    plan_snapshot: dict
+    plan_name: str
+    data_limit_bytes: int | None
+    session_time_limit_seconds: int | None
+    validity_period_seconds: int | None
 
 
 class PrintJobResponse(BaseModel):
