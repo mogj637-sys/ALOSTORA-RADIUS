@@ -236,6 +236,11 @@ def disconnect_radius_session(session_id: int, db: Session = Depends(get_db), us
         raise HTTPException(status_code=404, detail="جلسة المستخدم غير موجودة")
     if session.stopped_at is not None:
         raise HTTPException(status_code=409, detail="الجلسة منتهية بالفعل")
+    if not any(role.code == "owner" for role in user.roles):
+        assigned_pos_ids = {point.id for point in user.point_of_sales}
+        session_card = db.get(Card, session.card_id)
+        if session_card is None or session_card.assigned_pos_id not in assigned_pos_ids:
+            raise HTTPException(status_code=403, detail="لا تملك صلاحية فصل جلسة هذا الكرت")
     result = send_disconnect_for_session(db, session)
     if result is None:
         raise HTTPException(status_code=503, detail="خدمة فصل الجلسات RADIUS CoA غير مفعلة")
