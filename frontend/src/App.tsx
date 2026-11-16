@@ -2333,12 +2333,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
           {user.roles.includes("owner") && <button className={page === "admins" ? "nav-item active" : "nav-item"} onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات</button>}
 
-          {(can("cards.view") || can("cards.manage") || can("plans.view") || can("routers.view") || can("reports.view")) && <div className="nav-group"><span>إدارة النظام</span>
+          {(can("cards.view") || can("cards.manage") || can("plans.view") || can("routers.view") || (can("reports.view") && can("finance.view"))) && <div className="nav-group"><span>إدارة النظام</span>
             {can("cards.manage") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
             {can("cards.view") && <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>}
             {can("plans.view") && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>}
             {can("routers.view") && <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات</button>}
-            {can("reports.view") && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
+            {can("reports.view") && can("finance.view") && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
           </div>}
           {can("pos.view") && <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>}
           {can("printing.manage") && <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>}
