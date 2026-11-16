@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_owner
 from app.db.session import get_db
-from app.models.auth import AdminUser, Role, Permission
+from app.models.auth import AdminUser, Role, Permission, AdminUserPermissionOverride
 from app.models.core import PointOfSale
-from app.schemas.admins import AdminRoleCreate, AdminRoleResponse, AdminUserCreate, AdminUserResponse, AdminUserUpdate
+from app.schemas.admins import AdminPermissionOverride, AdminRoleCreate, AdminRoleResponse, AdminUserCreate, AdminUserResponse, AdminUserUpdate
 from app.security import hash_password
 from app.services.audit import record_audit
 
@@ -20,6 +20,14 @@ def _user_response(user: AdminUser) -> AdminUserResponse:
         is_active=user.is_active,
         roles=sorted(role.code for role in user.roles),
         point_of_sale_ids=sorted(point.id for point in user.point_of_sales),
+        card_visibility=user.card_visibility,
+        permission_overrides=[
+            AdminPermissionOverride(
+                permission_code=item.permission.code,
+                allowed=item.allowed,
+            )
+            for item in user.permission_overrides
+        ],
         last_login_at=user.last_login_at,
         created_at=user.created_at,
     )
@@ -34,6 +42,24 @@ def _resolve_roles(db: Session, role_codes: list[str]) -> list[Role]:
     if missing:
         raise HTTPException(status_code=422, detail=f"الأدوار غير معروفة: {', '.join(missing)}")
     return roles
+
+
+def _resolve_permission_overrides(
+    db: Session,
+    entries: list[AdminPermissionOverride],
+) -> list[AdminUserPermissionOverride]:
+    codes = [item.permission_code.strip() for item in entries]
+    if len(codes) != len(set(codes)):
+        raise HTTPException(status_code=422, detail="لا يمكن تكرار الصلاحية في تخصيص الموظف")
+    permissions = db.query(Permission).filter(Permission.code.in_(codes)).all() if codes else []
+    by_code = {item.code: item for item in permissions}
+    missing = sorted(set(codes) - set(by_code))
+    if missing:
+        raise HTTPException(status_code=422, detail=f"صلاحيات غير معروفة: {', '.join(missing)}")
+    return [
+        AdminUserPermissionOverride(permission=by_code[item.permission_code.strip()], allowed=item.allowed)
+        for item in entries
+    ]
 
 
 def _resolve_points_of_sale(db: Session, point_ids: list[int]) -> list[PointOfSale]:
@@ -85,7 +111,11 @@ def list_admins(
 ) -> list[AdminUserResponse]:
     users = (
         db.query(AdminUser)
-        .options(selectinload(AdminUser.roles))
+        .options(
+            selectinload(AdminUser.roles),
+            selectinload(AdminUser.point_of_sales),
+            selectinload(AdminUser.permission_overrides).selectinload(AdminUserPermissionOverride.permission),
+        )
         .order_by(AdminUser.id)
         .all()
     )
@@ -113,6 +143,8 @@ def create_admin(
         is_active=True,
         roles=roles,
         point_of_sales=points,
+        card_visibility=payload.card_visibility,
+        permission_overrides=_resolve_permission_overrides(db, payload.permission_overrides),
     )
     db.add(user)
     db.flush()
@@ -131,7 +163,11 @@ def update_admin(
 ) -> AdminUserResponse:
     user = (
         db.query(AdminUser)
-        .options(selectinload(AdminUser.roles))
+        .options(
+            selectinload(AdminUser.roles),
+            selectinload(AdminUser.point_of_sales),
+            selectinload(AdminUser.permission_overrides).selectinload(AdminUserPermissionOverride.permission),
+        )
         .filter(AdminUser.id == user_id)
         .first()
     )
@@ -141,6 +177,7 @@ def update_admin(
     next_roles = _resolve_roles(db, payload.role_codes) if payload.role_codes is not None else user.roles
     next_active = payload.is_active if payload.is_active is not None else user.is_active
     next_points = _resolve_points_of_sale(db, payload.point_of_sale_ids) if payload.point_of_sale_ids is not None else user.point_of_sales
+    next_visibility = payload.card_visibility if payload.card_visibility is not None else user.card_visibility
     keeps_owner = any(role.code == "owner" for role in next_roles)
 
     if user.id == current_user.id and (not next_active or not keeps_owner):
@@ -168,8 +205,12 @@ def update_admin(
         user.roles = next_roles
     if payload.point_of_sale_ids is not None:
         user.point_of_sales = next_points
+    if payload.card_visibility is not None:
+        user.card_visibility = next_visibility
+    if payload.permission_overrides is not None:
+        user.permission_overrides = _resolve_permission_overrides(db, payload.permission_overrides)
     user.is_active = next_active
-    record_audit(db, current_user, "admin.updated", "admin_user", f"تحديث حساب إداري: {user.username}", entity_id=user.id, details={"before": before, "after": {"display_name": user.display_name, "is_active": user.is_active, "role_codes": sorted(role.code for role in user.roles), "point_of_sale_ids": sorted(point.id for point in user.point_of_sales)}, "password_changed": bool(payload.password)})
+    record_audit(db, current_user, "admin.updated", "admin_user", f"تحديث حساب إداري: {user.username}", entity_id=user.id, details={"before": before, "after": {"display_name": user.display_name, "is_active": user.is_active, "role_codes": sorted(role.code for role in user.roles), "point_of_sale_ids": sorted(point.id for point in user.point_of_sales), "card_visibility": user.card_visibility, "permission_overrides": [{"permission_code": item.permission.code, "allowed": item.allowed} for item in user.permission_overrides]}, "password_changed": bool(payload.password)})
     db.commit()
     db.refresh(user)
     return _user_response(user)
