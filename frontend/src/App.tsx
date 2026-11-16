@@ -526,6 +526,15 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       "card.cancelled": "إلغاء كرت",
       "cards.batch_created": "إنشاء دفعة كروت",
       "session.disconnect_requested": "طلب فصل جلسة",
+      "print.job_created": "تنفيذ طباعة",
+      "print.reprint_created": "إعادة طباعة",
+      "finance.entry_created": "تسجيل حركة مالية",
+      "plan.created": "إنشاء باقة",
+      "plan.updated": "تعديل باقة",
+      "pos.created": "إنشاء نقطة بيع",
+      "pos.updated": "تعديل نقطة بيع",
+      "router.created": "إضافة راوتر",
+      "router.updated": "تعديل راوتر",
     };
     return (
       <section className="panel audit-log-panel">
@@ -552,7 +561,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             </tbody>
           </table>
         </div>
-        <div className="audit-pagination"><span>عرض {(auditOffset + 1).toLocaleString("ar")}–{Math.min(auditOffset + auditLogs.length, auditTotal).toLocaleString("ar")} من {auditTotal.toLocaleString("ar")}</span><div><button type="button" className="secondary-button" disabled={auditOffset === 0} onClick={() => loadAuditLogs(Math.max(0, auditOffset - 50))}>السابق</button><button type="button" className="secondary-button" disabled={auditOffset + 50 >= auditTotal} onClick={() => loadAuditLogs(auditOffset + 50)}>التالي</button></div></div>
+        <div className="audit-pagination"><span>عرض {(auditTotal === 0 ? 0 : auditOffset + 1).toLocaleString("ar")}–{Math.min(auditOffset + auditLogs.length, auditTotal).toLocaleString("ar")} من {auditTotal.toLocaleString("ar")}</span><div><button type="button" className="secondary-button" disabled={auditOffset === 0} onClick={() => loadAuditLogs(Math.max(0, auditOffset - 50))}>السابق</button><button type="button" className="secondary-button" disabled={auditOffset + 50 >= auditTotal} onClick={() => loadAuditLogs(auditOffset + 50)}>التالي</button></div></div>
       </section>
     );
   }
