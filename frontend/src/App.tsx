@@ -70,6 +70,29 @@ type CardBatchRecord = {
   printed_count: number;
 };
 
+type RadiusSessionRecord = {
+  id: number;
+  username: string;
+  serial_number: string;
+  card_status: string;
+  router_name: string;
+  nas_identifier: string;
+  acct_session_id: string;
+  framed_ip_address: string | null;
+  calling_station_id: string | null;
+  started_at: string;
+  last_update_at: string | null;
+  session_time_seconds: number;
+  upload_bytes: number;
+  download_bytes: number;
+};
+
+type RadiusSessionsResponse = {
+  active_count: number;
+  total_count: number;
+  items: RadiusSessionRecord[];
+};
+
 type GeneratedCard = {
   id: string;
   serial_number: string;
@@ -389,6 +412,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
   const [cards, setCards] = useState<Card[]>([]);
   const [cardBatches, setCardBatches] = useState<CardBatchRecord[]>([]);
+  const [radiusSessions, setRadiusSessions] = useState<RadiusSessionsResponse>({ active_count: 0, total_count: 0, items: [] });
   const [cardBatchFilter, setCardBatchFilter] = useState("");
   const [cardTemplates, setCardTemplates] = useState<CardTemplate[]>([]);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
@@ -400,7 +424,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [cardSearch, setCardSearch] = useState("");
   const [cardStatusFilter, setCardStatusFilter] = useState("");
-  const [cardManagementTab, setCardManagementTab] = useState<"all" | "expired" | "batches">("all");
+  const [cardManagementTab, setCardManagementTab] = useState<"all" | "expired" | "batches" | "sessions">("all");
   const [cardPlanFilter, setCardPlanFilter] = useState("");
   const [cardOffset, setCardOffset] = useState(0);
   const [hasMoreCards, setHasMoreCards] = useState(false);
@@ -462,6 +486,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   async function loadCardBatches() {
     const result = await apiRequest<CardBatchRecord[]>(token, "/api/v1/cards/batches?limit=200");
     setCardBatches(result);
+  }
+
+  async function loadRadiusSessions() {
+    const result = await apiRequest<RadiusSessionsResponse>(token, "/api/v1/cards/sessions?limit=200");
+    setRadiusSessions(result);
   }
 
   async function loadRouters() {
@@ -1472,6 +1501,46 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  function renderRadiusSessions() {
+    const formatDateTime = (value: string | null) => value
+      ? new Date(value).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" })
+      : "—";
+    const formatDuration = (seconds: number) => {
+      const safe = Math.max(0, Math.floor(seconds));
+      const days = Math.floor(safe / 86400);
+      const hours = Math.floor((safe % 86400) / 3600);
+      const minutes = Math.floor((safe % 3600) / 60);
+      return days ? `${days} يوم ${hours} س` : hours ? `${hours} س ${minutes} د` : `${minutes} د`;
+    };
+    const formatBytes = (bytes: number) => {
+      const mb = Math.max(0, bytes) / (1024 * 1024);
+      return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
+    };
+    return <>
+      <div className="section-heading">
+        <div><h2>جلسات RADIUS النشطة</h2><p>الجلسات التي سجلها خادم RADIUS الجديد من رسائل المحاسبة الواردة من أجهزة الشبكة.</p></div>
+        <button type="button" className="table-action" disabled={busy} onClick={() => loadRadiusSessions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث جلسات RADIUS"))}>تحديث الجلسات</button>
+      </div>
+      <div className="radius-session-summary">
+        <div><span>الجلسات النشطة الآن</span><strong>{radiusSessions.active_count.toLocaleString("ar")}</strong></div>
+        <div><span>إجمالي الجلسات المسجلة</span><strong>{radiusSessions.total_count.toLocaleString("ar")}</strong></div>
+        <div><span>الجلسات المعروضة</span><strong>{radiusSessions.items.length.toLocaleString("ar")}</strong></div>
+      </div>
+      <p className="card-source-note">المصدر: سجل المحاسبة في قاعدة بيانات RADIUS. العدد النشط يعتمد على الجلسات التي لم يصل لها حدث إيقاف (Stop) بعد.</p>
+      <div className="table-wrap radius-sessions-table-wrap">
+        <table className="radius-sessions-table"><thead><tr><th>اسم المستخدم</th><th>الرقم التسلسلي</th><th>الراوتر</th><th>NAS Identifier</th><th>عنوان IP</th><th>MAC / الجهاز</th><th>بداية الجلسة</th><th>آخر تحديث</th><th>مدة الاتصال</th><th>رفع</th><th>تنزيل</th></tr></thead>
+          <tbody>{radiusSessions.items.map((session) => <tr key={session.id}>
+            <td>{session.username}</td><td>{session.serial_number}</td><td>{session.router_name}</td><td>{session.nas_identifier}</td>
+            <td>{session.framed_ip_address || "—"}</td><td>{session.calling_station_id || "—"}</td>
+            <td>{formatDateTime(session.started_at)}</td><td>{formatDateTime(session.last_update_at)}</td>
+            <td>{formatDuration(session.session_time_seconds)}</td><td>{formatBytes(session.upload_bytes)}</td><td>{formatBytes(session.download_bytes)}</td>
+          </tr>)}</tbody>
+        </table>
+        {radiusSessions.items.length === 0 && <div className="empty-state">لا توجد جلسات RADIUS نشطة مسجلة حالياً.</div>}
+      </div>
+    </>;
+  }
+
   function renderCards() {
     return <>
       <div className="section-heading"><div><h2>إدارة الكروت</h2><p>ابحث في السجل وحدد الكروت ثم جهّز الكروت الجديدة للطباعة أو أدر حالتها.</p></div><span className="count-tag">200 كرت لكل صفحة</span></div>
@@ -1480,8 +1549,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <button type="button" role="tab" aria-selected={cardManagementTab === "all"} className={cardManagementTab === "all" ? "active" : ""} onClick={() => { setCardManagementTab("all"); setCardStatusFilter(""); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جميع الكروت")); }}>جميع كروت النظام</button>
         <button type="button" role="tab" aria-selected={cardManagementTab === "expired"} className={cardManagementTab === "expired" ? "active" : ""} onClick={() => { setCardManagementTab("expired"); setCardStatusFilter("expired"); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "expired", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت المنتهية")); }}>الكروت المنتهية</button>
         <button type="button" role="tab" aria-selected={cardManagementTab === "batches"} className={cardManagementTab === "batches" ? "active" : ""} onClick={() => { setCardManagementTab("batches"); loadCardBatches().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل دفعات الكروت")); }}>دفعات الكروت</button>
+        <button type="button" role="tab" aria-selected={cardManagementTab === "sessions"} className={cardManagementTab === "sessions" ? "active" : ""} onClick={() => { setCardManagementTab("sessions"); loadRadiusSessions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جلسات RADIUS")); }}>جلسات RADIUS ({radiusSessions.active_count.toLocaleString("ar")})</button>
       </div>
-      {cardManagementTab === "batches" ? renderBatches() : <>
+      {cardManagementTab === "batches" ? renderBatches() : cardManagementTab === "sessions" ? renderRadiusSessions() : <>
       <p className="card-source-note">هذه القائمة تعرض الكروت المسجلة في قاعدة بيانات RADIUS. جلب كروت MikroTik مباشرة سيُضاف عند تنفيذ ربط مزامنة الراوتر.</p>
       <div className="card-selection-toolbar">
         <label><input type="checkbox" checked={cards.length > 0 && cards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? [...new Set([...selectedCardIds, ...cards.map((card) => card.id)])] : selectedCardIds.filter((id) => !cards.some((card) => card.id === id)))} /> تحديد كروت الصفحة الحالية</label>
