@@ -2022,7 +2022,6 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       batch.password_length === Number(batchDraft.passwordLength) &&
       batch.prefix === batchDraft.prefix
     );
-    const selectedExistingBatch = compatibleBatches.find((batch) => batch.batch_number.toLowerCase() === batchDraft.existingBatchNumber.trim().toLowerCase());
     const chooseTemplate = (code: string) => {
       const template = availableTemplates.find((item) => item.code === code);
       setPrintTemplate(template?.code ?? "");
