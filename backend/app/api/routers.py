@@ -12,6 +12,8 @@ from app.services.router_secrets import (
     RouterSecretEncryptionNotConfigured,
     encrypt_router_secret,
 )
+from app.services.router_secrets import decrypt_router_secret
+from app.services.routeros_probe import RouterConnectionError, probe_routeros_system
 
 router = APIRouter(
     prefix="/api/v1/routers",
@@ -32,6 +34,33 @@ def list_routers(include_inactive: bool = False, db: Session = Depends(get_db)):
     if not include_inactive:
         query = query.filter(Router.is_active.is_(True))
     return query.order_by(Router.id.desc()).all()
+
+
+@router.post("/{router_id}/test-connection", dependencies=[Depends(require_permission("routers.view"))])
+def test_router_connection(router_id: int, db: Session = Depends(get_db)):
+    """Read basic RouterOS metadata only; never changes router configuration."""
+    item = db.get(Router, router_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="الراوتر غير موجود")
+    if not item.is_active:
+        raise HTTPException(status_code=409, detail="الراوتر غير نشط")
+    if not item.api_username or not item.api_secret_encrypted:
+        raise HTTPException(status_code=409, detail="بيانات RouterOS API غير محفوظة لهذا الراوتر")
+    try:
+        password = decrypt_router_secret(item.api_secret_encrypted)
+        result = probe_routeros_system(
+            host=item.management_host,
+            port=item.api_port,
+            username=item.api_username,
+            password=password,
+        )
+    except RouterSecretEncryptionNotConfigured as exc:
+        raise HTTPException(status_code=503, detail="مفتاح تشفير أسرار الراوتر غير مضبوط") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail="تعذر فك تشفير بيانات API المحفوظة") from exc
+    except RouterConnectionError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"router_id": item.id, "router_name": item.name, **result, "read_only": True}
 
 
 @router.post("", response_model=RouterResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("routers.create"))])
