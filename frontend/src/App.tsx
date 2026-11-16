@@ -1296,6 +1296,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         : { position: "absolute" as const, left: String(selectedLayout[xKey]) + "%", top: String(selectedLayout[yKey]) + "%", transform: "translate(-50%, -50%)", width: "88%" };
     const printableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
     const selectedPoint = points.find((point) => String(point.id) === selectedPosId);
+    const cardsPerPage = Math.max(1, Math.min(60, Number(selectedLayout.columns ?? 2) * Number(selectedLayout.rows ?? 5)));
     return (
       <>
         <div className="section-heading">
@@ -1408,8 +1409,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   </div>
                 </div>
                 <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"} style={selectedTemplate ? { gridTemplateColumns: `repeat(${Math.max(1, Math.min(5, Number(selectedLayout.columns ?? 2)))}, minmax(0, 1fr))` } : undefined}>
-                  {printPreviewCards.map((card) => (
-                    <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { position: "relative", background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, minHeight: `${selectedTemplate.height_mm}mm`, fontFamily: String(selectedLayout.font_family ?? "Arial"), fontSize: `${Number(selectedLayout.font_size ?? 12)}px`, border: selectedLayout.show_border === false ? "none" : `${Number(selectedLayout.border_width ?? 1)}px solid ${String(selectedLayout.border_color ?? "#b9d9c8")}` } : undefined}>
+                  {printPreviewCards.map((card, index) => (
+                    <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { position: "relative", background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, minHeight: `${selectedTemplate.height_mm}mm`, fontFamily: String(selectedLayout.font_family ?? "Arial"), fontSize: `${Number(selectedLayout.font_size ?? 12)}px`, border: selectedLayout.show_border === false ? "none" : `${Number(selectedLayout.border_width ?? 1)}px solid ${String(selectedLayout.border_color ?? "#b9d9c8")}`, breakAfter: (index + 1) % cardsPerPage === 0 && index < printPreviewCards.length - 1 ? "page" : undefined } : undefined}>
                       <div className="voucher-head"><strong>الأسطورة نت</strong><span>{card.is_free ? "كرت مجاني" : "بطاقة إنترنت"}</span></div>
                       {printOptions.show_plan && selectedLayout.show_plan !== false && <div className="voucher-plan"><span>الباقة</span><strong>{card.plan_name}</strong></div>}
                       {printOptions.show_username && selectedLayout.show_username !== false && <div className="voucher-user" style={layoutPosition("username_x", "username_y")}><span>اسم المستخدم</span><strong>{card.username}</strong></div>}
