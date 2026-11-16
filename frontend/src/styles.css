@@ -769,3 +769,37 @@ tbody tr:hover { background: #fbfdfc; }
     font-size: 10px;
   }
 }
+
+/* RADIUS live session view */
+.radius-session-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.radius-session-summary > div {
+  display: grid;
+  gap: 7px;
+  padding: 15px;
+  border: 1px solid #e1ebe5;
+  border-radius: 11px;
+  background: #fff;
+}
+.radius-session-summary span { color: #73857a; font-size: 10px; }
+.radius-session-summary strong { color: #176b51; font-size: 22px; }
+.radius-sessions-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.radius-sessions-table { width: max-content; min-width: 1180px; table-layout: auto; }
+.radius-sessions-table th, .radius-sessions-table td { white-space: nowrap; }
+@media (max-width: 700px) {
+  .radius-session-summary { grid-template-columns: 1fr; }
+  .radius-session-summary > div { padding: 12px; }
+  .radius-session-summary strong { font-size: 19px; }
+  .radius-sessions-table th, .radius-sessions-table td { padding: 9px 10px; font-size: 10px; }
+}
