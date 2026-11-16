@@ -1485,12 +1485,15 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <label htmlFor="card-plan-filter">الباقة<select id="card-plan-filter" value={cardPlanFilter} onChange={(e) => { setCardPlanFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, cardStatusFilter, e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الباقة")); }}><option value="">كل الباقات</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
         <button type="button" className="table-action" onClick={() => { setCardSearch(""); setCardStatusFilter(""); setCardPlanFilter(""); setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards("", 0, "", "", "").catch((err) => setError(err instanceof Error ? err.message : "تعذر إعادة ضبط الفلاتر")); }}>مسح الفلاتر</button>
       </div>
-      <div className="table-wrap"><table><thead><tr><th>تحديد</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>الوقت المستخدم / المتبقي</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>السرعة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>
+      <div className="table-wrap"><table><thead><tr><th>تحديد</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>آخر استخدام</th><th>تاريخ الانتهاء</th><th>الوقت المستخدم / المتبقي</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>السرعة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>
         {cards.map((card) => {
           const snapshot = card.plan_snapshot ?? {};
           const timeLimit = typeof snapshot.session_time_limit_seconds === "number" ? snapshot.session_time_limit_seconds : null;
           const remaining = timeLimit === null ? null : Math.max(0, timeLimit - card.used_seconds);
           const speed = typeof snapshot.speed_profile === "string" && snapshot.speed_profile ? snapshot.speed_profile : "غير محددة";
+          const formatDateTime = (value: string | null) => value
+            ? new Date(value).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" })
+            : "—";
           const formatDuration = (seconds: number) => {
             const safe = Math.max(0, Math.floor(seconds));
             const hours = Math.floor(safe / 3600);
@@ -1507,6 +1510,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td>
             <td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td>
             <td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td>
+            <td>{formatDateTime(card.first_used_at)}</td>
+            <td>{formatDateTime(card.expires_at)}</td>
             <td>{formatDuration(card.used_seconds)} / {remaining === null ? "مفتوح" : formatDuration(remaining)}</td>
             <td>{card.active_sessions_count.toLocaleString("ar")}</td>
             <td>{formatBytes(card.upload_bytes)} / {formatBytes(card.download_bytes)}</td>
