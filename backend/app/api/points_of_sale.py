@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import Card, PointOfSale, PrintJob, PrintJobItem
 from app.services.audit import record_audit
+from app.services.permissions import is_owner
 from app.schemas.points_of_sale import (
     PointOfSaleCreate,
     PointOfSaleInventoryResponse,
@@ -37,6 +38,8 @@ def list_points_of_sale(include_inactive: bool = False, db: Session = Depends(ge
 
 @router.post("", response_model=PointOfSaleResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("pos.manage"))])
 def create_point_of_sale(payload: PointOfSaleCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("pos.manage"))):
+    if not is_owner(user):
+        raise HTTPException(status_code=403, detail="إنشاء نقاط البيع وإعداد سقفها وصلاحياتها متاح لمدير النظام فقط")
     point = PointOfSale(**payload.model_dump())
     db.add(point)
     try:
@@ -65,6 +68,9 @@ def update_point_of_sale(
     changes = payload.model_dump(exclude_unset=True)
     if not changes:
         raise HTTPException(status_code=422, detail="يجب إرسال حقل واحد على الأقل")
+    protected_fields = {"is_active", "debt_limit", "allow_card_creation", "allow_printing"}
+    if not is_owner(user) and protected_fields.intersection(changes):
+        raise HTTPException(status_code=403, detail="تغيير سقف المديونية أو صلاحيات التشغيل أو إيقاف الحساب متاح لمدير النظام فقط")
     before = {key: getattr(point, key) for key in changes}
     for field, value in changes.items():
         setattr(point, field, value)
