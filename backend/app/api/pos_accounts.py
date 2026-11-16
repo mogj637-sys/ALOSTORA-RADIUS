@@ -63,12 +63,12 @@ def list_account_entries(
     )
 
 
-@router.post("/entries", response_model=PosAccountEntryResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("finance.manage"))])
+@router.post("/entries", response_model=PosAccountEntryResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("finance.create"))])
 def create_account_entry(
     point_id: int,
     payload: PosAccountEntryCreate,
     db: Session = Depends(get_db),
-    user: AdminUser = Depends(require_permission("finance.manage")),
+    user: AdminUser = Depends(require_permission("finance.create")),
 ):
     if not any(role.code == "owner" for role in user.roles) and point_id not in {point.id for point in user.point_of_sales}:
         raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة حساب نقطة البيع هذه")
