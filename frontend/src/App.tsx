@@ -2090,6 +2090,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderTemplates() {
+    const templateSummary = {
+      defaults: cardTemplates.filter((item) => item.is_default).length,
+      linked: cardTemplates.filter((item) => item.plan_id !== null && plans.some((plan) => plan.id === item.plan_id && plan.is_active)).length,
+      inactiveLinks: cardTemplates.filter((item) => item.plan_id !== null && !plans.some((plan) => plan.id === item.plan_id && plan.is_active)).length,
+    };
     const previewPlan = plans.find((plan) => String(plan.id) === templateDraft.plan_id);
     const previewPosition = (xKey: string, yKey: string) => ({
       position: "absolute" as const,
@@ -2126,6 +2131,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <span className="count-tag">{cardTemplates.length.toLocaleString("ar")} قالب محفوظ</span>
         </div>
 
+        <div className="template-summary-grid" aria-label="ملخص تصاميم الكروت">
+          <article className="template-summary-card"><span>إجمالي القوالب</span><strong>{cardTemplates.length.toLocaleString("ar")}</strong><small>تصميم محفوظ في المكتبة</small></article>
+          <article className="template-summary-card"><span>القوالب الافتراضية</span><strong>{templateSummary.defaults.toLocaleString("ar")}</strong><small>قالب محدد كافتراضي</small></article>
+          <article className="template-summary-card"><span>مرتبطة بباقات مفعّلة</span><strong>{templateSummary.linked.toLocaleString("ar")}</strong><small>جاهزة للاستخدام في إنشاء الكروت</small></article>
+          <article className="template-summary-card"><span>روابط تحتاج مراجعة</span><strong>{templateSummary.inactiveLinks.toLocaleString("ar")}</strong><small>مرتبطة بباقة غير مفعّلة أو غير متاحة</small></article>
+        </div>
         <div className="template-studio-grid">
           {(can("templates.create") || (editingTemplateId !== null && can("templates.update"))) && (
 <form className="panel template-editor-panel" onSubmit={saveCardTemplate}>
