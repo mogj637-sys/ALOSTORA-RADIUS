@@ -1083,7 +1083,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function loadCards(search = cardSearch, offset = cardOffset, batchId = cardBatchFilter, statusFilter = cardStatusFilter, planFilter = cardPlanFilter) {
-    if (!user.roles.includes("owner") && !search.trim()) {
+    if (user.card_visibility === "search_any" && !search.trim()) {
       setCards([]);
       setHasMoreCards(false);
       return;
@@ -2147,29 +2147,29 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   function renderCards() {
     return <>
-      <div className="section-heading"><div><h2>{user.roles.includes("owner") ? "إدارة الكروت" : "البحث عن كرت"}</h2><p>{user.roles.includes("owner") ? "عرض وإدارة جميع الكروت." : "ابحث باسم المستخدم أو الرقم التسلسلي الكامل للوصول إلى كرت من أي نقطة بيع، ثم اعرض بياناته وجلساته."}</p></div>{user.roles.includes("owner") && <span className="count-tag">200 كرت لكل صفحة</span>}</div>
-      {user.roles.includes("owner") && cardBatchFilter && <div className="notice">تُعرض كروت الدفعة المحددة فقط. <button type="button" className="table-action" onClick={() => { setCardBatchFilter(""); loadCards(cardSearch, 0, "").catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت")); }}>إلغاء فلتر الدفعة</button></div>}
-      {user.roles.includes("owner") && <div className="card-management-tabs" role="tablist" aria-label="تصنيفات إدارة الكروت">
+      <div className="section-heading"><div><h2>{user.card_visibility !== "search_any" ? "إدارة الكروت" : "البحث عن كرت"}</h2><p>{user.card_visibility !== "search_any" ? "عرض وإدارة جميع الكروت." : "ابحث باسم المستخدم أو الرقم التسلسلي الكامل للوصول إلى كرت من أي نقطة بيع، ثم اعرض بياناته وجلساته."}</p></div>{user.card_visibility !== "search_any" && <span className="count-tag">200 كرت لكل صفحة</span>}</div>
+      {user.card_visibility !== "search_any" && cardBatchFilter && <div className="notice">تُعرض كروت الدفعة المحددة فقط. <button type="button" className="table-action" onClick={() => { setCardBatchFilter(""); loadCards(cardSearch, 0, "").catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت")); }}>إلغاء فلتر الدفعة</button></div>}
+      {user.card_visibility !== "search_any" && <div className="card-management-tabs" role="tablist" aria-label="تصنيفات إدارة الكروت">
         <button type="button" role="tab" aria-selected={cardManagementTab === "all"} className={cardManagementTab === "all" ? "active" : ""} onClick={() => { setCardManagementTab("all"); setCardStatusFilter(""); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جميع الكروت")); }}>جميع كروت النظام</button>
         <button type="button" role="tab" aria-selected={cardManagementTab === "expired"} className={cardManagementTab === "expired" ? "active" : ""} onClick={() => { setCardManagementTab("expired"); setCardStatusFilter("expired"); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "expired", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت المنتهية")); }}>الكروت المنتهية</button>
         <button type="button" role="tab" aria-selected={cardManagementTab === "batches"} className={cardManagementTab === "batches" ? "active" : ""} onClick={() => { setCardManagementTab("batches"); loadCardBatches().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل دفعات الكروت")); }}>دفعات الكروت</button>
         <button type="button" role="tab" aria-selected={cardManagementTab === "sessions"} className={cardManagementTab === "sessions" ? "active" : ""} onClick={() => { setCardManagementTab("sessions"); loadRadiusSessions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جلسات المستخدمين")); }}>جلسات المستخدمين ({radiusSessions.active_count.toLocaleString("ar")})</button>
       </div>}
-      {user.roles.includes("owner") && cardManagementTab === "batches" ? renderBatches() : user.roles.includes("owner") && cardManagementTab === "sessions" ? renderRadiusSessions() : <>
+      {user.card_visibility !== "search_any" && cardManagementTab === "batches" ? renderBatches() : user.card_visibility !== "search_any" && cardManagementTab === "sessions" ? renderRadiusSessions() : <>
       <p className="card-source-note">هذه القائمة تعرض الكروت المسجلة في قاعدة بيانات RADIUS. جلب كروت MikroTik مباشرة سيُضاف عند تنفيذ ربط مزامنة الراوتر.</p>
-      {user.roles.includes("owner") && <div className="card-selection-toolbar">
+      {can("printing.manage") && <div className="card-selection-toolbar">
         <label><input type="checkbox" checked={cards.length > 0 && cards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? [...new Set([...selectedCardIds, ...cards.map((card) => card.id)])] : selectedCardIds.filter((id) => !cards.some((card) => card.id === id)))} /> تحديد كروت الصفحة الحالية</label>
         <span>تم تحديد {selectedCardIds.length} كرت</span><button type="button" disabled={!selectedCardIds.length} onClick={prepareSelectedCardsForPrinting}>تجهيز المحدد للطباعة</button>
       </div>}
       <div className="card-management-filters">
-        <label htmlFor="card-search">بحث في الكروت<input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); setCardSessionHistory(null); loadCards(e.target.value, 0, user.roles.includes("owner") ? cardBatchFilter : "").catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder={user.roles.includes("owner") ? "اسم المستخدم أو الرقم التسلسلي" : "أدخل اسم المستخدم أو الرقم التسلسلي كاملاً"} /></label>
-        {user.roles.includes("owner") && <>
+        <label htmlFor="card-search">بحث في الكروت<input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); setCardSessionHistory(null); loadCards(e.target.value, 0, user.card_visibility !== "search_any" ? cardBatchFilter : "").catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder={user.card_visibility !== "search_any" ? "اسم المستخدم أو الرقم التسلسلي" : "أدخل اسم المستخدم أو الرقم التسلسلي كاملاً"} /></label>
+        {user.card_visibility !== "search_any" && <>
           <label htmlFor="card-status-filter">الحالة<select id="card-status-filter" value={cardStatusFilter} onChange={(e) => { setCardStatusFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, e.target.value, cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الحالة")); }}><option value="">كل الحالات</option><option value="generated">منشأ</option><option value="allocated">مخصص لنقطة بيع</option><option value="active">متصل</option><option value="suspended">موقوف</option><option value="cancelled">ملغي</option><option value="printed_free">مجاني مطبوع</option><option value="expired">منتهي الصلاحية</option><option value="exhausted">نفد الرصيد</option></select></label>
           <label htmlFor="card-plan-filter">الباقة<select id="card-plan-filter" value={cardPlanFilter} onChange={(e) => { setCardPlanFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, cardStatusFilter, e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الباقة")); }}><option value="">كل الباقات</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
           <button type="button" className="table-action" onClick={() => { setCardSearch(""); setCardStatusFilter(""); setCardPlanFilter(""); setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards("", 0, "", "", "").catch((err) => setError(err instanceof Error ? err.message : "تعذر إعادة ضبط الفلاتر")); }}>مسح الفلاتر</button>
         </>}
       </div>
-      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{user.roles.includes("owner") && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>آخر استخدام</th><th>تاريخ الانتهاء</th><th>الوقت المستخدم / المتبقي</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.manage") && <th>الإجراءات</th>}</tr></thead><tbody>
+      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{can("printing.manage") && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>آخر استخدام</th><th>تاريخ الانتهاء</th><th>الوقت المستخدم / المتبقي</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.manage") && <th>الإجراءات</th>}</tr></thead><tbody>
         {cards.map((card) => {
           const snapshot = card.plan_snapshot ?? {};
           const timeLimit = typeof snapshot.session_time_limit_seconds === "number" ? snapshot.session_time_limit_seconds : null;
@@ -2190,7 +2190,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             return mb >= 1024 ? `${(mb / 1024).toFixed(2)} جيجابايت` : `${mb.toFixed(1)} ميجابايت`;
           };
           return <tr key={card.id}>
-            {user.roles.includes("owner") && <td><input type="checkbox" aria-label={`تحديد ${card.username}`} checked={selectedCardIds.includes(card.id)} onChange={() => toggleSelectedCard(card.id)} /></td>}
+            {can("printing.manage") && <td><input type="checkbox" aria-label={`تحديد ${card.username}`} checked={selectedCardIds.includes(card.id)} onChange={() => toggleSelectedCard(card.id)} /></td>}
             <td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td>
             <td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td>
             <td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td>
@@ -2223,7 +2223,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           </tr>)}
         </tbody></table>{cardSessionHistory.items.length === 0 && <div className="empty-state">لا توجد جلسات مسجلة لهذا الكرت.</div>}</div>
       </section>}
-      {user.roles.includes("owner") && <div className="pagination-controls"><button type="button" className="table-action" disabled={cardOffset === 0 || busy} onClick={() => changeCardPage(cardOffset - 200)}>السابق</button><span>الصفحة {Math.floor(cardOffset / 200) + 1}</span><button type="button" className="table-action" disabled={!hasMoreCards || busy} onClick={() => changeCardPage(cardOffset + 200)}>التالي</button></div>}
+      {user.card_visibility !== "search_any" && <div className="pagination-controls"><button type="button" className="table-action" disabled={cardOffset === 0 || busy} onClick={() => changeCardPage(cardOffset - 200)}>السابق</button><span>الصفحة {Math.floor(cardOffset / 200) + 1}</span><button type="button" className="table-action" disabled={!hasMoreCards || busy} onClick={() => changeCardPage(cardOffset + 200)}>التالي</button></div>}
       </>}
     </>;
   }
