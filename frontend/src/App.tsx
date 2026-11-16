@@ -475,7 +475,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [sessionsReport, setSessionsReport] = useState<SessionsReportData | null>(null);
   const [batchesReport, setBatchesReport] = useState<BatchesReportData | null>(null);
   const [printingReport, setPrintingReport] = useState<PrintingReportData | null>(null);
-  const [reportTab, setReportTab] = useState<"cards" | "usage" | "batches" | "printing" | "finance">("cards");
+  const [reportTab, setReportTab] = useState<"cards" | "usage" | "batches" | "printing" | "finance">(can("cards.view") ? "cards" : can("sessions.view") ? "usage" : "finance");
   const [statementPointId, setStatementPointId] = useState("");
   const [posStatement, setPosStatement] = useState<PosStatement | null>(null);
   const [reportFrom, setReportFrom] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
