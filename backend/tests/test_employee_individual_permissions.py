@@ -187,6 +187,18 @@ def test_employee_card_visibility_and_direct_permission_overrides(owner_client):
         identity = client.get("/api/v1/auth/me", headers=headers)
         assert "printing.manage" in identity.json()["permissions"]
 
+        imported = client.post(
+            "/api/v1/cards/print-selection/resolve",
+            headers=headers,
+            json={
+                "point_of_sale_id": point_a["id"],
+                "identifiers": [unprinted_batch_card["username"], card_b["username"]],
+            },
+        )
+        assert imported.status_code == 200, imported.text
+        assert [item["id"] for item in imported.json()["items"]] == [unprinted_batch_card["id"]]
+        assert imported.json()["unmatched"] == [card_b["username"]]
+
         printable = _new_unprinted_card(client, owner_headers, point_a["id"], "INDIVIDUAL_PRINT_ALLOWED")
         printed = client.post(
             "/api/v1/print-jobs",
