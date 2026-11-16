@@ -312,6 +312,64 @@ def list_cards(
     return cards
 
 
+@router.get("/{card_id}/sessions", dependencies=[Depends(require_permission("sessions.view"))])
+def list_card_session_history(
+    card_id: str,
+    search: str = Query(..., min_length=1, max_length=120),
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("sessions.view")),
+):
+    """Return the complete RADIUS session history for one explicitly searched card."""
+    try:
+        card_uuid = UUID(card_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="معرّف الكرت غير صالح")
+
+    card = db.query(Card).filter(Card.id == card_uuid).first()
+    if card is None:
+        raise HTTPException(status_code=404, detail="الكرت غير موجود")
+
+    is_owner = any(role.code == "owner" for role in user.roles)
+    exact_term = search.strip().lower()
+    if not exact_term:
+        raise HTTPException(status_code=422, detail="أدخل اسم المستخدم أو الرقم التسلسلي كاملاً")
+    if not is_owner and exact_term not in {card.username.lower(), card.serial_number.lower()}:
+        raise HTTPException(status_code=404, detail="لم يتم العثور على الكرت بهذا البحث")
+
+    rows = (
+        db.query(RadiusSession, Router)
+        .join(Router, Router.id == RadiusSession.router_id)
+        .filter(RadiusSession.card_id == card.id)
+        .order_by(RadiusSession.started_at.desc(), RadiusSession.id.desc())
+        .all()
+    )
+    active_count = sum(1 for session, _ in rows if session.stopped_at is None)
+    return {
+        "card_id": str(card.id),
+        "username": card.username,
+        "serial_number": card.serial_number,
+        "total_sessions": len(rows),
+        "active_sessions": active_count,
+        "items": [
+            {
+                "id": session.id,
+                "router_name": router_item.name,
+                "nas_identifier": router_item.nas_identifier,
+                "acct_session_id": session.acct_session_id,
+                "framed_ip_address": session.framed_ip_address,
+                "calling_station_id": session.calling_station_id,
+                "started_at": session.started_at,
+                "last_update_at": session.last_update_at,
+                "stopped_at": session.stopped_at,
+                "session_time_seconds": session.session_time_seconds,
+                "upload_bytes": session.input_octets,
+                "download_bytes": session.output_octets,
+            }
+            for session, router_item in rows
+        ],
+    }
+
+
 @router.patch("/{card_id}/status", response_model=CardListItem, dependencies=[Depends(require_permission("cards.manage"))])
 def update_card_status(
     card_id: str,
