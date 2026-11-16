@@ -1006,6 +1006,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createSingle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
+    const linkedPlan = selectedTemplate?.plan_id ? plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
+    if (!selectedTemplate || !linkedPlan) { setError("اختر قالباً مرتبطاً بباقة مفعّلة قبل إنشاء الكرت."); return; }
     setBusy(true); setError(""); setNotice(""); setGeneratedCards([]);
     try {
       const result = await apiRequest<{ id: string; batch_id: string; batch_number: string; serial_number: string; username: string; password: string }> (token, "/api/v1/cards/single", {
@@ -1034,6 +1037,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createBatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
+    const linkedPlan = selectedTemplate?.plan_id ? plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
+    if (!selectedTemplate || !linkedPlan) { setError("اختر قالباً مرتبطاً بباقة مفعّلة قبل إنشاء الدفعة."); return; }
     setBusy(true); setError(""); setNotice(""); setGeneratedCards([]);
     try {
       const result = await apiRequest<{ batch_id: string; batch_number: string; plan_id: number; template_code: string | null; point_of_sale_id: number | null; created_count: number; cards: GeneratedCard[] }>(token, "/api/v1/cards/batch", {
@@ -1297,41 +1303,100 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderCardCreate() {
-    return <>
-      <div className="section-heading"><div><h2>إضافة الكروت</h2><p>أنشئ كرتاً منفرداً أو دفعة كروت وحدد الباقة وبيانات الدخول.</p></div></div><div className="notice">تنبيه: الكروت التي تنشئها هنا تُحفظ في قاعدة ALOSTORA-RADIUS. إنشاء الكروت مباشرة داخل User Manager القديم غير مفعّل بعد.</div>
-      <div className="panel form-grid"><label>نقطة البيع المخصصة للطباعة<select value={selectedPosId} onChange={(e) => setSelectedPosId(e.target.value)}><option value="">اختر نقطة بيع</option>{points.filter((point) => point.is_active).map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}</option>)}</select></label><small className="field-hint">يتم تخصيص الكروت للنقطة عند تسجيل عملية الطباعة، وليس بمجرد إنشائها.</small></div>
-      <div className="mode-tabs">
-        <button type="button" className={cardMode === "single" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("single"); setGeneratedCards([]); setGeneratedBatchNumber(""); }}>كرت منفرد</button>
-        <button type="button" className={cardMode === "batch" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("batch"); setGeneratedCards([]); setGeneratedBatchNumber(""); }}>دفعة كروت</button>
-      </div>
-      {plans.filter((plan) => plan.is_active).length === 0 ? <div className="empty-state">لا توجد باقات مفعلة. فعّل باقة من قسم الباقات أولاً.</div> : cardMode === "single" ? (
-        <form className="panel form-grid" onSubmit={createSingle}>
-          <label>قالب الكرت<select value={printTemplate} onChange={(e) => { const code = e.target.value; setPrintTemplate(code); const linked = cardTemplates.find((item) => item.code === code)?.plan_id; if (linked) setSingleDraft((current) => ({ ...current, planId: String(linked) })); }}>{cardTemplates.map((item) => <option key={item.id} value={item.code}>{item.name}</option>)}</select></label>
-          {cardTemplates.find((item) => item.code === printTemplate)?.plan_id ? <div className="notice">الباقة المحددة تلقائياً من القالب: {plans.find((plan) => plan.id === cardTemplates.find((item) => item.code === printTemplate)?.plan_id)?.name}</div> : <label>الباقة (القالب غير مربوط بعد)<select value={singleDraft.planId || (plans[0] ? String(plans[0].id) : "")} onChange={(e) => setSingleDraft({ ...singleDraft, planId: e.target.value })}>{plans.filter((plan) => plan.is_active).map((plan) => <option value={plan.id} key={plan.id}>{plan.name} — {plan.code}</option>)}</select></label>}
-          <label>اسم المستخدم<input value={singleDraft.username} onChange={(e) => setSingleDraft({ ...singleDraft, username: e.target.value })} minLength={3} maxLength={32} required /></label>
-          <label>نوع بيانات الدخول<select value={singleDraft.cardType} onChange={(e) => setSingleDraft({ ...singleDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
-          {singleDraft.cardType === "separate_credentials" && <label>كلمة المرور<input type="text" value={singleDraft.password} onChange={(e) => setSingleDraft({ ...singleDraft, password: e.target.value })} minLength={4} maxLength={32} required /></label>}
-          <label className="checkbox-label"><input type="checkbox" checked={singleDraft.isFree} onChange={(e) => setSingleDraft({ ...singleDraft, isFree: e.target.checked })} /> كرت مجاني / خاص بمالك الشبكة</label>
-          <div className="form-actions"><button type="submit" disabled={busy || !singleDraft.planId || !selectedPosId || !printTemplate}>{busy ? "جارٍ الإنشاء..." : "إنشاء الكرت"}</button></div>
-        </form>
-      ) : (
-        <form className="panel form-grid" onSubmit={createBatch}>
-          <label>قالب الكرت<select value={printTemplate} onChange={(e) => { const code = e.target.value; setPrintTemplate(code); const linked = cardTemplates.find((item) => item.code === code)?.plan_id; if (linked) setBatchDraft((current) => ({ ...current, planId: String(linked) })); }}>{cardTemplates.map((item) => <option key={item.id} value={item.code}>{item.name}</option>)}</select></label>
-          {cardTemplates.find((item) => item.code === printTemplate)?.plan_id ? <div className="notice">الباقة المحددة تلقائياً من القالب: {plans.find((plan) => plan.id === cardTemplates.find((item) => item.code === printTemplate)?.plan_id)?.name}</div> : <label>الباقة (القالب غير مربوط بعد)<select value={batchDraft.planId} onChange={(e) => setBatchDraft({ ...batchDraft, planId: e.target.value })}>{plans.filter((plan) => plan.is_active).map((plan) => <option value={plan.id} key={plan.id}>{plan.name} — {plan.code}</option>)}</select></label>}
-          <label>عدد الكروت<input type="number" min="1" max="5000" value={batchDraft.quantity} onChange={(e) => setBatchDraft({ ...batchDraft, quantity: e.target.value })} required /></label>
-          <label>نوع بيانات الدخول<select value={batchDraft.cardType} onChange={(e) => setBatchDraft({ ...batchDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
-          <label>طريقة توليد اسم المستخدم<select value={batchDraft.generationMode} onChange={(e) => setBatchDraft({ ...batchDraft, generationMode: e.target.value })}><option value="digits">أرقام فقط</option><option value="letters">حروف فقط</option><option value="alphanumeric">أرقام وحروف</option></select></label>
-          <label>طول اسم المستخدم<input type="number" min="3" max="32" value={batchDraft.usernameLength} onChange={(e) => setBatchDraft({ ...batchDraft, usernameLength: e.target.value })} /></label>
-          <label>طول كلمة المرور<input type="number" min="4" max="32" value={batchDraft.passwordLength} onChange={(e) => setBatchDraft({ ...batchDraft, passwordLength: e.target.value })} disabled={batchDraft.cardType !== "separate_credentials"} /></label>
-          <label>بادئة اختيارية<input value={batchDraft.prefix} onChange={(e) => setBatchDraft({ ...batchDraft, prefix: e.target.value })} placeholder="مثال: 777" /></label>
-          <div className="form-actions"><button type="submit" disabled={busy || !batchDraft.planId || !selectedPosId || !printTemplate}>{busy ? "جارٍ إنشاء الكروت..." : "إنشاء الدفعة"}</button></div>
-        </form>
-      )}
-      {generatedCards.length > 0 && <section className="generated-panel">
-        <div className="section-heading compact-heading"><div><h2>بيانات الدفعة الجديدة {generatedBatchNumber ? `— ${generatedBatchNumber}` : ""}</h2><p>كلمات المرور تظهر الآن فقط. احفظ الجدول أو اطبعه قبل مغادرة الصفحة.</p></div><div className="form-actions"><button type="button" disabled={!selectedPosId || !selectedPrintCardIds.length} onClick={() => setPage("pos")}>متابعة الطباعة لنقطة البيع</button><button type="button" className="secondary-button" onClick={() => window.print()}>طباعة الصفحة</button></div></div>
-        <div className="table-wrap"><table><thead><tr><th>التسلسل</th><th>اسم المستخدم</th><th>كلمة المرور</th></tr></thead><tbody>{generatedCards.map((card) => <tr key={card.serial_number}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.password || "بدون كلمة مرور"}</td></tr>)}</tbody></table></div>
-      </section>}
-    </>;
+    const activePlans = plans.filter((plan) => plan.is_active);
+    const availableTemplates = cardTemplates.filter((item) => item.plan_id !== null && activePlans.some((plan) => plan.id === item.plan_id));
+    const selectedTemplate = availableTemplates.find((item) => item.code === printTemplate)
+      ?? availableTemplates.find((item) => item.is_default)
+      ?? availableTemplates[0];
+    const selectedPlan = selectedTemplate ? activePlans.find((plan) => plan.id === selectedTemplate.plan_id) : undefined;
+    const selectedPoint = points.find((point) => String(point.id) === selectedPosId && point.is_active);
+    const chooseTemplate = (code: string) => {
+      const template = availableTemplates.find((item) => item.code === code);
+      setPrintTemplate(template?.code ?? "");
+      if (template?.plan_id) {
+        const planId = String(template.plan_id);
+        setSingleDraft((current) => ({ ...current, planId }));
+        setBatchDraft((current) => ({ ...current, planId }));
+      }
+      setError("");
+    };
+    const planDetails = selectedPlan ? [
+      selectedPlan.data_limit_bytes == null ? "رصيد مفتوح" : `${(selectedPlan.data_limit_bytes / (1024 ** 2)).toFixed(0)} MB`,
+      selectedPlan.session_time_limit_seconds == null ? "وقت مفتوح" : `${(selectedPlan.session_time_limit_seconds / 3600).toFixed(0)} ساعة`,
+      selectedPlan.validity_period_seconds == null ? "صلاحية مفتوحة" : `${(selectedPlan.validity_period_seconds / 86400).toFixed(0)} يوم`,
+      selectedPlan.speed_profile ? `السرعة: ${selectedPlan.speed_profile}` : "",
+    ].filter(Boolean) : [];
+    const canCreate = !!selectedTemplate && !!selectedPlan && !!selectedPoint && !busy;
+    return (
+      <section className="card-create-workspace">
+        <div className="section-heading card-create-heading"><div><span className="eyebrow">إنشاء وإعداد بطاقات الإنترنت</span><h2>إضافة الكروت</h2><p>اختر القالب أولاً؛ ستُحدد الباقة المرتبطة به تلقائياً، ثم اختر نقطة البيع وطريقة إنشاء الكرت.</p></div><span className="count-tag">{cardMode === "single" ? "إنشاء كرت منفرد" : "إنشاء دفعة كروت"}</span></div>
+        <div className="notice">الكروت تُنشأ وتحفظ داخل قاعدة ALOSTORA-RADIUS. ربطها واستعادتها من User Manager القديم مؤجل إلى المرحلة الأخيرة من المشروع.</div>
+
+        <div className="card-create-steps">
+          <article className={selectedTemplate ? "complete" : "pending"}><span>1</span><div><strong>قالب الطباعة</strong><small>{selectedTemplate?.name ?? "لم يتم اختيار قالب"}</small></div></article>
+          <article className={selectedPlan ? "complete" : "pending"}><span>2</span><div><strong>الباقة المرتبطة</strong><small>{selectedPlan?.name ?? "تُحدد من القالب"}</small></div></article>
+          <article className={selectedPoint ? "complete" : "pending"}><span>3</span><div><strong>نقطة البيع</strong><small>{selectedPoint?.name ?? "اختر نقطة البيع"}</small></div></article>
+        </div>
+
+        <div className="panel card-create-setup">
+          <div className="card-create-section-heading"><span>01</span><div><h3>القالب ونقطة البيع</h3><p>مصدر الباقة هو القالب، ولا يتم اختيارها بشكل منفصل.</p></div></div>
+          <div className="form-grid">
+            <label>قالب الكرت
+              <select value={selectedTemplate?.code ?? ""} onChange={(e) => chooseTemplate(e.target.value)} required>
+                <option value="">اختر قالباً مرتبطاً بباقة مفعّلة</option>
+                {availableTemplates.map((item) => <option key={item.id} value={item.code}>{item.name} — {item.code}</option>)}
+              </select>
+              <span className="field-hint">تظهر هنا القوالب المرتبطة بباقات مفعّلة فقط.</span>
+            </label>
+            <label>نقطة البيع
+              <select value={selectedPosId} onChange={(e) => setSelectedPosId(e.target.value)} required>
+                <option value="">اختر نقطة بيع مسجلة</option>
+                {points.filter((point) => point.is_active).map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}</option>)}
+              </select>
+              <span className="field-hint">اختر نقطة البيع التي ستتبع لها عملية التوزيع والطباعة.</span>
+            </label>
+          </div>
+          {selectedPlan ? <div className="card-create-plan-summary"><div><span>الباقة المحددة تلقائياً</span><strong>{selectedPlan.name}</strong><small>{selectedPlan.code} · {Number(selectedPlan.price).toLocaleString("en-US")} ريال</small></div><div className="card-plan-specs">{planDetails.map((detail) => <span key={detail}>{detail}</span>)}</div></div>
+            : <div className="empty-state compact-empty">لا يوجد قالب متاح مرتبط بباقة مفعّلة. أنشئ قالباً واربطه بباقة من صفحة تصاميم الكروت أولاً.</div>}
+        </div>
+
+        <div className="mode-tabs card-create-mode-tabs">
+          <button type="button" className={cardMode === "single" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("single"); setGeneratedCards([]); setGeneratedBatchNumber(""); setError(""); }}>كرت منفرد</button>
+          <button type="button" className={cardMode === "batch" ? "mode-tab active" : "mode-tab"} onClick={() => { setCardMode("batch"); setGeneratedCards([]); setGeneratedBatchNumber(""); setError(""); }}>دفعة كروت</button>
+        </div>
+
+        {cardMode === "single" ? (
+          <form className="panel card-create-form" onSubmit={createSingle}>
+            <div className="card-create-section-heading"><span>02</span><div><h3>بيانات الكرت المنفرد</h3><p>أدخل اسم المستخدم وحدد طريقة بيانات الدخول.</p></div></div>
+            <div className="form-grid">
+              <label>اسم المستخدم<input value={singleDraft.username} onChange={(e) => setSingleDraft({ ...singleDraft, username: e.target.value })} minLength={3} maxLength={32} pattern="[A-Za-z0-9_-]+" required placeholder="أحرف إنجليزية وأرقام فقط" /></label>
+              <label>نوع بيانات الدخول<select value={singleDraft.cardType} onChange={(e) => setSingleDraft({ ...singleDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
+              {singleDraft.cardType === "separate_credentials" && <label>كلمة المرور<input type="text" value={singleDraft.password} onChange={(e) => setSingleDraft({ ...singleDraft, password: e.target.value })} minLength={4} maxLength={32} required /></label>}
+              <label className="checkbox-label"><input type="checkbox" checked={singleDraft.isFree} onChange={(e) => setSingleDraft({ ...singleDraft, isFree: e.target.checked })} /> كرت مجاني / خاص بمالك الشبكة</label>
+            </div>
+            <div className="card-create-submit-row"><span>القالب: {selectedTemplate?.name ?? "—"} · الباقة: {selectedPlan?.name ?? "—"}</span><button type="submit" disabled={!canCreate || !singleDraft.username.trim() || (singleDraft.cardType === "separate_credentials" && singleDraft.password.length < 4)}>{busy ? "جارٍ الإنشاء..." : "إنشاء الكرت"}</button></div>
+          </form>
+        ) : (
+          <form className="panel card-create-form" onSubmit={createBatch}>
+            <div className="card-create-section-heading"><span>02</span><div><h3>إعداد دفعة الكروت</h3><p>حدد العدد وطريقة توليد بيانات الدخول.</p></div></div>
+            <div className="form-grid">
+              <label>عدد الكروت<input type="number" min="1" max="5000" value={batchDraft.quantity} onChange={(e) => setBatchDraft({ ...batchDraft, quantity: e.target.value })} required /></label>
+              <label>نوع بيانات الدخول<select value={batchDraft.cardType} onChange={(e) => setBatchDraft({ ...batchDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
+              <label>طريقة توليد اسم المستخدم<select value={batchDraft.generationMode} onChange={(e) => setBatchDraft({ ...batchDraft, generationMode: e.target.value })}><option value="digits">أرقام فقط</option><option value="letters">حروف فقط</option><option value="alphanumeric">أرقام وحروف</option></select></label>
+              <label>طول اسم المستخدم<input type="number" min="3" max="32" value={batchDraft.usernameLength} onChange={(e) => setBatchDraft({ ...batchDraft, usernameLength: e.target.value })} required /></label>
+              <label>طول كلمة المرور<input type="number" min="4" max="32" value={batchDraft.passwordLength} onChange={(e) => setBatchDraft({ ...batchDraft, passwordLength: e.target.value })} disabled={batchDraft.cardType !== "separate_credentials"} required={batchDraft.cardType === "separate_credentials"} /></label>
+              <label>بادئة اسم المستخدم<input value={batchDraft.prefix} onChange={(e) => setBatchDraft({ ...batchDraft, prefix: e.target.value })} maxLength={20} pattern="[A-Za-z0-9]*" placeholder="اختياري، مثال: 777" /></label>
+            </div>
+            <div className="card-create-submit-row"><span>سيتم إنشاء {Number(batchDraft.quantity) || 0} كرت · {selectedTemplate?.name ?? "لا يوجد قالب"} · {selectedPlan?.name ?? "لا توجد باقة"}</span><button type="submit" disabled={!canCreate || Number(batchDraft.quantity) < 1 || Number(batchDraft.quantity) > 5000 || Number(batchDraft.usernameLength) < 3 || Number(batchDraft.usernameLength) > 32 || (batchDraft.cardType === "separate_credentials" && (Number(batchDraft.passwordLength) < 4 || Number(batchDraft.passwordLength) > 32))}>{busy ? "جارٍ إنشاء الكروت..." : "إنشاء الدفعة"}</button></div>
+          </form>
+        )}
+
+        {generatedCards.length > 0 && <section className="generated-panel card-generated-panel">
+          <div className="section-heading compact-heading"><div><span className="eyebrow">تم إنشاء الكروت</span><h2>بيانات الدفعة الجديدة {generatedBatchNumber ? `— ${generatedBatchNumber}` : ""}</h2><p>احفظ بيانات الدخول الآن؛ كلمات المرور لن تظهر مرة أخرى بعد مغادرة هذه الصفحة.</p></div><div className="form-actions"><button type="button" disabled={!selectedPrintCardIds.length || !selectedPosId} onClick={() => setPage("pos")}>متابعة الطباعة لنقطة البيع</button><button type="button" className="secondary-button" onClick={() => window.print()}>طباعة بيانات الدخول</button></div></div>
+          <div className="table-wrap"><table><thead><tr><th>التسلسل</th><th>اسم المستخدم</th><th>كلمة المرور</th></tr></thead><tbody>{generatedCards.map((card) => <tr key={card.serial_number}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.password || "بدون كلمة مرور"}</td></tr>)}</tbody></table></div>
+        </section>}
+      </section>
+    );
   }
 
   function renderBatches() {
