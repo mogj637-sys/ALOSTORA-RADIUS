@@ -792,6 +792,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div><h2>سجل عمليات النظام</h2><p>سجل زمني للعمليات الإدارية والتشغيلية المسجلة داخل النظام.</p></div>
           <div className="audit-toolbar"><span className="count-tag">{auditTotal.toLocaleString("ar")} عملية</span><button type="button" className="secondary-button" onClick={() => loadAuditLogs(0)}>تحديث السجل</button></div>
         </div>
+        <div className="audit-summary-grid">
+          <article><span>العمليات في الصفحة</span><strong>{auditLogs.length.toLocaleString("ar")}</strong><small>من أصل {auditTotal.toLocaleString("ar")} عملية</small></article>
+          <article><span>المستخدمون الظاهرون</span><strong>{new Set(auditLogs.map((item) => item.actor_username)).size.toLocaleString("ar")}</strong><small>حسابات نفذت عمليات في النتائج الحالية</small></article>
+          <article><span>عمليات بعنوان IP</span><strong>{auditLogs.filter((item) => Boolean(item.ip_address)).length.toLocaleString("ar")}</strong><small>سجلات تتضمن عنوان مصدر</small></article>
+        </div>
         <div className="table-wrap">
           <table className="data-table audit-log-table">
             <thead><tr><th>التاريخ والوقت</th><th>المستخدم الإداري</th><th>العملية</th><th>القسم</th><th>المعرف</th><th>التفاصيل</th><th>عنوان IP</th></tr></thead>
