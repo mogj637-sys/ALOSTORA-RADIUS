@@ -268,14 +268,17 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
 
             card = _build_card(plan, username, password, payload.card_type)
             cards.append(card)
-            response_cards.append(CardCreatedSecret(
-                serial_number=card.serial_number,
-                username=username,
-                password=password,
-            ))
-
         db.add_all(cards)
         db.flush()
+        response_cards = [
+            CardCreatedSecret(
+                id=card.id,
+                serial_number=card.serial_number,
+                username=card.username,
+                password=password,
+            )
+            for card, (_, password) in zip(cards, credentials, strict=True)
+        ]
         db.add_all([
             CardEvent(
                 card_id=card.id,
