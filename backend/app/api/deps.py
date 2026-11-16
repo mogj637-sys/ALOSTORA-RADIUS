@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.auth import AdminUser
+from app.services.permissions import has_permission
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -54,17 +55,7 @@ def require_permission(permission_code: str):
     def permission_dependency(
         user: AdminUser = Depends(get_current_user),
     ) -> AdminUser:
-        if any(role.code == "owner" for role in user.roles):
-            return user
-        granted = {
-            permission.code
-            for role in user.roles
-            for permission in role.permissions
-        }
-        if permission_code not in granted:
-            module, _, action = permission_code.partition(".")
-            if action == "view" and (f"{module}.manage" in granted or (module == "sessions" and "sessions.disconnect" in granted)):
-                return user
+        if not has_permission(user, permission_code):
             raise HTTPException(
                 status_code=403,
                 detail=f"ليست لديك صلاحية تنفيذ هذه العملية ({permission_code})",
