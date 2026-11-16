@@ -2438,6 +2438,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button type="button" className="table-action" onClick={() => { setCardSearch(""); setCardStatusFilter(""); setCardPlanFilter(""); setCardFreeFilter(""); setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards("", 0, "", "", "", "").catch((err) => setError(err instanceof Error ? err.message : "تعذر إعادة ضبط الفلاتر")); }}>مسح الفلاتر</button>
         </>}
       </div>
+      <div className="card-results-strip">
+        <div><strong>{cards.length.toLocaleString("ar")}</strong><span>نتيجة معروضة في هذه الصفحة</span></div>
+        {user.card_visibility !== "search_any" && <div><strong>{(Math.floor(cardOffset / 200) + 1).toLocaleString("ar")}</strong><span>رقم الصفحة</span></div>}
+        {(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <div><strong>{selectedCardIds.length.toLocaleString("ar")}</strong><span>كرت محدد للطباعة</span></div>}
+        {busy && <span className="card-results-loading">جارٍ تحديث النتائج…</span>}
+      </div>
       <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>أول استخدام</th><th>تاريخ الانتهاء</th><th>وقت الجلسات المستخدم / المتبقي</th><th>الوقت المتبقي للصلاحية</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>البيانات المستهلكة / المتبقية</th><th>حد المستخدمين المتزامنين (إعداد الباقة)</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.update") && <th>الإجراءات</th>}</tr></thead><tbody>
         {cards.map((card) => {
           const snapshot = card.plan_snapshot ?? {};
