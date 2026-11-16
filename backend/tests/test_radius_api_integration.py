@@ -720,3 +720,65 @@ def test_radius_chap_accepts_freeradius_octets_json_envelope(owner_client):
     )
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["control:Auth-Type"] == "Accept"
+
+
+def test_plan_rate_settings_are_snapshotted_and_applied_to_radius_reply(owner_client):
+    client, headers, _ = owner_client
+    router = _router(client, headers)
+    code = "RATE-" + secrets.token_hex(4).upper()
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "code": code,
+            "name": "Plan with RX TX settings",
+            "price": "12.00",
+            "settings": {
+                "shared_users": 2,
+                "group": "staff",
+                "rate_limit_rx": "2",
+                "rate_limit_tx": "1",
+                "rate_limit_unit": "Mbps",
+                "schedule": {
+                    "enabled": True,
+                    "days": ["0", "1", "2", "3", "4", "5", "6"],
+                    "from": "08:00",
+                    "to": "22:00",
+                },
+                "notifications": {"enabled": True, "remaining_percent": 70, "exhausted_percent": 95},
+            },
+        },
+    )
+    assert plan.status_code == 201, plan.text
+    username = "RATE" + secrets.token_hex(5).upper()
+    password = "rate-password-" + secrets.token_hex(4)
+    card = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": username,
+            "card_type": "separate_credentials",
+            "password": password,
+        },
+    )
+    assert card.status_code == 201, card.text
+
+    accepted = client.post(
+        "/internal/radius/authorize",
+        headers=_radius_headers(),
+        json={
+            "nas_identifier": router["nas_identifier"],
+            "username": username,
+            "password": password,
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["reply:Mikrotik-Rate-Limit"] == "2Mbps/1Mbps"
+
+    db = SessionLocal()
+    saved = db.get(Card, UUID(card.json()["id"]))
+    assert saved.plan_snapshot["settings"]["shared_users"] == 2
+    assert saved.plan_snapshot["settings"]["schedule"]["enabled"] is True
+    assert saved.plan_snapshot["settings"]["notifications"]["enabled"] is True
+    db.close()
