@@ -33,7 +33,7 @@ def _create_card(client, headers, point_id, label):
         headers=headers,
         json={
             "plan_id": plan.json()["id"],
-            "username": f"{label}{secrets.token_hex(5).upper()}",
+            "username": f"{label[:20]}{secrets.token_hex(5).upper()}",
             "card_type": "username_only",
             "point_of_sale_id": point_id,
         },
@@ -69,7 +69,7 @@ def _new_unprinted_card(client, headers, point_id, label):
         headers=headers,
         json={
             "plan_id": plan.json()["id"],
-            "username": f"{label}{secrets.token_hex(5).upper()}",
+            "username": f"{label[:20]}{secrets.token_hex(5).upper()}",
             "card_type": "username_only",
             "point_of_sale_id": point_id,
         },
