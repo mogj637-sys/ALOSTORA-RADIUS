@@ -188,7 +188,7 @@ def _style_sheet(sheet):
             cell.alignment = Alignment(horizontal="right", vertical="center")
 
 
-@router.get("/points-of-sale", response_model=PosReportResponse)
+@router.get("/points-of-sale", response_model=PosReportResponse, dependencies=[Depends(require_permission("finance.view"))])
 def points_of_sale_report(
     date_from: date = Query(...), date_to: date = Query(...),
     db: Session = Depends(get_db),
@@ -196,7 +196,7 @@ def points_of_sale_report(
     return _report_data(date_from, date_to, db)
 
 
-@router.get("/points-of-sale/export.xlsx")
+@router.get("/points-of-sale/export.xlsx", dependencies=[Depends(require_permission("finance.view"))])
 def export_points_of_sale_report(
     date_from: date = Query(...), date_to: date = Query(...),
     db: Session = Depends(get_db),
@@ -225,7 +225,7 @@ def export_points_of_sale_report(
     return _workbook_response(workbook, f"pos-report-{date_from}-{date_to}.xlsx")
 
 
-@router.get("/points-of-sale/{point_id}/statement", response_model=PosStatementResponse)
+@router.get("/points-of-sale/{point_id}/statement", response_model=PosStatementResponse, dependencies=[Depends(require_permission("finance.view"))])
 def point_of_sale_statement(
     point_id: int, date_from: date = Query(...), date_to: date = Query(...),
     db: Session = Depends(get_db),
@@ -233,7 +233,7 @@ def point_of_sale_statement(
     return _statement_data(point_id, date_from, date_to, db)
 
 
-@router.get("/points-of-sale/{point_id}/statement/export.xlsx")
+@router.get("/points-of-sale/{point_id}/statement/export.xlsx", dependencies=[Depends(require_permission("finance.view"))])
 def export_point_of_sale_statement(
     point_id: int, date_from: date = Query(...), date_to: date = Query(...),
     db: Session = Depends(get_db),
