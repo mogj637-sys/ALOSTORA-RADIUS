@@ -647,12 +647,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
   }
 
-  async function loadCards(search = cardSearch, offset = cardOffset, batchId = cardBatchFilter) {
+  async function loadCards(search = cardSearch, offset = cardOffset, batchId = cardBatchFilter, statusFilter = cardStatusFilter, planFilter = cardPlanFilter) {
     const params = new URLSearchParams({ offset: String(offset), limit: "200" });
     if (search.trim()) params.set("search", search.trim());
     if (batchId) params.set("batch_id", batchId);
-    if (cardStatusFilter) params.set("status", cardStatusFilter);
-    if (cardPlanFilter) params.set("plan_id", cardPlanFilter);
+    if (statusFilter) params.set("status", statusFilter);
+    if (planFilter) params.set("plan_id", planFilter);
     const result = await apiRequest<Card[]>(token, `/api/v1/cards?${params.toString()}`);
     setCards(result);
     setHasMoreCards(result.length === 200);
@@ -1476,8 +1476,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       </div>
       <div className="card-management-filters">
         <label htmlFor="card-search">بحث في الكروت<input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0, cardBatchFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" /></label>
-        <label htmlFor="card-status-filter">الحالة<select id="card-status-filter" value={cardStatusFilter} onChange={(e) => { setCardStatusFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الحالة")); }}><option value="">كل الحالات</option><option value="generated">منشأ</option><option value="allocated">مخصص لنقطة بيع</option><option value="active">متصل</option><option value="suspended">موقوف</option><option value="cancelled">ملغي</option><option value="printed_free">مجاني مطبوع</option><option value="expired">منتهي الصلاحية</option><option value="exhausted">نفد الرصيد</option></select></label>
-        <label htmlFor="card-plan-filter">الباقة<select id="card-plan-filter" value={cardPlanFilter} onChange={(e) => { setCardPlanFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الباقة")); }}><option value="">كل الباقات</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
+        <label htmlFor="card-status-filter">الحالة<select id="card-status-filter" value={cardStatusFilter} onChange={(e) => { setCardStatusFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, e.target.value, cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الحالة")); }}><option value="">كل الحالات</option><option value="generated">منشأ</option><option value="allocated">مخصص لنقطة بيع</option><option value="active">متصل</option><option value="suspended">موقوف</option><option value="cancelled">ملغي</option><option value="printed_free">مجاني مطبوع</option><option value="expired">منتهي الصلاحية</option><option value="exhausted">نفد الرصيد</option></select></label>
+        <label htmlFor="card-plan-filter">الباقة<select id="card-plan-filter" value={cardPlanFilter} onChange={(e) => { setCardPlanFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, cardStatusFilter, e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الباقة")); }}><option value="">كل الباقات</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
         <button type="button" className="table-action" onClick={() => { setCardSearch(""); setCardStatusFilter(""); setCardPlanFilter(""); setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards("", 0, "").catch((err) => setError(err instanceof Error ? err.message : "تعذر إعادة ضبط الفلاتر")); }}>مسح الفلاتر</button>
       </div>
       <div className="table-wrap"><table><thead><tr><th>تحديد</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>
