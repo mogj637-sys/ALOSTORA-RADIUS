@@ -1524,7 +1524,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div><h2>حسابات الإدارة والموظفين</h2><p>إنشاء حسابات دخول مستقلة وتحديد الدور الإداري لكل حساب.</p></div>
           <span className="count-tag">{adminAccounts.length.toLocaleString("ar")} حساب</span>
         </div>
-        <div className="notice">يمكنك إنشاء دور مستقل لكل وظيفة، ثم تحديد صلاحياته. صلاحية «عرض نقاط البيع» تتيح الوصول إلى جميع نقاط البيع، وفق اختيارك.</div>
+        <div className="notice">يمكنك إنشاء دور مستقل لكل وظيفة، ثم تحديد صلاحياته. حدد نقاط البيع المسموح بها لكل حساب؛ الموظف يرى كروت النقاط المرتبطة به فقط، ويمكن ربط الحساب بأكثر من نقطة.</div>
         <form className="panel form-grid admin-create-form" onSubmit={createAdminRole}>
           <div className="section-heading"><div><h3>إنشاء دور وظيفي جديد</h3><p>مثال: موظف نقاط البيع، محاسب، مسؤول طباعة.</p></div></div>
           <label>رمز الدور بالإنجليزية<input value={roleDraft.code} onChange={(event) => setRoleDraft({ ...roleDraft, code: event.target.value })} minLength={3} maxLength={60} pattern="[a-z][a-z0-9_]+" placeholder="pos_staff" required /></label>
@@ -2201,7 +2201,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <div className="section-heading compact-heading"><div><h2>الكروت الجاهزة للتخصيص</h2><p>حدد الكروت المنشأة وغير المخصصة. عند التسجيل تُرحّل القيمة التجارية مرة واحدة فقط.</p></div><span className="count-tag">{printableCards.length} كرت</span></div>
             <div className="card-search">
               <label htmlFor="pos-card-search">بحث عن كرت</label>
-              <input id="pos-card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder="اسم المستخدم أو الرقم التسلسلي" />
+              <input id="pos-card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); loadCards(e.target.value, 0).catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder={user.roles.includes("owner") || user.point_of_sale_ids.length > 0 ? "اسم المستخدم أو الرقم التسلسلي" : "أدخل اسم المستخدم أو الرقم التسلسلي كاملاً"} />
               <button type="button" className="table-action" onClick={() => loadCards(cardSearch, cardOffset).catch((err) => setError(err instanceof Error ? err.message : "تعذر التحديث"))}>تحديث</button>
             </div>
             <div className="table-wrap">
