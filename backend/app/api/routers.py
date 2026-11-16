@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_owner
+from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.core import Router
 from app.schemas.routers import RouterCreate, RouterResponse, RouterUpdate
@@ -14,7 +14,7 @@ from app.services.router_secrets import (
 router = APIRouter(
     prefix="/api/v1/routers",
     tags=["routers"],
-    dependencies=[Depends(get_current_owner)],
+    dependencies=[Depends(require_permission("routers.view"))],
 )
 
 
@@ -33,7 +33,7 @@ def list_routers(include_inactive: bool = False, db: Session = Depends(get_db)):
     return query.order_by(Router.id.desc()).all()
 
 
-@router.post("", response_model=RouterResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RouterResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("routers.manage"))])
 def create_router(payload: RouterCreate, db: Session = Depends(get_db)):
     values = payload.model_dump(exclude={"api_secret", "radius_secret"})
     values["radius_secret_encrypted"] = _encrypt(payload.radius_secret)
@@ -49,7 +49,7 @@ def create_router(payload: RouterCreate, db: Session = Depends(get_db)):
     return item
 
 
-@router.patch("/{router_id}", response_model=RouterResponse)
+@router.patch("/{router_id}", response_model=RouterResponse, dependencies=[Depends(require_permission("routers.manage"))])
 def update_router(router_id: int, payload: RouterUpdate, db: Session = Depends(get_db)):
     item = db.get(Router, router_id)
     if item is None:
