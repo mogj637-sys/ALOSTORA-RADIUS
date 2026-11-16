@@ -23,8 +23,8 @@ def list_plans(
     return query.order_by(Plan.id.desc()).all()
 
 
-@router.post("", response_model=PlanResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("plans.manage"))])
-def create_plan(payload: PlanCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("plans.manage"))):
+@router.post("", response_model=PlanResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("plans.create"))])
+def create_plan(payload: PlanCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("plans.create"))):
     plan = Plan(**payload.model_dump())
     db.add(plan)
     try:
@@ -38,8 +38,8 @@ def create_plan(payload: PlanCreate, db: Session = Depends(get_db), user: AdminU
     return plan
 
 
-@router.patch("/{plan_id}", response_model=PlanResponse, dependencies=[Depends(require_permission("plans.manage"))])
-def update_plan(plan_id: int, payload: PlanUpdate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("plans.manage"))):
+@router.patch("/{plan_id}", response_model=PlanResponse, dependencies=[Depends(require_permission("plans.create"))])
+def update_plan(plan_id: int, payload: PlanUpdate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("plans.update"))):
     plan = db.get(Plan, plan_id)
     if plan is None:
         raise HTTPException(status_code=404, detail="الباقة غير موجودة")
