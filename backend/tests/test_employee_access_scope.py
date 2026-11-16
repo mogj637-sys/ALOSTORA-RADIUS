@@ -175,7 +175,7 @@ def test_employee_can_search_any_pos_card_but_cannot_browse_all_cards_or_pos_fin
         # Once a card is found, the employee can inspect its complete session
         # history, including sessions created through another point of sale.
         history = client.get(
-            f"/api/v1/cards/{card_b['id']}/sessions",
+            f"/api/v1/cards/{card_b['id']}/sessions?search={card_b['username']}",
             headers=staff_headers,
         )
         assert history.status_code == 200, history.text
