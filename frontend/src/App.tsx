@@ -1036,7 +1036,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     if (page === "admins" && user.roles.includes("owner")) {
       setError("");
       loadAdminAccounts().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل حسابات الإدارة"));
-    }\n    if (page === "overview") {
+    }
+    if (page === "overview") {
       setError("");
       loadRadiusOverview().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل لوحة المعلومات"));
     }
