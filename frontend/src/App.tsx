@@ -1287,6 +1287,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   function renderPos() {
     const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
+    const selectedLayout = selectedTemplate?.layout ?? {};
+    const layoutPosition = (xKey: string, yKey: string) =>
+      selectedLayout[xKey] === undefined || selectedLayout[yKey] === undefined
+        ? undefined
+        : { position: "absolute" as const, left: String(selectedLayout[xKey]) + "%", top: String(selectedLayout[yKey]) + "%", transform: "translate(-50%, -50%)", width: "88%" };
     const printableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
     const selectedPoint = points.find((point) => String(point.id) === selectedPosId);
     return (
@@ -1402,13 +1407,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 </div>
                 <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"}>
                   {printPreviewCards.map((card) => (
-                    <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, minHeight: `${selectedTemplate.height_mm}mm` } : undefined}>
+                    <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { position: "relative", background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, minHeight: `${selectedTemplate.height_mm}mm`, fontFamily: String(selectedLayout.font_family ?? "Arial"), fontSize: `${Number(selectedLayout.font_size ?? 12)}px`, border: selectedLayout.show_border === false ? "none" : `${Number(selectedLayout.border_width ?? 1)}px solid ${String(selectedLayout.border_color ?? "#b9d9c8")}` } : undefined}>
                       <div className="voucher-head"><strong>الأسطورة نت</strong><span>{card.is_free ? "كرت مجاني" : "بطاقة إنترنت"}</span></div>
-                      {printOptions.show_plan && <div className="voucher-plan"><span>الباقة</span><strong>{card.plan_name}</strong></div>}
-                      {printOptions.show_username && <div className="voucher-user"><span>اسم المستخدم</span><strong>{card.username}</strong></div>}
-                      {printOptions.show_password && <div className="voucher-password"><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>}
-                      {printOptions.show_limits && <div className="voucher-limits"><span>{card.data_limit_bytes == null ? "رصيد مفتوح" : (Number(card.data_limit_bytes) / (1024 ** 2)).toFixed(0) + " MB"} · {card.session_time_limit_seconds == null ? "وقت مفتوح" : (Number(card.session_time_limit_seconds) / 3600).toFixed(0) + " ساعة"} · {card.validity_period_seconds == null ? "صلاحية مفتوحة" : (Number(card.validity_period_seconds) / 86400).toFixed(0) + " يوم"}</span></div>}
-                      <div className="voucher-foot"><span>{printOptions.show_serial_number ? card.serial_number : ""}</span><strong>{printOptions.show_price ? (card.is_free ? "مجاني" : Number(card.price_snapshot).toLocaleString("en-US") + " ريال") : ""}</strong></div>
+                      {printOptions.show_plan && selectedLayout.show_plan !== false && <div className="voucher-plan"><span>الباقة</span><strong>{card.plan_name}</strong></div>}
+                      {printOptions.show_username && selectedLayout.show_username !== false && <div className="voucher-user" style={layoutPosition("username_x", "username_y")}><span>اسم المستخدم</span><strong>{card.username}</strong></div>}
+                      {printOptions.show_password && selectedLayout.show_password !== false && <div className="voucher-password" style={layoutPosition("password_x", "password_y")}><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>}
+                      {printOptions.show_limits && selectedLayout.show_limits !== false && <div className="voucher-limits"><span>{card.data_limit_bytes == null ? "رصيد مفتوح" : (Number(card.data_limit_bytes) / (1024 ** 2)).toFixed(0) + " MB"} · {card.session_time_limit_seconds == null ? "وقت مفتوح" : (Number(card.session_time_limit_seconds) / 3600).toFixed(0) + " ساعة"} · {card.validity_period_seconds == null ? "صلاحية مفتوحة" : (Number(card.validity_period_seconds) / 86400).toFixed(0) + " يوم"}</span></div>}
+                      <div className="voucher-foot"><span style={layoutPosition("serial_x", "serial_y")}>{printOptions.show_serial_number && selectedLayout.show_serial_number !== false ? card.serial_number : ""}</span><strong style={layoutPosition("price_x", "price_y")}>{printOptions.show_price && selectedLayout.show_price !== false ? (card.is_free ? "مجاني" : Number(card.price_snapshot).toLocaleString("en-US") + " ريال") : ""}</strong></div>
                     </article>
                   ))}
                 </div>
