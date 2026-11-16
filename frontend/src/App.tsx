@@ -1291,7 +1291,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <label>اسم المستخدم<input value={adminDraft.username} onChange={(event) => setAdminDraft({ ...adminDraft, username: event.target.value })} minLength={3} maxLength={80} pattern="[A-Za-z0-9_.-]+" autoComplete="off" required /></label>
           <label>اسم الموظف<input value={adminDraft.displayName} onChange={(event) => setAdminDraft({ ...adminDraft, displayName: event.target.value })} minLength={2} maxLength={150} required /></label>
           <label>كلمة المرور<input type="password" value={adminDraft.password} onChange={(event) => setAdminDraft({ ...adminDraft, password: event.target.value })} minLength={12} maxLength={256} autoComplete="new-password" required /></label>
-          <label>الدور الإداري<select value={adminDraft.roleCode} onChange={(event) => setAdminDraft({ ...adminDraft, roleCode: event.target.value })} required>{adminRoles.map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}</select></label>
+          <label>الدور الإداري<select value={adminDraft.roleCode} onChange={(event) => setAdminDraft({ ...adminDraft, roleCode: event.target.value })} required>{adminRoles.filter((role) => role.code !== "owner").map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}</select></label>
           <div className="form-actions"><button type="submit" disabled={busy || adminRoles.length === 0}>{busy ? "جارٍ الحفظ..." : "إنشاء حساب"}</button></div>
         </form>
         <section className="panel admin-permission-matrix">
@@ -1325,7 +1325,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <tbody>{adminAccounts.map((account) => <tr key={account.id}>
               <td><strong dir="ltr">{account.username}</strong></td><td>{account.display_name}</td>
               <td><select aria-label={`دور ${account.username}`} defaultValue={account.roles[0] ?? "viewer"} onChange={(event) => updateAdminAccount(account, { role_codes: [event.target.value] })} disabled={busy || account.id === user.id}>
-                {adminRoles.map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}
+                {adminRoles.filter((role) => role.code !== "owner" || account.roles.includes("owner")).map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}
               </select></td>
               <td>{account.last_login_at ? new Date(account.last_login_at).toLocaleString("ar") : "لم يسجل الدخول"}</td>
               <td><span className={account.is_active ? "admin-status active" : "admin-status inactive"}>{account.is_active ? "نشط" : "متوقف"}</span></td>
