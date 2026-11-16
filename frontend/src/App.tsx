@@ -53,6 +53,7 @@ type Card = {
   upload_bytes: number;
   download_bytes: number;
   plan_snapshot: Record<string, unknown>;
+  active_sessions_count: number;
 };
 
 type CardBatchRecord = {
@@ -1484,7 +1485,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <label htmlFor="card-plan-filter">الباقة<select id="card-plan-filter" value={cardPlanFilter} onChange={(e) => { setCardPlanFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, cardStatusFilter, e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الباقة")); }}><option value="">كل الباقات</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
         <button type="button" className="table-action" onClick={() => { setCardSearch(""); setCardStatusFilter(""); setCardPlanFilter(""); setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards("", 0, "", "", "").catch((err) => setError(err instanceof Error ? err.message : "تعذر إعادة ضبط الفلاتر")); }}>مسح الفلاتر</button>
       </div>
-      <div className="table-wrap"><table><thead><tr><th>تحديد</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>الوقت المستخدم / المتبقي</th><th>الاستهلاك (رفع / تنزيل)</th><th>السرعة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>
+      <div className="table-wrap"><table><thead><tr><th>تحديد</th><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>الوقت المستخدم / المتبقي</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>السرعة</th><th>مجاني</th><th>الإجراءات</th></tr></thead><tbody>
         {cards.map((card) => {
           const snapshot = card.plan_snapshot ?? {};
           const timeLimit = typeof snapshot.session_time_limit_seconds === "number" ? snapshot.session_time_limit_seconds : null;
@@ -1507,6 +1508,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td>
             <td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td>
             <td>{formatDuration(card.used_seconds)} / {remaining === null ? "مفتوح" : formatDuration(remaining)}</td>
+            <td>{card.active_sessions_count.toLocaleString("ar")}</td>
             <td>{formatBytes(card.upload_bytes)} / {formatBytes(card.download_bytes)}</td>
             <td>{speed}</td><td>{card.is_free ? "نعم" : "لا"}</td>
             <td className="actions-cell">{card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null}{["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button>}</td>
