@@ -189,13 +189,15 @@ def update_admin(
         raise HTTPException(status_code=400, detail="لا يمكن تعطيل حسابك الحالي أو سحب صلاحية مدير النظام منه")
 
     if user.is_active and any(role.code == "owner" for role in user.roles) and (not next_active or not keeps_owner):
-        active_owners = (
-            db.query(AdminUser)
+        active_owner_rows = (
+            db.query(AdminUser.id)
             .join(AdminUser.roles)
             .filter(AdminUser.is_active.is_(True), Role.code == "owner")
-            .count()
+            .order_by(AdminUser.id)
+            .with_for_update()
+            .all()
         )
-        if active_owners <= 1:
+        if len(active_owner_rows) <= 1:
             raise HTTPException(status_code=400, detail="لا يمكن تعطيل أو تخفيض صلاحية آخر مدير نظام")
 
     before = {
