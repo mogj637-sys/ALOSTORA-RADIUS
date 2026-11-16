@@ -328,7 +328,7 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
 }
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
-  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "routers" | "reports" | "templates">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "routers" | "reports" | "templates">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [routers, setRouters] = useState<RouterRecord[]>([]);
   const [userManagerProbe, setUserManagerProbe] = useState<UserManagerProbe | null>(null);
@@ -791,7 +791,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   useEffect(() => {
     if (page !== "pos") setPrintPreviewCards([]);
-    if (page === "pos" || page === "templates") {
+    if (page === "pos" || page === "pos-management" || page === "templates") {
       loadCardTemplates().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل قوالب الطباعة"));
     }
     if (page === "templates") setError("");
@@ -804,7 +804,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       Promise.all([
         loadPlans(),
         page === "cards" || page === "card-create" || page === "pos" ? loadCards() : Promise.resolve(),
-        page === "pos" ? loadPointsOfSale() : Promise.resolve(),
+        page === "pos" || page === "pos-management" ? loadPointsOfSale() : Promise.resolve(),
         page === "routers" ? loadRouters() : Promise.resolve(),
       ]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل البيانات"));
     }
@@ -1124,6 +1124,35 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     </>;
   }
 
+  function renderPosManagement() {
+    return (
+      <>
+        <div className="section-heading">
+          <div><h2>إدارة نقاط البيع</h2><p>أضف نقاط البيع هنا مرة واحدة، ثم اخترها لاحقاً عند إنشاء دفعات الكروت والطباعة.</p></div>
+          <span className="count-tag">{points.length} نقطة بيع</span>
+        </div>
+        <form className="panel form-grid" onSubmit={createPointOfSale}>
+          <label>رمز نقطة البيع<input value={posDraft.code} onChange={(e) => setPosDraft({ ...posDraft, code: e.target.value })} required minLength={2} maxLength={50} pattern="[A-Za-z0-9_-]+" /></label>
+          <label>اسم نقطة البيع<input value={posDraft.name} onChange={(e) => setPosDraft({ ...posDraft, name: e.target.value })} required minLength={2} maxLength={150} /></label>
+          <label>اسم المسؤول<input value={posDraft.contactName} onChange={(e) => setPosDraft({ ...posDraft, contactName: e.target.value })} maxLength={150} /></label>
+          <label>رقم الهاتف<input value={posDraft.phone} onChange={(e) => setPosDraft({ ...posDraft, phone: e.target.value })} maxLength={40} /></label>
+          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "إضافة نقطة بيع"}</button></div>
+        </form>
+        <div className="table-wrap">
+          <table><thead><tr><th>الرمز</th><th>اسم نقطة البيع</th><th>المسؤول</th><th>الهاتف</th><th>الحالة</th><th>الإجراء</th></tr></thead>
+            <tbody>{points.map((point) => <tr key={point.id}>
+              <td>{point.code}</td><td>{point.name}</td><td>{point.contact_name || "—"}</td><td>{point.phone || "—"}</td>
+              <td>{point.is_active ? "مفعلة" : "متوقفة"}</td>
+              <td><button type="button" className="table-action" disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف" : "تفعيل"}</button></td>
+            </tr>)}</tbody>
+          </table>
+          {points.length === 0 && <div className="empty-state">لا توجد نقاط بيع. أضف أول نقطة بيع من النموذج أعلاه.</div>}
+        </div>
+        <div className="notice">إيقاف نقطة البيع يمنع اختيارها في عمليات الطباعة الجديدة، ولا يحذف سجلها أو حركاتها السابقة.</div>
+      </>
+    );
+  }
+
   function renderPos() {
     const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
     const printableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
@@ -1131,15 +1160,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     return (
       <>
         <div className="section-heading">
-          <div><h2>نقاط البيع والطباعة</h2><p>أنشئ نقاط البيع، راجع قيمة الكروت المطبوعة، وسجل الطباعة أو أعد طباعة دفعة سابقة.</p></div>
+          <div><h2>الطباعة والدفعات</h2><p>اختر نقطة بيع مسجلة مسبقاً، وحدد الكروت ثم سجل الطباعة أو أعد طباعة دفعة سابقة.</p></div>
         </div>
-        <form className="panel form-grid" onSubmit={createPointOfSale}>
-          <label>رمز نقطة البيع<input value={posDraft.code} onChange={(e) => setPosDraft({ ...posDraft, code: e.target.value })} required minLength={2} maxLength={50} /></label>
-          <label>اسم نقطة البيع<input value={posDraft.name} onChange={(e) => setPosDraft({ ...posDraft, name: e.target.value })} required minLength={2} maxLength={150} /></label>
-          <label>اسم المسؤول<input value={posDraft.contactName} onChange={(e) => setPosDraft({ ...posDraft, contactName: e.target.value })} /></label>
-          <label>رقم الهاتف<input value={posDraft.phone} onChange={(e) => setPosDraft({ ...posDraft, phone: e.target.value })} /></label>
-          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "إضافة نقطة بيع"}</button></div>
-        </form>
 
         <div className="pos-toolbar">
           <label>اختر نقطة البيع
@@ -1529,7 +1551,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات ومزامنة اليوزرمنجر</button>
             <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>تقارير اليوزرمنجر / المالية</button>
           </div>
-          <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>نقاط البيع والطباعة</button>
+          <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>
+          <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>
           <button className={page === "templates" ? "nav-item active" : "nav-item"} onClick={() => setPage("templates")}>تصاميم الكروت</button>
           <div className="nav-group muted"><span>أقسام قيد التطوير</span><small>نظام الهوتسبوت · الكفتيريا والهوست · أجهزة البث · محرر الصفحات · الخدمات الإضافية · الإعدادات والصيانة</small></div>
         </nav>
@@ -1537,12 +1560,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "نقاط البيع والطباعة" : page === "reports" ? "تقارير اليوزرمنجر والمالية" : page === "templates" ? "استديو تصميم الكروت" : "إدارة أجهزة MikroTik"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "الطباعة والدفعات" : page === "pos-management" ? "إدارة نقاط البيع" : page === "reports" ? "تقارير اليوزرمنجر والمالية" : page === "templates" ? "استديو تصميم الكروت" : "إدارة أجهزة MikroTik"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "card-create" ? renderCardCreate() : page === "pos" ? renderPos() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
+        {page === "overview" ? renderOverview() : page === "plans" ? renderPlans() : page === "cards" ? renderCards() : page === "card-create" ? renderCardCreate() : page === "pos" ? renderPos() : page === "pos-management" ? renderPosManagement() : page === "reports" ? renderReports() : page === "templates" ? renderTemplates() : renderRouters()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
