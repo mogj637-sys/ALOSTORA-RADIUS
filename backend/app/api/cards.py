@@ -40,6 +40,7 @@ def _plan_snapshot(plan: Plan) -> dict:
         "session_time_limit_seconds": plan.session_time_limit_seconds,
         "validity_period_seconds": plan.validity_period_seconds,
         "speed_profile": plan.speed_profile,
+        "settings": plan.settings or {},
     }
 
 
