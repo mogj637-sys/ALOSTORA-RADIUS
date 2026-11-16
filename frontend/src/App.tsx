@@ -1620,7 +1620,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createSingle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!can("cards.create")) { setError("ليست لديك صلاحية إنشاء الكروت."); return; }
+    if (!can("cards.create") || !can("cards.credentials")) { setError("تتطلب إضافة الكروت صلاحية الإنشاء وصلاحية عرض بيانات الدخول."); return; }
     const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
     const linkedPlan = selectedTemplate?.plan_id ? plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
     if (!selectedTemplate || !linkedPlan) { setError("اختر قالباً مرتبطاً بباقة مفعّلة قبل إنشاء الكرت."); return; }
@@ -1652,7 +1652,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createBatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!can("cards.create")) { setError("ليست لديك صلاحية إنشاء دفعات الكروت."); return; }
+    if (!can("cards.create") || !can("cards.credentials")) { setError("تتطلب إضافة الدفعات صلاحية الإنشاء وصلاحية عرض بيانات الدخول."); return; }
     const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
     const linkedPlan = selectedTemplate?.plan_id ? plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
     if (!selectedTemplate || !linkedPlan) { setError("اختر قالباً مرتبطاً بباقة مفعّلة قبل إنشاء الدفعة."); return; }
@@ -2964,7 +2964,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           {user.roles.includes("owner") && <button className={page === "admins" ? "nav-item active" : "nav-item"} onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات</button>}
 
           {(can("cards.view") || can("cards.create") || can("plans.view") || can("routers.view") || can("reports.view") || can("templates.view")) && <div className="nav-group"><span>إدارة النظام</span>
-            {can("cards.create") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
+            {can("cards.create") && can("cards.credentials") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
             {can("cards.view") && <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>}
             {can("plans.view") && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>}
             {can("routers.view") && <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات</button>}
@@ -2986,7 +2986,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "pos" && can("printing.view") && can("cards.view") && can("pos.view") ? renderPos() : page === "pos-management" && can("pos.view") ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && can("reports.view") ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("cards.credentials") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "pos" && can("printing.view") && can("cards.view") && can("pos.view") ? renderPos() : page === "pos-management" && can("pos.view") ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && can("reports.view") ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
