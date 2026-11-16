@@ -303,7 +303,7 @@ type PosAccountEntry = {
 
 type CardsReportData = { total_cards: number; total_value: number; used_seconds: number; upload_bytes: number; download_bytes: number; by_status: { status: string; count: number }[]; by_plan: { plan_name: string; count: number }[] };
 type SessionsReportData = { total_sessions: number; unique_users: number; session_seconds: number; upload_bytes: number; download_bytes: number; active_sessions: number; by_router: { router_name: string; sessions: number }[] };
-type BatchesReportData = { total_batches: number; total_cards: number; items: { batch_id: string; batch_number: string; created_at: string; plan_name: string; point_of_sale_name: string | null; quantity: number; generated_cards: number }[] };
+type BatchesReportData = { total_batches: number; total_cards: number; items: { batch_id: string; batch_number: string; created_at: string; plan_name: string; point_of_sale_name: string | null; quantity: number; generated_cards: number; is_online_sale: boolean; note: string | null }[] };
 type PrintingReportData = { total_jobs: number; total_cards_printed: number; reprint_jobs: number; items: { id: string; created_at: string; point_of_sale_name: string; card_count: number; is_reprint: boolean; template_code: string | null }[] };
 
 type PosReportRow = {
@@ -2132,120 +2132,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button type="button" className="table-action" disabled={busy} onClick={() => loadCardBatches().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث الدفعات"))}>تحديث</button>
         </div>
         <div className="table-wrap">
-          <table><thead><tr><th>رقم الدفعة</th><th>الباقة</th><th>القالب</th><th>نقطة البيع</th><th>عدد الكروت</th><th>المطبوع</th><th>التاريخ</th><th>الإجراء</th></tr></thead>
+          <table><thead><tr><th>رقم الدفعة</th><th>الباقة</th><th>القالب</th><th>نقطة البيع</th><th>عدد الكروت</th><th>المطبوع</th><th>نوع البيع</th><th>ملاحظة</th><th>التاريخ</th><th>الإجراء</th></tr></thead>
             <tbody>{cardBatches.map((batch) => <tr key={batch.batch_id}>
               <td>{batch.batch_number}</td><td>{batch.plan_name}</td><td>{batch.template_code || "—"}</td><td>{batch.point_of_sale_name || "لم تحدد"}</td>
-              <td>{batch.quantity}</td><td>{batch.printed_count}</td><td>{new Date(batch.created_at).toLocaleString("ar")}</td>
+              <td>{batch.quantity}</td><td>{batch.printed_count}</td><td>{batch.is_online_sale ? "أونلاين" : "عادي"}</td><td>{batch.note || "—"}</td><td>{new Date(batch.created_at).toLocaleString("ar")}</td>
               <td><button type="button" className="table-action" onClick={() => { setCardBatchFilter(batch.batch_id); setCardSearch(""); setCardOffset(0); setPage("cards"); loadCards("", 0, batch.batch_id).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل كروت الدفعة")); }}>عرض الكروت</button></td>
-            </tr>)}</tbody>
-          </table>
-          {cardBatches.length === 0 && <div className="empty-state">لا توجد دفعات كروت مسجلة بعد.</div>}
-        </div>
-      </>
-    );
-  }
-
-  function renderRadiusSessions() {
-    const formatDateTime = (value: string | null) => value
-      ? new Date(value).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" })
-      : "—";
-    const formatDuration = (seconds: number) => {
-      const safe = Math.max(0, Math.floor(seconds));
-      const days = Math.floor(safe / 86400);
-      const hours = Math.floor((safe % 86400) / 3600);
-      const minutes = Math.floor((safe % 3600) / 60);
-      return days ? `${days} يوم ${hours} س` : hours ? `${hours} س ${minutes} د` : `${minutes} د`;
-    };
-    const formatBytes = (bytes: number) => {
-      const mb = Math.max(0, bytes) / (1024 * 1024);
-      return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
-    };
-    return <>
-      <div className="section-heading">
-        <div><h2>جلسات المستخدمين النشطة</h2><p>اتصالات المستخدمين الحالية التي سجلها نظام RADIUS الجديد من أجهزة الشبكة.</p></div>
-        <button type="button" className="table-action" disabled={busy} onClick={() => loadRadiusSessions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث جلسات المستخدمين"))}>تحديث الجلسات</button>
-      </div>
-      <div className="radius-session-summary">
-        <div><span>جلسات الاتصال النشطة</span><strong>{radiusSessions.active_count.toLocaleString("ar")}</strong></div>
-        <div><span>المستخدمون المتصلون (اكتف)</span><strong>{radiusSessions.active_users_count.toLocaleString("ar")}</strong></div>
-        <div><span>إجمالي الجلسات المسجلة</span><strong>{radiusSessions.total_count.toLocaleString("ar")}</strong></div>
-        <div><span>الجلسات المعروضة</span><strong>{radiusSessions.items.length.toLocaleString("ar")}</strong></div>
-      </div>
-      <p className="card-source-note">المصدر: سجل المحاسبة في قاعدة بيانات RADIUS. العدد النشط يعتمد على الجلسات التي لم يصل لها حدث إيقاف (Stop) بعد.</p>
-      <div className="table-wrap radius-sessions-table-wrap">
-        <table className="radius-sessions-table"><thead><tr><th>اسم المستخدم</th><th>الرقم التسلسلي</th><th>الراوتر</th><th>NAS Identifier</th><th>عنوان IP</th><th>MAC / الجهاز</th><th>بداية الجلسة</th><th>آخر تحديث</th><th>مدة الاتصال</th><th>رفع</th><th>تنزيل</th>{can("sessions.disconnect") && <th>الإجراء</th>}</tr></thead>
-          <tbody>{radiusSessions.items.map((session) => <tr key={session.id}>
-            <td>{session.username}</td><td>{session.serial_number}</td><td>{session.router_name}</td><td>{session.nas_identifier}</td>
-            <td>{session.framed_ip_address || "—"}</td><td>{session.calling_station_id || "—"}</td>
-            <td>{formatDateTime(session.started_at)}</td><td>{formatDateTime(session.last_update_at)}</td>
-            <td>{formatDuration(session.session_time_seconds)}</td><td>{formatBytes(session.upload_bytes)}</td><td>{formatBytes(session.download_bytes)}</td>{can("sessions.disconnect") && <td><button type="button" className="table-action danger-action" disabled={busy} onClick={() => disconnectRadiusSession(session.id)}>فصل الجلسة</button></td>}
-          </tr>)}</tbody>
-        </table>
-        {radiusSessions.items.length === 0 && <div className="empty-state">لا توجد جلسات مستخدمين نشطة مسجلة حالياً.</div>}
-      </div>
-    </>;
-  }
-
-  function renderCards() {
-    return <>
-      <div className="section-heading"><div><h2>{user.card_visibility !== "search_any" ? "إدارة الكروت" : "البحث عن كرت"}</h2><p>{user.card_visibility === "all" ? "عرض وإدارة جميع كروت النظام." : user.card_visibility === "assigned" ? "عرض وإدارة كروت نقاط البيع المرتبطة بحسابك." : "ابحث باسم المستخدم أو الرقم التسلسلي الكامل للوصول إلى كرت من أي نقطة بيع، ثم اعرض بياناته وجلساته."}</p></div>{user.card_visibility !== "search_any" && <span className="count-tag">200 كرت لكل صفحة</span>}</div>
-      {user.card_visibility !== "search_any" && cardBatchFilter && <div className="notice">تُعرض كروت الدفعة المحددة فقط. <button type="button" className="table-action" onClick={() => { setCardBatchFilter(""); loadCards(cardSearch, 0, "").catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت")); }}>إلغاء فلتر الدفعة</button></div>}
-      {user.card_visibility !== "search_any" && <div className="card-management-tabs" role="tablist" aria-label="تصنيفات إدارة الكروت">
-        <button type="button" role="tab" aria-selected={cardManagementTab === "all"} className={cardManagementTab === "all" ? "active" : ""} onClick={() => { setCardManagementTab("all"); setCardStatusFilter(""); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جميع الكروت")); }}>{user.card_visibility === "all" ? "جميع كروت النظام" : "كروت نقاط البيع المرتبطة"}</button>
-        <button type="button" role="tab" aria-selected={cardManagementTab === "expired"} className={cardManagementTab === "expired" ? "active" : ""} onClick={() => { setCardManagementTab("expired"); setCardStatusFilter("expired"); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "expired", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت المنتهية")); }}>الكروت المنتهية</button>
-        <button type="button" role="tab" aria-selected={cardManagementTab === "batches"} className={cardManagementTab === "batches" ? "active" : ""} onClick={() => { setCardManagementTab("batches"); loadCardBatches().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل دفعات الكروت")); }}>دفعات الكروت</button>
-        {can("sessions.view") && <button type="button" role="tab" aria-selected={cardManagementTab === "sessions"} className={cardManagementTab === "sessions" ? "active" : ""} onClick={() => { setCardManagementTab("sessions"); loadRadiusSessions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جلسات المستخدمين")); }}>جلسات المستخدمين ({radiusSessions.active_count.toLocaleString("ar")})</button>}
-      </div>}
-      {user.card_visibility !== "search_any" && cardManagementTab === "batches" ? renderBatches() : user.card_visibility !== "search_any" && cardManagementTab === "sessions" ? renderRadiusSessions() : <>
-      <p className="card-source-note">هذه القائمة تعرض الكروت المسجلة في قاعدة بيانات RADIUS. جلب كروت MikroTik مباشرة سيُضاف عند تنفيذ ربط مزامنة الراوتر.</p>
-      {can("printing.manage") && user.card_visibility !== "search_any" && <div className="card-selection-toolbar">
-        <label><input type="checkbox" checked={cards.length > 0 && cards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? [...new Set([...selectedCardIds, ...cards.map((card) => card.id)])] : selectedCardIds.filter((id) => !cards.some((card) => card.id === id)))} /> تحديد كروت الصفحة الحالية</label>
-        <span>تم تحديد {selectedCardIds.length} كرت</span><button type="button" disabled={!selectedCardIds.length} onClick={prepareSelectedCardsForPrinting}>تجهيز المحدد للطباعة</button>
-      </div>}
-      <div className="card-management-filters">
-        <label htmlFor="card-search">بحث في الكروت<input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardOffset(0); setCardSessionHistory(null); loadCards(e.target.value, 0, user.card_visibility !== "search_any" ? cardBatchFilter : "").catch((err) => setError(err instanceof Error ? err.message : "تعذر البحث")); }} placeholder={user.card_visibility !== "search_any" ? "اسم المستخدم أو الرقم التسلسلي" : "أدخل اسم المستخدم أو الرقم التسلسلي كاملاً"} /></label>
-        {user.card_visibility !== "search_any" && <>
-          <label htmlFor="card-status-filter">الحالة<select id="card-status-filter" value={cardStatusFilter} onChange={(e) => { setCardStatusFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, e.target.value, cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الحالة")); }}><option value="">كل الحالات</option><option value="generated">منشأ</option><option value="allocated">مخصص لنقطة بيع</option><option value="active">متصل</option><option value="suspended">موقوف</option><option value="cancelled">ملغي</option><option value="printed_free">مجاني مطبوع</option><option value="expired">منتهي الصلاحية</option><option value="exhausted">نفد الرصيد</option></select></label>
-          <label htmlFor="card-plan-filter">الباقة<select id="card-plan-filter" value={cardPlanFilter} onChange={(e) => { setCardPlanFilter(e.target.value); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, cardStatusFilter, e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الباقة")); }}><option value="">كل الباقات</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
-          <button type="button" className="table-action" onClick={() => { setCardSearch(""); setCardStatusFilter(""); setCardPlanFilter(""); setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards("", 0, "", "", "").catch((err) => setError(err instanceof Error ? err.message : "تعذر إعادة ضبط الفلاتر")); }}>مسح الفلاتر</button>
-        </>}
-      </div>
-      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{can("printing.manage") && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>آخر استخدام</th><th>تاريخ الانتهاء</th><th>الوقت المستخدم / المتبقي</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.manage") && <th>الإجراءات</th>}</tr></thead><tbody>
-        {cards.map((card) => {
-          const snapshot = card.plan_snapshot ?? {};
-          const timeLimit = typeof snapshot.session_time_limit_seconds === "number" ? snapshot.session_time_limit_seconds : null;
-          const remaining = timeLimit === null ? null : Math.max(0, timeLimit - card.used_seconds);
-          const speed = typeof snapshot.speed_profile === "string" && snapshot.speed_profile ? snapshot.speed_profile : "غير محددة";
-          const formatDateTime = (value: string | null) => value
-            ? new Date(value).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" })
-            : "—";
-          const formatDuration = (seconds: number) => {
-            const safe = Math.max(0, Math.floor(seconds));
-            const hours = Math.floor(safe / 3600);
-            const minutes = Math.floor((safe % 3600) / 60);
-            return hours ? `${hours} س ${minutes} د` : `${minutes} د`;
-          };
-          const formatBytes = (bytes: number) => {
-            if (bytes <= 0) return "0 ميجابايت";
-            const mb = bytes / (1024 * 1024);
-            return mb >= 1024 ? `${(mb / 1024).toFixed(2)} جيجابايت` : `${mb.toFixed(1)} ميجابايت`;
-          };
-          return <tr key={card.id}>
-            {can("printing.manage") && user.card_visibility !== "search_any" && <td><input type="checkbox" aria-label={`تحديد ${card.username}`} checked={selectedCardIds.includes(card.id)} onChange={() => toggleSelectedCard(card.id)} /></td>}
-            <td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td>
-            <td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td>
-            <td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td>
-            <td>{formatDateTime(card.first_used_at)}</td>
-            <td>{formatDateTime(card.expires_at)}</td>
-            <td>{formatDuration(card.used_seconds)} / {remaining === null ? "مفتوح" : formatDuration(remaining)}</td>
-            <td>{card.active_sessions_count.toLocaleString("ar")}</td>
-            <td>{formatBytes(card.upload_bytes)} / {formatBytes(card.download_bytes)}</td>
-            <td>{speed}</td><td>{card.is_free ? "نعم" : "لا"}</td>
-            {can("sessions.view") && <td><button type="button" className="table-action" onClick={() => loadCardSessionHistory(card)}>عرض الجلسات</button></td>}
-            {can("cards.manage") && user.card_visibility !== "search_any" && <td className="actions-cell">{card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null}{["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button>}</td>}
-          </tr>;
-        })}
-      </tbody></table>{cards.length === 0 && <div className="empty-state">لا توجد كروت تطابق البحث في هذه الصفحة.</div>}</div>
+            </tr>)}</tbody></table>{cards.length === 0 && <div className="empty-state">لا توجد كروت تطابق البحث في هذه الصفحة.</div>}</div>
       {cardSessionHistory && <section className="panel" style={{ marginTop: 16 }}>
         <div className="section-heading compact-heading">
           <div><h3>سجل جلسات الكرت</h3><p>{cardSessionHistory.username} — {cardSessionHistory.serial_number}</p></div>
