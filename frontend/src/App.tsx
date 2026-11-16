@@ -413,6 +413,7 @@ function LoginScreen({ onLogin }: { onLogin: (username: string, password: string
 }
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
+  const can = (permission: string) => user.roles.includes("owner") || user.permissions.includes(permission);
   const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins">("overview");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
@@ -2332,17 +2333,17 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
           {user.roles.includes("owner") && <button className={page === "admins" ? "nav-item active" : "nav-item"} onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات</button>}
 
-          <div className="nav-group"><span>نظام اليوزرمنجر</span>
-            <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>
-            <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>
-            <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>
-            <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات ومزامنة اليوزرمنجر</button>
-            <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>تقارير اليوزرمنجر / المالية</button>
-          </div>
-          <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>
-          <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>
-          <button className={page === "batches" ? "nav-item active" : "nav-item"} onClick={() => setPage("batches")}>دفعات الكروت</button>
-          <button className={page === "templates" ? "nav-item active" : "nav-item"} onClick={() => setPage("templates")}>تصاميم الكروت</button>
+          {(can("cards.view") || can("cards.manage") || can("plans.view") || can("routers.view") || can("reports.view")) && <div className="nav-group"><span>إدارة النظام</span>
+            {can("cards.manage") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
+            {can("cards.view") && <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>}
+            {can("plans.view") && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>}
+            {can("routers.view") && <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات</button>}
+            {can("reports.view") && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
+          </div>}
+          {can("pos.view") && <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>}
+          {can("printing.manage") && <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>}
+          {can("cards.view") && <button className={page === "batches" ? "nav-item active" : "nav-item"} onClick={() => setPage("batches")}>دفعات الكروت</button>}
+          {can("cards.manage") && <button className={page === "templates" ? "nav-item active" : "nav-item"} onClick={() => setPage("templates")}>تصاميم الكروت</button>}
           <div className="nav-group muted"><span>أقسام قيد التطوير</span><small>نظام الهوتسبوت · الكفتيريا والهوست · أجهزة البث · محرر الصفحات · الخدمات الإضافية · الإعدادات والصيانة</small></div>
         </nav>
         <div className="sidebar-foot">ALOSTORA-RADIUS · 0.4.0</div>
