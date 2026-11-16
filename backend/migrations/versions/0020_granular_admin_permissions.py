@@ -109,6 +109,11 @@ def downgrade() -> None:
     ).scalars().all()
     if permission_ids:
         bind.execute(
+            sa.text("DELETE FROM admin_user_permission_overrides WHERE permission_id IN :permission_ids")
+            .bindparams(sa.bindparam("permission_ids", expanding=True)),
+            {"permission_ids": permission_ids},
+        )
+        bind.execute(
             sa.text("DELETE FROM role_permissions WHERE permission_id IN :permission_ids")
             .bindparams(sa.bindparam("permission_ids", expanding=True)),
             {"permission_ids": permission_ids},
