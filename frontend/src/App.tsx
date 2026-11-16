@@ -372,6 +372,12 @@ type PrintJobHistory = {
   cards: { card_id: string; serial_number: string; username: string; is_free: boolean }[];
 };
 
+type CardPrintSelectionResolveResponse = {
+  total_requested: number;
+  matched_count: number;
+  items: { id: string; username: string; serial_number: string; plan_id: number; is_free: boolean }[];
+  unmatched: string[];
+};
 type PrintJobResult = {
   id: string;
   template_code: string | null;
@@ -1330,23 +1336,23 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     if (!file) return;
     setError(""); setNotice(""); setPrintImportSummary("");
     try {
+      if (!selectedPosId) throw new Error("اختر نقطة البيع قبل استيراد ملف الكروت.");
       const content = await file.text();
-      const values = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+      const values = Array.from(new Set(content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
         .map((line) => line.split(/[;,\t]/)[0].trim().replace(/^["']|["']$/g, ""))
-        .filter((value) => value && !["username", "user", "serial", "serial_number", "اسم المستخدم", "الرقم التسلسلي"].includes(value.toLowerCase()));
-      const available = new Map<string, string>();
-      cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null).forEach((card) => {
-        available.set(card.username.toLowerCase(), card.id);
-        available.set(card.serial_number.toLowerCase(), card.id);
+        .filter((value) => value && !["username", "user", "serial", "serial_number", "اسم المستخدم", "الرقم التسلسلي"].includes(value.toLowerCase())))).slice(0, 5000);
+      if (values.length === 0) throw new Error("الملف لا يحتوي أسماء مستخدمين أو أرقاماً تسلسلية صالحة.");
+      const result = await apiRequest<CardPrintSelectionResolveResponse>(token, "/api/v1/cards/print-selection/resolve", {
+        method: "POST",
+        body: JSON.stringify({ identifiers: values, point_of_sale_id: Number(selectedPosId) }),
       });
-      const matched = Array.from(new Set(values.map((value) => available.get(value.toLowerCase())).filter((id): id is string => !!id))).slice(0, 5000);
-      const unmatched = Math.max(0, values.length - matched.length);
+      const matched = result.items.map((item) => item.id);
       setSelectedPrintCardIds(matched);
-      setPrintImportSummary(`تم العثور على ${matched.length} كرت من أصل ${values.length} قيمة في الملف. غير المطابق: ${unmatched}. تتم المطابقة مع نتائج الكروت المحمّلة حالياً فقط.`);
+      setPrintImportSummary(`تم العثور على ${result.matched_count} كرت من أصل ${result.total_requested} قيمة بعد البحث في قاعدة البيانات كاملة. غير المطابق أو غير المؤهل للطباعة: ${result.unmatched.length}.`);
       setPrintMode("file");
-      if (matched.length === 0) setError("لم يتم العثور على كروت مطابقة في النتائج المحمّلة. ابحث عن الكروت أولاً ثم أعد استيراد الملف.");
-    } catch {
-      setError("تعذر قراءة الملف. استخدم CSV أو TXT يحتوي اسم مستخدم أو رقماً تسلسلياً في العمود الأول.");
+      if (matched.length === 0) setError("لم يتم العثور على كروت مؤهلة للطباعة في نقطة البيع المحددة.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر قراءة الملف. استخدم CSV أو TXT يحتوي اسم مستخدم أو رقماً تسلسلياً في العمود الأول.");
     } finally {
       event.target.value = "";
     }
