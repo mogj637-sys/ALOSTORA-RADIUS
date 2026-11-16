@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_permission
 from app.db.session import get_db
+from app.models.auth import AdminUser
 from app.models.core import Card, CardBatch, Plan, PointOfSale, PosAccountEntry, PrintJob, RadiusSession, Router
 from app.schemas.reports import (
     PosReportResponse, PosReportRow, PosReportTotals,
@@ -37,8 +38,10 @@ def _period_bounds(date_from: date, date_to: date):
     return start_at, end_at
 
 
-def _report_data(date_from: date, date_to: date, db: Session) -> PosReportResponse:
+def _report_data(date_from: date, date_to: date, db: Session, user: AdminUser) -> PosReportResponse:
     start_at, end_at = _period_bounds(date_from, date_to)
+    is_owner = any(role.code == "owner" for role in user.roles)
+    assigned_pos_ids = [point.id for point in user.point_of_sales]
     opening_rows = (
         db.query(
             PosAccountEntry.point_of_sale_id,
@@ -48,6 +51,7 @@ def _report_data(date_from: date, date_to: date, db: Session) -> PosReportRespon
             )), 0),
         )
         .filter(PosAccountEntry.created_at < start_at)
+        .filter(True if is_owner else PosAccountEntry.point_of_sale_id.in_(assigned_pos_ids))
         .group_by(PosAccountEntry.point_of_sale_id)
         .all()
     )
@@ -66,11 +70,15 @@ def _report_data(date_from: date, date_to: date, db: Session) -> PosReportRespon
             func.coalesce(func.sum(case(((PosAccountEntry.direction == "credit") & (~PosAccountEntry.entry_type.in_(("commission", "payment", "return"))), PosAccountEntry.amount), else_=0)), 0).label("other_credits"),
         )
         .filter(PosAccountEntry.created_at >= start_at, PosAccountEntry.created_at < end_at)
+        .filter(True if is_owner else PosAccountEntry.point_of_sale_id.in_(assigned_pos_ids))
         .group_by(PosAccountEntry.point_of_sale_id)
         .all()
     )
     period_by_point = {row[0]: row for row in period_rows}
-    points = db.query(PointOfSale).order_by(PointOfSale.name.asc(), PointOfSale.id.asc()).all()
+    points_query = db.query(PointOfSale)
+    if not is_owner:
+        points_query = points_query.filter(PointOfSale.id.in_(assigned_pos_ids)) if assigned_pos_ids else points_query.filter(PointOfSale.id.is_(None))
+    points = points_query.order_by(PointOfSale.name.asc(), PointOfSale.id.asc()).all()
     report_rows = []
     for point in points:
         aggregate = period_by_point.get(point.id)
@@ -111,8 +119,10 @@ def _report_data(date_from: date, date_to: date, db: Session) -> PosReportRespon
     )
 
 
-def _statement_data(point_id: int, date_from: date, date_to: date, db: Session) -> PosStatementResponse:
+def _statement_data(point_id: int, date_from: date, date_to: date, db: Session, user: AdminUser) -> PosStatementResponse:
     start_at, end_at = _period_bounds(date_from, date_to)
+    if not any(role.code == "owner" for role in user.roles) and point_id not in {point.id for point in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية الاطلاع على كشف نقطة البيع هذه")
     point = db.get(PointOfSale, point_id)
     if point is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
@@ -191,15 +201,15 @@ def _style_sheet(sheet):
 @router.get("/points-of-sale", response_model=PosReportResponse, dependencies=[Depends(require_permission("finance.view"))])
 def points_of_sale_report(
     date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("finance.view")),
 ):
-    return _report_data(date_from, date_to, db)
+    return _report_data(date_from, date_to, db, user)
 
 
 @router.get("/points-of-sale/export.xlsx", dependencies=[Depends(require_permission("finance.view"))])
 def export_points_of_sale_report(
     date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("finance.view")),
 ):
     report = _report_data(date_from, date_to, db)
     workbook = Workbook()
@@ -228,15 +238,15 @@ def export_points_of_sale_report(
 @router.get("/points-of-sale/{point_id}/statement", response_model=PosStatementResponse, dependencies=[Depends(require_permission("finance.view"))])
 def point_of_sale_statement(
     point_id: int, date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("finance.view")),
 ):
-    return _statement_data(point_id, date_from, date_to, db)
+    return _statement_data(point_id, date_from, date_to, db, user)
 
 
 @router.get("/points-of-sale/{point_id}/statement/export.xlsx", dependencies=[Depends(require_permission("finance.view"))])
 def export_point_of_sale_statement(
     point_id: int, date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("finance.view")),
 ):
     statement = _statement_data(point_id, date_from, date_to, db)
     workbook = Workbook()
@@ -264,18 +274,21 @@ def export_point_of_sale_statement(
 @router.get("/cards", dependencies=[Depends(require_permission("cards.view"))])
 def cards_report(
     date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.view")),
 ):
     start_at, end_at = _period_bounds(date_from, date_to)
+    is_owner = any(role.code == "owner" for role in user.roles)
+    pos_ids = [point.id for point in user.point_of_sales]
+    card_scope = True if is_owner else (Card.assigned_pos_id.in_(pos_ids) if pos_ids else Card.id.is_(None))
     rows = (
         db.query(Card.status, func.count(Card.id))
-        .filter(Card.created_at >= start_at, Card.created_at < end_at)
+        .filter(Card.created_at >= start_at, Card.created_at < end_at, card_scope)
         .group_by(Card.status).all()
     )
     plan_rows = (
         db.query(Plan.name, func.count(Card.id))
         .join(Card, Card.plan_id == Plan.id)
-        .filter(Card.created_at >= start_at, Card.created_at < end_at)
+        .filter(Card.created_at >= start_at, Card.created_at < end_at, card_scope)
         .group_by(Plan.id, Plan.name).order_by(Plan.name.asc()).all()
     )
     totals = db.query(
@@ -284,7 +297,7 @@ def cards_report(
         func.coalesce(func.sum(Card.used_seconds), 0),
         func.coalesce(func.sum(Card.upload_bytes), 0),
         func.coalesce(func.sum(Card.download_bytes), 0),
-    ).filter(Card.created_at >= start_at, Card.created_at < end_at).one()
+    ).filter(Card.created_at >= start_at, Card.created_at < end_at, card_scope).one()
     return {
         "date_from": date_from, "date_to": date_to,
         "total_cards": totals[0], "total_value": _money(totals[1]),
@@ -298,20 +311,24 @@ def cards_report(
 @router.get("/sessions", dependencies=[Depends(require_permission("sessions.view"))])
 def sessions_report(
     date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("sessions.view")),
 ):
     start_at, end_at = _period_bounds(date_from, date_to)
+    is_owner = any(role.code == "owner" for role in user.roles)
+    pos_ids = [point.id for point in user.point_of_sales]
+    scoped_card_ids = db.query(Card.id).filter(Card.assigned_pos_id.in_(pos_ids)) if pos_ids else db.query(Card.id).filter(Card.id.is_(None))
+    session_scope = True if is_owner else RadiusSession.card_id.in_(scoped_card_ids)
     totals = db.query(
         func.count(RadiusSession.id),
         func.count(func.distinct(RadiusSession.card_id)),
         func.coalesce(func.sum(RadiusSession.session_time_seconds), 0),
         func.coalesce(func.sum(RadiusSession.input_octets), 0),
         func.coalesce(func.sum(RadiusSession.output_octets), 0),
-    ).filter(RadiusSession.started_at >= start_at, RadiusSession.started_at < end_at).one()
+    ).filter(RadiusSession.started_at >= start_at, RadiusSession.started_at < end_at, session_scope).one()
     router_rows = (
         db.query(Router.name, func.count(RadiusSession.id))
         .join(Router, Router.id == RadiusSession.router_id)
-        .filter(RadiusSession.started_at >= start_at, RadiusSession.started_at < end_at)
+        .filter(RadiusSession.started_at >= start_at, RadiusSession.started_at < end_at, session_scope)
         .group_by(Router.id, Router.name).order_by(Router.name.asc()).all()
     )
     return {
@@ -319,7 +336,7 @@ def sessions_report(
         "total_sessions": totals[0], "unique_users": totals[1],
         "session_seconds": int(totals[2] or 0), "upload_bytes": int(totals[3] or 0),
         "download_bytes": int(totals[4] or 0),
-        "active_sessions": db.query(func.count(RadiusSession.id)).filter(RadiusSession.stopped_at.is_(None)).scalar() or 0,
+        "active_sessions": db.query(func.count(RadiusSession.id)).filter(RadiusSession.stopped_at.is_(None), session_scope).scalar() or 0,
         "by_router": [{"router_name": name, "sessions": count} for name, count in router_rows],
     }
 
@@ -327,16 +344,21 @@ def sessions_report(
 @router.get("/batches", dependencies=[Depends(require_permission("cards.view"))])
 def batches_report(
     date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.view")),
 ):
     start_at, end_at = _period_bounds(date_from, date_to)
-    rows = (
+    is_owner = any(role.code == "owner" for role in user.roles)
+    pos_ids = [point.id for point in user.point_of_sales]
+    rows_query = (
         db.query(CardBatch, Plan.name, PointOfSale.name)
         .join(Plan, Plan.id == CardBatch.plan_id)
         .outerjoin(PointOfSale, PointOfSale.id == CardBatch.point_of_sale_id)
         .filter(CardBatch.created_at >= start_at, CardBatch.created_at < end_at)
-        .order_by(CardBatch.created_at.desc()).all()
+        .order_by(CardBatch.created_at.desc())
     )
+    if not is_owner:
+        rows_query = rows_query.filter(CardBatch.point_of_sale_id.in_(pos_ids)) if pos_ids else rows_query.filter(CardBatch.id.is_(None))
+    rows = rows_query.all()
     batch_ids = [row[0].id for row in rows]
     counts = {}
     if batch_ids:
@@ -361,17 +383,20 @@ def batches_report(
 @router.get("/printing", dependencies=[Depends(require_permission("cards.view"))])
 def printing_report(
     date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.view")),
 ):
     start_at, end_at = _period_bounds(date_from, date_to)
+    is_owner = any(role.code == "owner" for role in user.roles)
+    pos_ids = [point.id for point in user.point_of_sales]
+    job_scope = True if is_owner else (PrintJob.point_of_sale_id.in_(pos_ids) if pos_ids else PrintJob.id.is_(None))
     totals = db.query(
         func.count(PrintJob.id), func.coalesce(func.sum(PrintJob.card_count), 0),
         func.coalesce(func.sum(case((PrintJob.is_reprint.is_(True), 1), else_=0)), 0),
-    ).filter(PrintJob.created_at >= start_at, PrintJob.created_at < end_at).one()
+    ).filter(PrintJob.created_at >= start_at, PrintJob.created_at < end_at, job_scope).one()
     rows = (
         db.query(PrintJob, PointOfSale.name)
         .outerjoin(PointOfSale, PointOfSale.id == PrintJob.point_of_sale_id)
-        .filter(PrintJob.created_at >= start_at, PrintJob.created_at < end_at)
+        .filter(PrintJob.created_at >= start_at, PrintJob.created_at < end_at, job_scope)
         .order_by(PrintJob.created_at.desc()).limit(200).all()
     )
     return {
