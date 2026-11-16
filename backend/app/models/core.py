@@ -87,6 +87,8 @@ class CardTemplate(TimestampMixin, Base):
     text_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#173b2d")
     layout: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    plan_id: Mapped[int | None] = mapped_column(ForeignKey("plans.id", ondelete="RESTRICT"), nullable=True)
+    plan: Mapped[Plan | None] = relationship()
 
 
 class PointOfSale(TimestampMixin, Base):
