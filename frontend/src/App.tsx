@@ -514,6 +514,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   };
   const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
   const [openNavGroup, setOpenNavGroup] = useState<"system" | "cards" | "printing" | null>(null);
+  useEffect(() => {
+    if (["card-create", "cards", "batches", "templates"].includes(page)) setOpenNavGroup("cards");
+    else if (["plans", "routers", "reports"].includes(page)) setOpenNavGroup("system");
+    else if (page === "pos") setOpenNavGroup("printing");
+  }, [page]);
   const [systemStatus, setSystemStatus] = useState<{ api: string; database: string; version: string; checkedAt: string } | null>(null);
   const [systemStatusLoading, setSystemStatusLoading] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
