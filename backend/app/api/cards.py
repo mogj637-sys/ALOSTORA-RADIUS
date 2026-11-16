@@ -25,6 +25,7 @@ from app.schemas.cards import (
 from app.services.card_generator import generate_password, generate_username
 from app.services.credentials import CredentialEncryptionNotConfigured, encrypt_credential
 from app.services.pos_credit import ensure_pos_card_creation_allowed
+from app.services.permissions import card_visibility, is_owner
 
 router = APIRouter(prefix="/api/v1/cards", tags=["cards"], dependencies=[Depends(require_permission("cards.view"))])
 
@@ -91,9 +92,9 @@ def list_card_batches(
     db: Session = Depends(get_db),
     user: AdminUser = Depends(require_permission("cards.view")),
 ):
-    is_owner = any(role.code == "owner" for role in user.roles)
+    visibility = card_visibility(user)
     assigned_pos_ids = [point.id for point in user.point_of_sales]
-    if not is_owner and not assigned_pos_ids:
+    if visibility == "search_any":
         return []
     rows_query = (
         db.query(CardBatch, Plan, PointOfSale)
@@ -101,8 +102,8 @@ def list_card_batches(
         .outerjoin(PointOfSale, PointOfSale.id == CardBatch.point_of_sale_id)
         .order_by(CardBatch.created_at.desc())
     )
-    if not is_owner:
-        rows_query = rows_query.filter(CardBatch.point_of_sale_id.in_(assigned_pos_ids))
+    if visibility == "assigned":
+        rows_query = rows_query.filter(CardBatch.point_of_sale_id.in_(assigned_pos_ids)) if assigned_pos_ids else rows_query.filter(CardBatch.id.is_(None))
     rows = rows_query.limit(limit).all()
     results = []
     for batch, plan, point in rows:
@@ -134,13 +135,17 @@ def list_card_batches(
 @router.get("/overview")
 def get_radius_overview(db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.view"))):
     """Return database-backed totals for the admin dashboard."""
-    is_owner = any(role.code == "owner" for role in user.roles)
+    visibility = card_visibility(user)
     assigned_pos_ids = [point.id for point in user.point_of_sales]
     card_query = db.query(Card)
     session_query = db.query(RadiusSession)
-    if not is_owner:
+    if visibility == "assigned":
+        scoped_ids = db.query(Card.id).filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else db.query(Card.id).filter(Card.id.is_(None))
         card_query = card_query.filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else card_query.filter(Card.id.is_(None))
-        session_query = session_query.filter(RadiusSession.card_id.in_(db.query(Card.id).filter(Card.assigned_pos_id.in_(assigned_pos_ids)))) if assigned_pos_ids else session_query.filter(RadiusSession.id.is_(None))
+        session_query = session_query.filter(RadiusSession.card_id.in_(scoped_ids))
+    elif visibility == "search_any":
+        card_query = card_query.filter(Card.id.is_(None))
+        session_query = session_query.filter(RadiusSession.id.is_(None))
     card_counts = dict(card_query.with_entities(Card.status, func.count(Card.id)).group_by(Card.status).all())
     active_sessions = (
         session_query.with_entities(func.count(RadiusSession.id))
@@ -178,11 +183,14 @@ def list_radius_sessions(
     user: AdminUser = Depends(require_permission("sessions.view")),
 ):
     """Return live RADIUS sessions and aggregate counters for the admin dashboard."""
-    is_owner = any(role.code == "owner" for role in user.roles)
+    visibility = card_visibility(user)
     assigned_pos_ids = [point.id for point in user.point_of_sales]
+    if visibility == "search_any":
+        raise HTTPException(status_code=403, detail="هذا الحساب مخوّل بالبحث عن جلسات كرت محدد فقط")
     session_query = db.query(RadiusSession)
-    if not is_owner:
-        session_query = session_query.filter(RadiusSession.card_id.in_(db.query(Card.id).filter(Card.assigned_pos_id.in_(assigned_pos_ids)))) if assigned_pos_ids else session_query.filter(RadiusSession.id.is_(None))
+    if visibility == "assigned":
+        scoped_ids = db.query(Card.id).filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else db.query(Card.id).filter(Card.id.is_(None))
+        session_query = session_query.filter(RadiusSession.card_id.in_(scoped_ids))
     active_count = (
         session_query.with_entities(func.count(RadiusSession.id))
         .filter(RadiusSession.stopped_at.is_(None))
@@ -195,7 +203,7 @@ def list_radius_sessions(
     )
     total_count = session_query.with_entities(func.count(RadiusSession.id)).scalar() or 0
     rows_query = db.query(RadiusSession, Card, Router).join(Card, Card.id == RadiusSession.card_id).join(Router, Router.id == RadiusSession.router_id)
-    if not is_owner:
+    if visibility == "assigned":
         rows_query = rows_query.filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else rows_query.filter(RadiusSession.id.is_(None))
     rows = (
         rows_query
@@ -237,7 +245,10 @@ def disconnect_radius_session(session_id: int, db: Session = Depends(get_db), us
         raise HTTPException(status_code=404, detail="جلسة المستخدم غير موجودة")
     if session.stopped_at is not None:
         raise HTTPException(status_code=409, detail="الجلسة منتهية بالفعل")
-    if not any(role.code == "owner" for role in user.roles):
+    visibility = card_visibility(user)
+    if visibility == "search_any":
+        raise HTTPException(status_code=403, detail="البحث عن الكرت لا يمنح صلاحية فصل جلساته")
+    if visibility == "assigned":
         assigned_pos_ids = {point.id for point in user.point_of_sales}
         session_card = db.get(Card, session.card_id)
         if session_card is None or session_card.assigned_pos_id not in assigned_pos_ids:
@@ -266,11 +277,12 @@ def list_cards(
     db: Session = Depends(get_db),
     user: AdminUser = Depends(require_permission("cards.view")),
 ):
-    is_owner = any(role.code == "owner" for role in user.roles)
+    visibility = card_visibility(user)
+    assigned_pos_ids = [point.id for point in user.point_of_sales]
     query = db.query(Card)
-    if not is_owner:
-        # Employees may inspect one card from any point of sale, but only
-        # through an exact username or serial-number lookup.
+    if visibility == "assigned":
+        query = query.filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else query.filter(Card.id.is_(None))
+    if visibility == "search_any":
         if not search or search.strip() != search:
             raise HTTPException(status_code=403, detail="يجب البحث باسم المستخدم أو الرقم التسلسلي كاملاً")
         exact_term = search.strip()
@@ -293,8 +305,8 @@ def list_cards(
         query = query.filter(Card.is_free.is_(is_free))
     cards = (
         query.order_by(Card.created_at.desc())
-        .offset(offset if is_owner else 0)
-        .limit(limit if is_owner else 1)
+        .offset(offset if visibility != "search_any" else 0)
+        .limit(limit if visibility != "search_any" else 1)
         .all()
     )
     if not cards:
@@ -330,12 +342,16 @@ def list_card_session_history(
     if card is None:
         raise HTTPException(status_code=404, detail="الكرت غير موجود")
 
-    is_owner = any(role.code == "owner" for role in user.roles)
+    visibility = card_visibility(user)
     exact_term = search.strip().lower()
     if not exact_term:
         raise HTTPException(status_code=422, detail="أدخل اسم المستخدم أو الرقم التسلسلي كاملاً")
-    if not is_owner and exact_term not in {card.username.lower(), card.serial_number.lower()}:
+    if visibility == "search_any" and exact_term not in {card.username.lower(), card.serial_number.lower()}:
         raise HTTPException(status_code=404, detail="لم يتم العثور على الكرت بهذا البحث")
+    if visibility == "assigned":
+        assigned_pos_ids = {point.id for point in user.point_of_sales}
+        if card.assigned_pos_id not in assigned_pos_ids:
+            raise HTTPException(status_code=403, detail="الكرت خارج نطاق نقاط البيع المسموح بها")
 
     rows = (
         db.query(RadiusSession, Router)
