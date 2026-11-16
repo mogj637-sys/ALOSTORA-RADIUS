@@ -838,8 +838,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setError(""); setNotice(""); setPrintImportSummary("");
     try {
       const content = await file.text();
-      const values = content.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean)
-        .map((line) => line.split(/[;,\\t]/)[0].trim().replace(/^["']|["']$/g, ""))
+      const values = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+        .map((line) => line.split(/[;,\t]/)[0].trim().replace(/^["']|["']$/g, ""))
         .filter((value) => value && !["username", "user", "serial", "serial_number", "اسم المستخدم", "الرقم التسلسلي"].includes(value.toLowerCase()));
       const available = new Map<string, string>();
       cards.forEach((card) => {
