@@ -266,28 +266,36 @@ def list_cards(
     user: AdminUser = Depends(require_permission("cards.view")),
 ):
     is_owner = any(role.code == "owner" for role in user.roles)
-    assigned_pos_ids = [point.id for point in user.point_of_sales]
     query = db.query(Card)
     if not is_owner:
-        if assigned_pos_ids:
-            query = query.filter(Card.assigned_pos_id.in_(assigned_pos_ids))
-        else:
-            if not search or search.strip() != search:
-                raise HTTPException(status_code=403, detail="الموظف لا يملك قائمة كروت عامة؛ ابحث باسم المستخدم أو الرقم التسلسلي كاملاً")
-            exact_term = search.strip()
-            query = query.filter(or_(func.lower(Card.username) == exact_term.lower(), func.lower(Card.serial_number) == exact_term.lower()))
-    if status_filter:
-        query = query.filter(Card.status == status_filter)
-    if search and (is_owner or assigned_pos_ids):
+        # Employees may inspect one card from any point of sale, but only
+        # through an exact username or serial-number lookup.
+        if not search or search.strip() != search:
+            raise HTTPException(status_code=403, detail="يجب البحث باسم المستخدم أو الرقم التسلسلي كاملاً")
+        exact_term = search.strip()
+        query = query.filter(
+            or_(
+                func.lower(Card.username) == exact_term.lower(),
+                func.lower(Card.serial_number) == exact_term.lower(),
+            )
+        )
+    elif search:
         term = f"%{search.strip()}%"
         query = query.filter(or_(Card.username.ilike(term), Card.serial_number.ilike(term)))
+    if status_filter:
+        query = query.filter(Card.status == status_filter)
     if plan_id is not None:
         query = query.filter(Card.plan_id == plan_id)
     if batch_id is not None:
         query = query.filter(Card.batch_id == batch_id)
     if is_free is not None:
         query = query.filter(Card.is_free.is_(is_free))
-    cards = query.order_by(Card.created_at.desc()).offset(offset if (is_owner or assigned_pos_ids) else 0).limit(1 if not is_owner and not assigned_pos_ids else limit).all()
+    cards = (
+        query.order_by(Card.created_at.desc())
+        .offset(offset if is_owner else 0)
+        .limit(limit if is_owner else 1)
+        .all()
+    )
     if not cards:
         return cards
     session_counts = dict(
