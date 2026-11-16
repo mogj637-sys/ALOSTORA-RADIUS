@@ -603,7 +603,7 @@ def update_card_status(
     return card
 
 
-@router.post("/single", response_model=CardCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.create"))])
+@router.post("/single", response_model=CardCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.create")), Depends(require_permission("cards.credentials"))])
 def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.create"))):
     plan = db.get(Plan, payload.plan_id)
     if plan is None or not plan.is_active:
@@ -680,7 +680,7 @@ def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db),
     )
 
 
-@router.post("/batch", response_model=CardBatchResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.create"))])
+@router.post("/batch", response_model=CardBatchResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.create")), Depends(require_permission("cards.credentials"))])
 def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.create"))):
     plan = db.get(Plan, payload.plan_id)
     if plan is None or not plan.is_active:
