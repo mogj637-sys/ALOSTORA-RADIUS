@@ -98,3 +98,7 @@ class CardListItem(BaseModel):
     assigned_pos_id: int | None
     first_used_at: datetime | None
     expires_at: datetime | None
+    used_seconds: int
+    upload_bytes: int
+    download_bytes: int
+    plan_snapshot: dict
