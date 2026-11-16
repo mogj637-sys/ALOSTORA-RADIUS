@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -21,7 +22,7 @@ from app.models.core import (
 )
 from app.services.credentials import CredentialEncryptionNotConfigured, decrypt_credential
 from app.services.audit import record_audit
-from app.services.permissions import has_permission
+from app.services.permissions import card_visibility, has_permission
 from app.services.pos_credit import ensure_pos_printing_allowed, get_pos_balance_due
 from app.schemas.print_jobs import (
     PrintJobCreate,
@@ -188,11 +189,6 @@ def create_print_job(
     )
     if point_of_sale is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
-    existing = _existing_job(db, payload, include_credentials=True)
-    if existing is not None:
-        return existing
-    ensure_pos_printing_allowed(point_of_sale)
-
     cards = (
         db.query(Card)
         .filter(Card.id.in_(payload.card_ids))
@@ -212,10 +208,35 @@ def create_print_job(
             if batch.template_code and batch.template_code != payload.template_code:
                 raise HTTPException(status_code=409, detail=f"يجب استخدام قالب الدفعة {batch.template_code}")
 
-    # A concurrent retry may have committed while this request waited for card locks.
+    if card_visibility(user) == "assigned":
+        allowed_batch_ids = {
+            row[0]
+            for row in db.query(CardBatch.id)
+            .filter(CardBatch.point_of_sale_id == point_of_sale.id)
+            .all()
+        }
+        if any(card.batch_id is None or card.batch_id not in allowed_batch_ids for card in cards):
+            raise HTTPException(status_code=403, detail="لا تملك صلاحية طباعة كروت خارج نطاق نقاط البيع المرتبطة بحسابك")
+    else:
+        allowed_batch_ids = {
+            row[0]
+            for row in db.query(CardBatch.id)
+            .filter(
+                or_(
+                    CardBatch.point_of_sale_id == point_of_sale.id,
+                    CardBatch.point_of_sale_id.is_(None),
+                )
+            )
+            .all()
+        }
+        if any(card.batch_id is not None and card.batch_id not in allowed_batch_ids for card in cards):
+            raise HTTPException(status_code=403, detail="لا تملك صلاحية طباعة كروت مخصصة لنقطة بيع أخرى")
+
     existing = _existing_job(db, payload, include_credentials=True)
     if existing is not None:
         return existing
+
+    ensure_pos_printing_allowed(point_of_sale)
 
     if payload.is_reprint:
         original_ids = {
