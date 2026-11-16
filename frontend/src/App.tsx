@@ -19,6 +19,7 @@ type CurrentUser = {
   roles: string[];
 };
 type AdminRole = { code: string; name: string; description: string | null };
+type AdminPermission = { code: string; name: string; module: string; description: string | null };
 type AdminAccount = { id: number; username: string; display_name: string; is_active: boolean; roles: string[]; last_login_at: string | null; created_at: string };
 
 type Plan = {
@@ -415,6 +416,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [plans, setPlans] = useState<Plan[]>([]);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
   const [adminRoles, setAdminRoles] = useState<AdminRole[]>([]);
+  const [adminPermissions, setAdminPermissions] = useState<AdminPermission[]>([]);
+  const [selectedPermissionRole, setSelectedPermissionRole] = useState("manager");
+  const [rolePermissionCodes, setRolePermissionCodes] = useState<string[]>([]);
   const [adminDraft, setAdminDraft] = useState({ username: "", displayName: "", password: "", roleCode: "operator" });
 
   const [routers, setRouters] = useState<RouterRecord[]>([]);
@@ -497,15 +501,52 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function loadPlans() {
   async function loadAdminAccounts() {
-    const [accounts, roles] = await Promise.all([
+    const [accounts, roles, permissions] = await Promise.all([
       apiRequest<AdminAccount[]>(token, "/api/v1/admins"),
       apiRequest<AdminRole[]>(token, "/api/v1/admins/roles"),
+      apiRequest<AdminPermission[]>(token, "/api/v1/admins/permissions"),
     ]);
     setAdminAccounts(accounts);
     setAdminRoles(roles);
-    if (roles.length && !roles.some((role) => role.code === adminDraft.roleCode)) {
-      setAdminDraft((draft) => ({ ...draft, roleCode: roles[0].code }));
+    setAdminPermissions(permissions);
+    const assignableRoles = roles.filter((role) => role.code !== "owner");
+    if (assignableRoles.length && !assignableRoles.some((role) => role.code === adminDraft.roleCode)) {
+      setAdminDraft((draft) => ({ ...draft, roleCode: assignableRoles[0].code }));
     }
+    const permissionRole = roles.some((role) => role.code === selectedPermissionRole && role.code !== "owner")
+      ? selectedPermissionRole
+      : (assignableRoles[0]?.code ?? "manager");
+    setSelectedPermissionRole(permissionRole);
+    const permissionsForRole = await apiRequest<{ role_code: string; permission_codes: string[] }>(
+      token, `/api/v1/admins/roles/${permissionRole}/permissions`
+    );
+    setRolePermissionCodes(permissionsForRole.permission_codes);
+  }
+
+  async function selectPermissionRole(roleCode: string) {
+    setSelectedPermissionRole(roleCode);
+    try {
+      const result = await apiRequest<{ role_code: string; permission_codes: string[] }>(
+        token, `/api/v1/admins/roles/${roleCode}/permissions`
+      );
+      setRolePermissionCodes(result.permission_codes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تحميل صلاحيات الدور");
+    }
+  }
+
+  async function saveRolePermissions() {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await apiRequest<{ role_code: string; permission_codes: string[] }>(
+        token, `/api/v1/admins/roles/${selectedPermissionRole}/permissions`,
+        { method: "PUT", body: JSON.stringify({ permission_codes: rolePermissionCodes }) }
+      );
+      setRolePermissionCodes(result.permission_codes);
+      setNotice("تم حفظ مصفوفة الصلاحيات بنجاح.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر حفظ الصلاحيات");
+    } finally { setBusy(false); }
   }
 
   async function createAdminAccount(event: FormEvent<HTMLFormElement>) {
@@ -1244,7 +1285,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div><h2>حسابات الإدارة والموظفين</h2><p>إنشاء حسابات دخول مستقلة وتحديد الدور الإداري لكل حساب.</p></div>
           <span className="count-tag">{adminAccounts.length.toLocaleString("ar")} حساب</span>
         </div>
-        <div className="notice">إدارة الحسابات متاحة لمدير النظام فقط. الأدوار الحالية تحدد تصنيف الحساب؛ توزيع الصلاحيات التفصيلية على كل قسم سيُستكمل في المرحلة التالية.</div>
+        <div className="notice">يمكنك تخصيص صلاحيات كل دور أدناه. الصلاحيات تُفحص في الخادم، ومدير النظام يظل بصلاحيات كاملة ثابتة.</div>
         <form className="panel form-grid admin-create-form" onSubmit={createAdminAccount}>
           <div className="section-heading"><div><h3>إضافة حساب جديد</h3><p>كلمة المرور يجب ألا تقل عن 12 حرفاً.</p></div></div>
           <label>اسم المستخدم<input value={adminDraft.username} onChange={(event) => setAdminDraft({ ...adminDraft, username: event.target.value })} minLength={3} maxLength={80} pattern="[A-Za-z0-9_.-]+" autoComplete="off" required /></label>
@@ -1253,6 +1294,31 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <label>الدور الإداري<select value={adminDraft.roleCode} onChange={(event) => setAdminDraft({ ...adminDraft, roleCode: event.target.value })} required>{adminRoles.map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}</select></label>
           <div className="form-actions"><button type="submit" disabled={busy || adminRoles.length === 0}>{busy ? "جارٍ الحفظ..." : "إنشاء حساب"}</button></div>
         </form>
+        <section className="panel admin-permission-matrix">
+          <div className="section-heading"><div><h3>مصفوفة صلاحيات الأدوار</h3><p>حدد ما يمكن لكل دور مشاهدته أو إدارته. لا يمكن تعديل دور مدير النظام.</p></div></div>
+          <label className="permission-role-picker">الدور الإداري
+            <select value={selectedPermissionRole} onChange={(event) => selectPermissionRole(event.target.value)}>
+              {adminRoles.filter((role) => role.code !== "owner").map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}
+            </select>
+          </label>
+          <div className="permission-groups">
+            {Object.entries(adminPermissions.reduce<Record<string, AdminPermission[]>>((groups, permission) => {
+              (groups[permission.module] ??= []).push(permission); return groups;
+            }, {})).map(([module, permissions]) => (
+              <div className="permission-group" key={module}>
+                <h4>{{cards:"الكروت والقوالب",sessions:"الجلسات",plans:"الباقات",routers:"الراوترات",pos:"نقاط البيع",finance:"الحسابات المالية",reports:"التقارير",printing:"الطباعة"}[module] ?? module}</h4>
+                {permissions.map((permission) => (
+                  <label className="permission-option" key={permission.code}>
+                    <input type="checkbox" checked={rolePermissionCodes.includes(permission.code)} disabled={busy}
+                      onChange={(event) => setRolePermissionCodes((current) => event.target.checked ? [...current, permission.code] : current.filter((code) => code !== permission.code))} />
+                    <span><strong>{permission.name}</strong><small>{permission.description}</small></span>
+                  </label>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="form-actions"><button type="button" onClick={saveRolePermissions} disabled={busy || !selectedPermissionRole}>{busy ? "جارٍ الحفظ..." : "حفظ صلاحيات الدور"}</button></div>
+        </section>
         <section className="panel admin-directory">
           <div className="section-heading"><div><h3>الحسابات المسجلة</h3><p>يمكن تغيير دور الحساب أو إيقافه دون حذف سجله.</p></div><button type="button" className="table-action" onClick={() => loadAdminAccounts().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث الحسابات"))}>تحديث</button></div>
           <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>المستخدم</th><th>اسم الموظف</th><th>الدور الحالي</th><th>آخر دخول</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
