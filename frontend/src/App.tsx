@@ -282,7 +282,7 @@ type PrintJobResult = {
   total_amount: number;
   is_reprint: boolean;
   print_options: PrintOptions;
-  items: { card_id: string; serial_number: string; username: string; password: string; is_free: boolean; price_snapshot: number; plan_snapshot: Record<string, unknown> }[];
+  items: { card_id: string; serial_number: string; username: string; password: string; is_free: boolean; price_snapshot: number; plan_name: string; data_limit_bytes: number | null; session_time_limit_seconds: number | null; validity_period_seconds: number | null }[];
 };
 
 async function apiRequest<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
@@ -1361,10 +1361,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   {printPreviewCards.map((card) => (
                     <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, minHeight: `${selectedTemplate.height_mm}mm` } : undefined}>
                       <div className="voucher-head"><strong>الأسطورة نت</strong><span>{card.is_free ? "كرت مجاني" : "بطاقة إنترنت"}</span></div>
-                      {printOptions.show_plan && <div className="voucher-plan"><span>الباقة</span><strong>{String(card.plan_snapshot.name ?? "—")}</strong></div>}
+                      {printOptions.show_plan && <div className="voucher-plan"><span>الباقة</span><strong>{card.plan_name}</strong></div>}
                       {printOptions.show_username && <div className="voucher-user"><span>اسم المستخدم</span><strong>{card.username}</strong></div>}
                       {printOptions.show_password && <div className="voucher-password"><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>}
-                      {printOptions.show_limits && <div className="voucher-limits"><span>{card.plan_snapshot.data_limit_bytes == null ? "رصيد مفتوح" : (Number(card.plan_snapshot.data_limit_bytes) / (1024 ** 2)).toFixed(0) + " MB"} · {card.plan_snapshot.session_time_limit_seconds == null ? "وقت مفتوح" : (Number(card.plan_snapshot.session_time_limit_seconds) / 3600).toFixed(0) + " ساعة"} · {card.plan_snapshot.validity_period_seconds == null ? "صلاحية مفتوحة" : (Number(card.plan_snapshot.validity_period_seconds) / 86400).toFixed(0) + " يوم"}</span></div>}
+                      {printOptions.show_limits && <div className="voucher-limits"><span>{card.data_limit_bytes == null ? "رصيد مفتوح" : (Number(card.data_limit_bytes) / (1024 ** 2)).toFixed(0) + " MB"} · {card.session_time_limit_seconds == null ? "وقت مفتوح" : (Number(card.session_time_limit_seconds) / 3600).toFixed(0) + " ساعة"} · {card.validity_period_seconds == null ? "صلاحية مفتوحة" : (Number(card.validity_period_seconds) / 86400).toFixed(0) + " يوم"}</span></div>}
                       <div className="voucher-foot"><span>{printOptions.show_serial_number ? card.serial_number : ""}</span><strong>{printOptions.show_price ? (card.is_free ? "مجاني" : Number(card.price_snapshot).toLocaleString("en-US") + " ريال") : ""}</strong></div>
                     </article>
                   ))}
