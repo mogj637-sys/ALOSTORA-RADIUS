@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import (
     Card,
+    CardBatch,
     CardEvent,
     PointOfSale,
     Plan,
@@ -176,6 +177,15 @@ def create_print_job(
     )
     if len(cards) != len(payload.card_ids):
         raise HTTPException(status_code=404, detail="بعض الكروت المطلوبة غير موجودة")
+
+    batch_ids = {card.batch_id for card in cards if card.batch_id is not None}
+    if batch_ids:
+        batches = db.query(CardBatch).filter(CardBatch.id.in_(batch_ids)).all()
+        for batch in batches:
+            if batch.point_of_sale_id is not None and batch.point_of_sale_id != payload.point_of_sale_id:
+                raise HTTPException(status_code=409, detail=f"الدفعة {batch.batch_number} مخصصة لنقطة بيع أخرى")
+            if batch.template_code and batch.template_code != payload.template_code:
+                raise HTTPException(status_code=409, detail=f"يجب استخدام قالب الدفعة {batch.template_code}")
 
     # A concurrent retry may have committed while this request waited for card locks.
     existing = _existing_job(db, payload)
