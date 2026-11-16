@@ -400,6 +400,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [cardSearch, setCardSearch] = useState("");
   const [cardStatusFilter, setCardStatusFilter] = useState("");
+  const [cardManagementTab, setCardManagementTab] = useState<"all" | "expired" | "batches">("all");
   const [cardPlanFilter, setCardPlanFilter] = useState("");
   const [cardOffset, setCardOffset] = useState(0);
   const [hasMoreCards, setHasMoreCards] = useState(false);
@@ -1476,9 +1477,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       <div className="section-heading"><div><h2>إدارة الكروت</h2><p>ابحث في السجل وحدد الكروت ثم جهّز الكروت الجديدة للطباعة أو أدر حالتها.</p></div><span className="count-tag">200 كرت لكل صفحة</span></div>
       {cardBatchFilter && <div className="notice">تُعرض كروت الدفعة المحددة فقط. <button type="button" className="table-action" onClick={() => { setCardBatchFilter(""); loadCards(cardSearch, 0, "").catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت")); }}>إلغاء فلتر الدفعة</button></div>}
       <div className="card-management-tabs" role="tablist" aria-label="تصنيفات إدارة الكروت">
-        <button type="button" role="tab" aria-selected={cardStatusFilter !== "expired"} className={cardStatusFilter !== "expired" ? "active" : ""} onClick={() => { setCardStatusFilter(""); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جميع الكروت")); }}>جميع كروت النظام</button>
-        <button type="button" role="tab" aria-selected={cardStatusFilter === "expired"} className={cardStatusFilter === "expired" ? "active" : ""} onClick={() => { setCardStatusFilter("expired"); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "expired", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت المنتهية")); }}>الكروت المنتهية</button>
+        <button type="button" role="tab" aria-selected={cardManagementTab === "all"} className={cardManagementTab === "all" ? "active" : ""} onClick={() => { setCardManagementTab("all"); setCardStatusFilter(""); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جميع الكروت")); }}>جميع كروت النظام</button>
+        <button type="button" role="tab" aria-selected={cardManagementTab === "expired"} className={cardManagementTab === "expired" ? "active" : ""} onClick={() => { setCardManagementTab("expired"); setCardStatusFilter("expired"); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "expired", cardPlanFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت المنتهية")); }}>الكروت المنتهية</button>
+        <button type="button" role="tab" aria-selected={cardManagementTab === "batches"} className={cardManagementTab === "batches" ? "active" : ""} onClick={() => { setCardManagementTab("batches"); loadCardBatches().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل دفعات الكروت")); }}>دفعات الكروت</button>
       </div>
+      {cardManagementTab === "batches" ? renderBatches() : <>
       <p className="card-source-note">هذه القائمة تعرض الكروت المسجلة في قاعدة بيانات RADIUS. جلب كروت MikroTik مباشرة سيُضاف عند تنفيذ ربط مزامنة الراوتر.</p>
       <div className="card-selection-toolbar">
         <label><input type="checkbox" checked={cards.length > 0 && cards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? [...new Set([...selectedCardIds, ...cards.map((card) => card.id)])] : selectedCardIds.filter((id) => !cards.some((card) => card.id === id)))} /> تحديد كروت الصفحة الحالية</label>
@@ -1526,6 +1529,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         })}
       </tbody></table>{cards.length === 0 && <div className="empty-state">لا توجد كروت تطابق البحث في هذه الصفحة.</div>}</div>
       <div className="pagination-controls"><button type="button" className="table-action" disabled={cardOffset === 0 || busy} onClick={() => changeCardPage(cardOffset - 200)}>السابق</button><span>الصفحة {Math.floor(cardOffset / 200) + 1}</span><button type="button" className="table-action" disabled={!hasMoreCards || busy} onClick={() => changeCardPage(cardOffset + 200)}>التالي</button></div>
+      </>}
     </>;
   }
 
