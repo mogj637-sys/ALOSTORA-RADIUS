@@ -2984,3 +2984,218 @@ button:disabled { cursor: not-allowed; }
   }
 }
 
+
+
+/* Audit log: readable activity timeline, table hierarchy and responsive controls */
+.workspace .audit-log-panel {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid #e0eae3;
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(24, 65, 43, .04);
+}
+.workspace .audit-log-panel > .section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+  padding: 2px 0 15px;
+  border-bottom: 1px solid #eaf0ec;
+}
+.workspace .audit-log-panel > .section-heading h2 {
+  margin: 0 0 5px;
+  color: #244e3b;
+  font-size: 18px;
+  line-height: 1.6;
+}
+.workspace .audit-log-panel > .section-heading p {
+  margin: 0;
+  color: #7b8b81;
+  font-size: 11px;
+  line-height: 1.9;
+}
+.workspace .audit-toolbar {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 9px;
+}
+.workspace .audit-toolbar .count-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 37px;
+  padding: 7px 12px;
+  border: 1px solid #d8e9de;
+  border-radius: 9px;
+  background: #edf7f1;
+  color: #176b50;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.workspace .audit-toolbar button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid #d9e8df;
+  border-radius: 9px;
+  background: #f5faf6;
+  color: #286248;
+  font-size: 10px;
+  font-weight: 750;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.workspace .audit-toolbar button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #b7d8c4;
+  background: #eaf6ee;
+}
+.workspace .audit-log-panel > .table-wrap {
+  overflow: auto;
+  border: 1px solid #e3ece6;
+  border-radius: 11px;
+  scrollbar-width: thin;
+  scrollbar-color: #c5d9cc transparent;
+}
+.workspace .audit-log-table {
+  width: 100%;
+  min-width: 1040px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.workspace .audit-log-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 13px 12px;
+  border-bottom: 1px solid #dfeae3;
+  background: #f1f7f3;
+  color: #526d5d;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.workspace .audit-log-table td {
+  padding: 12px;
+  border-bottom: 1px solid #edf2ee;
+  color: #586d60;
+  font-size: 10px;
+  line-height: 1.8;
+  vertical-align: middle;
+}
+.workspace .audit-log-table tbody tr:last-child td { border-bottom: 0; }
+.workspace .audit-log-table tbody tr { transition: background .14s ease; }
+.workspace .audit-log-table tbody tr:hover td { background: #f7fbf8; }
+.workspace .audit-log-table td:first-child {
+  min-width: 145px;
+  color: #718278;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.workspace .audit-log-table td:nth-child(2) {
+  min-width: 125px;
+  color: #315943;
+  font-weight: 750;
+}
+.workspace .audit-log-table td:nth-child(3) strong {
+  display: inline-flex;
+  align-items: center;
+  max-width: 210px;
+  padding: 5px 9px;
+  border: 1px solid #dcebe1;
+  border-radius: 7px;
+  background: #f1f8f3;
+  color: #286448;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.6;
+}
+.workspace .audit-log-table td:nth-child(4) {
+  color: #64786b;
+  white-space: nowrap;
+}
+.workspace .audit-log-table td:nth-child(5),
+.workspace .audit-log-table td:nth-child(7) {
+  color: #75867b;
+  direction: ltr;
+  text-align: right;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.workspace .audit-log-table td:nth-child(6) {
+  min-width: 240px;
+  max-width: 430px;
+  color: #52675a;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.workspace .audit-log-table .empty-state {
+  padding: 38px 16px;
+  background: #fbfdfb;
+  color: #819087;
+  font-size: 11px;
+  text-align: center;
+}
+.workspace .audit-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 3px;
+  color: #74847a;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.workspace .audit-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.workspace .audit-pagination button {
+  min-width: 78px;
+  min-height: 36px;
+  padding: 7px 13px;
+  border: 1px solid #dce8e0;
+  border-radius: 8px;
+  background: #f7faf8;
+  color: #315f47;
+  font-size: 10px;
+  font-weight: 750;
+  transition: background .15s ease, border-color .15s ease;
+}
+.workspace .audit-pagination button:hover:not(:disabled) {
+  border-color: #b7d8c4;
+  background: #edf7f0;
+}
+.workspace .audit-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
+@media (max-width: 700px) {
+  .workspace .audit-log-panel { padding: 15px; gap: 13px; }
+  .workspace .audit-log-panel > .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .workspace .audit-toolbar {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .workspace .audit-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .workspace .audit-pagination > div { width: 100%; }
+  .workspace .audit-pagination button { flex: 1 1 50%; }
+}
+@media (max-width: 420px) {
+  .workspace .audit-toolbar { align-items: stretch; }
+  .workspace .audit-toolbar .count-tag,
+  .workspace .audit-toolbar button { justify-content: center; flex: 1 1 auto; }
+  .workspace .audit-log-panel > .section-heading h2 { font-size: 16px; }
+}
