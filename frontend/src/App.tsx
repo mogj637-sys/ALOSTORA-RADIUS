@@ -1703,7 +1703,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>المستخدم</th><th>اسم الموظف</th><th>الدور الحالي</th><th>نطاق الكروت</th><th>نقاط البيع المسموحة</th><th>آخر دخول</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
             <tbody>{adminAccounts.map((account) => <tr key={account.id}>
               <td><strong dir="ltr">{account.username}</strong></td><td>{account.display_name}</td>
-              <td><select aria-label={`دور ${account.username}`} defaultValue={account.roles[0] ?? "viewer"} onChange={(event) => updateAdminAccount(account, { role_codes: [event.target.value] })} disabled={busy || account.id === user.id}>
+              <td><select aria-label={`دور ${account.username}`} value={account.roles[0] ?? "viewer"} onChange={(event) => updateAdminAccount(account, { role_codes: [event.target.value] })} disabled={busy || account.id === user.id}>
                 {adminRoles.filter((role) => role.code !== "owner" || account.roles.includes("owner")).map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}
               </select></td>
               <td>{account.card_visibility === "all" ? "جميع الكروت" : account.card_visibility === "assigned" ? "نقاطه فقط" : "بحث عن كرت محدد"}</td>
@@ -1733,7 +1733,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   <option value="all">جميع كروت النظام</option>
                 </select>
               </label>
-              <div className="notice">نطاق الكروت لا يمنح الموظف صلاحية الطباعة أو إنشاء الكروت تلقائياً؛ يجب فتح صلاحية كل عملية بصورة مستقلة وربط نقطة البيع المناسبة.</div>
+              <div className="notice">نطاق الكروت لا يمنح الموظف صلاحية الطباعة أو إنشاء الكروت تلقائياً؛ يجب فتح صلاحية كل عملية بصورة مستقلة وربط نقطة البيع المناسبة. الطباعة تحتاج صلاحيات عرض الكروت ونقاط البيع مع صلاحية الطباعة.</div>
               <div className="permission-groups">
                 {Object.entries(adminPermissions.reduce<Record<string, AdminPermission[]>>((groups, permission) => {
                   (groups[permission.module] ??= []).push(permission); return groups;
@@ -1756,7 +1756,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               </div>
               <div className="form-actions">
                 <button type="button" onClick={saveAdminIndividualSettings} disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ إعدادات الموظف"}</button>
-                <button type="button" className="secondary-button" disabled={busy} onClick={() => { setAdminOverrideDraft({}); setAdminVisibilityDraft("search_any"); }}>إعادة إلى الافتراضي</button>
+                <button type="button" className="secondary-button" disabled={busy} onClick={() => { setAdminOverrideDraft({}); setAdminVisibilityDraft(selectedAccount.point_of_sale_ids.length > 0 ? "assigned" : "search_any"); }}>إعادة إلى الافتراضي</button>
               </div>
             </section>
           );
