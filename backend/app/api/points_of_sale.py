@@ -25,7 +25,7 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=list[PointOfSaleResponse])
+@router.get("", response_model=list[PointOfSaleResponse], dependencies=[Depends(require_permission("pos.view"))])
 def list_points_of_sale(include_inactive: bool = False, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("pos.view"))):
     query = db.query(PointOfSale)
     if not any(role.code == "owner" for role in user.roles):
