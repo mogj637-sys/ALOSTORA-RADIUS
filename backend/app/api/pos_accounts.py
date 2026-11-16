@@ -25,6 +25,8 @@ router = APIRouter(
 
 @router.get("", response_model=PosAccountSummaryResponse)
 def account_summary(point_id: int, db: Session = Depends(get_db)):
+    if not any(role.code == "owner" for role in user.roles) and point_id not in {point.id for point in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة حساب نقطة البيع هذه")
     point = db.get(PointOfSale, point_id)
     if point is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
@@ -46,7 +48,10 @@ def list_account_entries(
     point_id: int,
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("finance.view")),
 ):
+    if not any(role.code == "owner" for role in user.roles) and point_id not in {point.id for point in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية الاطلاع على حساب نقطة البيع هذه")
     if db.get(PointOfSale, point_id) is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
     return (
