@@ -552,7 +552,16 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   async function loadCardTemplates() {
     const result = await apiRequest<CardTemplate[]>(token, "/api/v1/card-templates");
     setCardTemplates(result);
-    if (result.length && !result.some((item) => item.code === printTemplate)) setPrintTemplate(result.find((item) => item.is_default)?.code ?? result[0].code);
+    if (result.length) {
+      const selected = result.find((item) => item.code === printTemplate)
+        ?? result.find((item) => item.is_default)
+        ?? result[0];
+      setPrintTemplate(selected.code);
+      if (selected.plan_id) {
+        setBatchDraft((current) => ({ ...current, planId: String(selected.plan_id) }));
+        setSingleDraft((current) => ({ ...current, planId: String(selected.plan_id) }));
+      }
+    }
   }
 
   async function loadCards(search = cardSearch, offset = cardOffset) {
@@ -799,7 +808,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setError("");
       loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقارير المالية"));
     }
-    if (page === "plans" || page === "cards" || page === "card-create" || page === "pos" || page === "pos-management" || page === "routers") {
+    if (page === "plans" || page === "cards" || page === "card-create" || page === "pos" || page === "pos-management" || page === "templates" || page === "routers") {
       setError("");
       Promise.all([
         loadPlans(),
