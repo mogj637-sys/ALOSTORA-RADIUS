@@ -4,6 +4,55 @@ from app.db.session import SessionLocal
 from app.models.auth import AdminUser, Role
 
 
+def _create_point(client, headers, label):
+    response = client.post(
+        "/api/v1/points-of-sale",
+        headers=headers,
+        json={
+            "code": f"{label}-{secrets.token_hex(4).upper()}",
+            "name": f"نقطة {label}",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def _create_card(client, headers, point_id, label):
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "code": f"{label}-{secrets.token_hex(4).upper()}",
+            "name": f"باقة {label}",
+            "price": "15.00",
+        },
+    )
+    assert plan.status_code == 201, plan.text
+    created = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": f"{label}{secrets.token_hex(5).upper()}",
+            "card_type": "username_only",
+            "point_of_sale_id": point_id,
+        },
+    )
+    assert created.status_code == 201, created.text
+    card = created.json()
+    printed = client.post(
+        "/api/v1/print-jobs",
+        headers=headers,
+        json={
+            "idempotency_key": f"individual-scope-{secrets.token_hex(8)}",
+            "point_of_sale_id": point_id,
+            "card_ids": [card["id"]],
+        },
+    )
+    assert printed.status_code == 201, printed.text
+    return card
+
+
 def _new_unprinted_card(client, headers, point_id, label):
     plan = client.post(
         "/api/v1/plans",
