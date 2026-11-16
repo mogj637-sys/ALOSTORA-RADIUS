@@ -2,9 +2,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
-from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 CardType = Literal["username_only", "same_credentials", "separate_credentials"]
