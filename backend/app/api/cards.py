@@ -140,8 +140,15 @@ def get_radius_overview(db: Session = Depends(get_db), user: AdminUser = Depends
     card_query = db.query(Card)
     session_query = db.query(RadiusSession)
     if visibility == "assigned":
-        scoped_ids = db.query(Card.id).filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else db.query(Card.id).filter(Card.id.is_(None))
-        card_query = card_query.filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else card_query.filter(Card.id.is_(None))
+        scoped_ids = (
+            db.query(Card.id).filter(
+                or_(
+                    Card.assigned_pos_id.in_(assigned_pos_ids),
+                    Card.batch_id.in_(db.query(CardBatch.id).filter(CardBatch.point_of_sale_id.in_(assigned_pos_ids))),
+                )
+            ) if assigned_pos_ids else db.query(Card.id).filter(Card.id.is_(None))
+        )
+        card_query = card_query.filter(Card.id.in_(scoped_ids))
         session_query = session_query.filter(RadiusSession.card_id.in_(scoped_ids))
     elif visibility == "search_any":
         card_query = card_query.filter(Card.id.is_(None))
@@ -281,7 +288,12 @@ def list_cards(
     assigned_pos_ids = [point.id for point in user.point_of_sales]
     query = db.query(Card)
     if visibility == "assigned":
-        query = query.filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else query.filter(Card.id.is_(None))
+        query = query.filter(
+            or_(
+                Card.assigned_pos_id.in_(assigned_pos_ids),
+                Card.batch_id.in_(db.query(CardBatch.id).filter(CardBatch.point_of_sale_id.in_(assigned_pos_ids))),
+            )
+        ) if assigned_pos_ids else query.filter(Card.id.is_(None))
     if visibility == "search_any":
         if not search or search.strip() != search:
             raise HTTPException(status_code=403, detail="يجب البحث باسم المستخدم أو الرقم التسلسلي كاملاً")
@@ -349,8 +361,15 @@ def list_card_session_history(
     if visibility == "search_any" and exact_term not in {card.username.lower(), card.serial_number.lower()}:
         raise HTTPException(status_code=404, detail="لم يتم العثور على الكرت بهذا البحث")
     if visibility == "assigned":
-        assigned_pos_ids = {point.id for point in user.point_of_sales}
-        if card.assigned_pos_id not in assigned_pos_ids:
+        assigned_pos_ids = [point.id for point in user.point_of_sales]
+        in_scope = card.assigned_pos_id in assigned_pos_ids or (
+            card.batch_id is not None
+            and db.query(CardBatch.id).filter(
+                CardBatch.id == card.batch_id,
+                CardBatch.point_of_sale_id.in_(assigned_pos_ids),
+            ).first() is not None
+        )
+        if not in_scope:
             raise HTTPException(status_code=403, detail="الكرت خارج نطاق نقاط البيع المسموح بها")
 
     rows = (
@@ -408,8 +427,15 @@ def update_card_status(
     if visibility == "search_any":
         raise HTTPException(status_code=403, detail="هذا الحساب مخصص للبحث والاطلاع فقط")
     if visibility == "assigned":
-        allowed_pos_ids = {point.id for point in user.point_of_sales}
-        if card.assigned_pos_id not in allowed_pos_ids:
+        allowed_pos_ids = [point.id for point in user.point_of_sales]
+        in_scope = card.assigned_pos_id in allowed_pos_ids or (
+            card.batch_id is not None
+            and db.query(CardBatch.id).filter(
+                CardBatch.id == card.batch_id,
+                CardBatch.point_of_sale_id.in_(allowed_pos_ids),
+            ).first() is not None
+        )
+        if not in_scope:
             raise HTTPException(status_code=403, detail="الكرت خارج نطاق نقاط البيع المسموح بها")
 
     previous_status = card.status
