@@ -2313,7 +2313,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button type="button" className="table-action" onClick={() => { setCardSearch(""); setCardStatusFilter(""); setCardPlanFilter(""); setCardFreeFilter(""); setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards("", 0, "", "", "", "").catch((err) => setError(err instanceof Error ? err.message : "تعذر إعادة ضبط الفلاتر")); }}>مسح الفلاتر</button>
         </>}
       </div>
-      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>أول استخدام</th><th>تاريخ الانتهاء</th><th>وقت الجلسات المستخدم / المتبقي</th><th>الوقت المتبقي للصلاحية</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>البيانات المستهلكة / المتبقية</th><th>المستخدمون المتزامنون</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.update") && <th>الإجراءات</th>}</tr></thead><tbody>
+      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>أول استخدام</th><th>تاريخ الانتهاء</th><th>وقت الجلسات المستخدم / المتبقي</th><th>الوقت المتبقي للصلاحية</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>البيانات المستهلكة / المتبقية</th><th>حد المستخدمين المتزامنين (إعداد الباقة)</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.update") && <th>الإجراءات</th>}</tr></thead><tbody>
         {cards.map((card) => {
           const snapshot = card.plan_snapshot ?? {};
           const timeLimit = typeof snapshot.session_time_limit_seconds === "number" ? snapshot.session_time_limit_seconds : null;
@@ -2340,12 +2340,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             const minutes = Math.floor((safe % 3600) / 60);
             return days ? `${days} يوم ${hours} س` : hours ? `${hours} س ${minutes} د` : `${minutes} د`;
           };
-          const validityRemainingLabel = Number.isFinite(expiryTimestamp)
-            ? expiryTimestamp <= Date.now() ? "انتهت" : formatDuration(Math.ceil((expiryTimestamp - Date.now()) / 1000))
-            : card.expires_at ? "غير متاح"
-            : typeof snapshot.validity_period_seconds === "number" && snapshot.validity_period_seconds > 0
-              ? card.first_used_at ? "غير متاح" : "تبدأ بعد أول استخدام"
-              : "مفتوحة";
+          const validityRemainingLabel = card.status === "expired" ? "انتهت"
+            : Number.isFinite(expiryTimestamp)
+              ? expiryTimestamp <= Date.now() ? "انتهت" : formatDuration(Math.ceil((expiryTimestamp - Date.now()) / 1000))
+              : card.expires_at ? "غير متاح"
+              : typeof snapshot.validity_period_seconds === "number" && snapshot.validity_period_seconds > 0
+                ? card.first_used_at ? "غير متاح" : "تبدأ بعد أول استخدام"
+                : "مفتوحة";
           const formatBytes = (bytes: number) => {
             if (bytes <= 0) return "0 ميجابايت";
             const mb = bytes / (1024 * 1024);
