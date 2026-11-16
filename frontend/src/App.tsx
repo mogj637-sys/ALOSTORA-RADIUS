@@ -17,6 +17,7 @@ type CurrentUser = {
   username: string;
   display_name: string;
   roles: string[];
+  permissions: string[];
 };
 type AdminRole = { code: string; name: string; description: string | null };
 type AdminPermission = { code: string; name: string; module: string; description: string | null };
