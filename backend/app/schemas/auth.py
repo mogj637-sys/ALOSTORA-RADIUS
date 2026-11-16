@@ -17,3 +17,4 @@ class CurrentUserResponse(BaseModel):
     username: str
     display_name: str
     roles: list[str]
+    permissions: list[str]
