@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_permission
 from app.db.session import get_db
-from app.models.core import PointOfSale, PosAccountEntry
+from app.models.core import Card, CardBatch, Plan, PointOfSale, PosAccountEntry, PrintJob, PrintJobItem, RadiusSession, Router
 from app.schemas.reports import (
     PosReportResponse, PosReportRow, PosReportTotals,
     PosStatementEntry, PosStatementResponse,
@@ -21,7 +21,7 @@ from app.schemas.reports import (
 router = APIRouter(
     prefix="/api/v1/reports",
     tags=["reports"],
-    dependencies=[Depends(require_permission("reports.view")), Depends(require_permission("finance.view"))],
+    dependencies=[Depends(require_permission("reports.view"))],
 )
 
 
@@ -259,3 +259,129 @@ def export_point_of_sale_statement(
         for cell in row:
             cell.number_format = '#,##0.00'
     return _workbook_response(workbook, f"pos-{point_id}-statement-{date_from}-{date_to}.xlsx")
+
+
+@router.get("/cards", dependencies=[Depends(require_permission("cards.view"))])
+def cards_report(
+    date_from: date = Query(...), date_to: date = Query(...),
+    db: Session = Depends(get_db),
+):
+    start_at, end_at = _period_bounds(date_from, date_to)
+    rows = (
+        db.query(Card.status, func.count(Card.id))
+        .filter(Card.created_at >= start_at, Card.created_at < end_at)
+        .group_by(Card.status).all()
+    )
+    plan_rows = (
+        db.query(Plan.name, func.count(Card.id))
+        .join(Card, Card.plan_id == Plan.id)
+        .filter(Card.created_at >= start_at, Card.created_at < end_at)
+        .group_by(Plan.id, Plan.name).order_by(Plan.name.asc()).all()
+    )
+    totals = db.query(
+        func.count(Card.id),
+        func.coalesce(func.sum(Card.price_snapshot), 0),
+        func.coalesce(func.sum(Card.used_seconds), 0),
+        func.coalesce(func.sum(Card.upload_bytes), 0),
+        func.coalesce(func.sum(Card.download_bytes), 0),
+    ).filter(Card.created_at >= start_at, Card.created_at < end_at).one()
+    return {
+        "date_from": date_from, "date_to": date_to,
+        "total_cards": totals[0], "total_value": _money(totals[1]),
+        "used_seconds": int(totals[2] or 0), "upload_bytes": int(totals[3] or 0),
+        "download_bytes": int(totals[4] or 0),
+        "by_status": [{"status": status, "count": count} for status, count in rows],
+        "by_plan": [{"plan_name": name, "count": count} for name, count in plan_rows],
+    }
+
+
+@router.get("/sessions", dependencies=[Depends(require_permission("sessions.view"))])
+def sessions_report(
+    date_from: date = Query(...), date_to: date = Query(...),
+    db: Session = Depends(get_db),
+):
+    start_at, end_at = _period_bounds(date_from, date_to)
+    totals = db.query(
+        func.count(RadiusSession.id),
+        func.count(func.distinct(RadiusSession.card_id)),
+        func.coalesce(func.sum(RadiusSession.session_time_seconds), 0),
+        func.coalesce(func.sum(RadiusSession.input_octets), 0),
+        func.coalesce(func.sum(RadiusSession.output_octets), 0),
+    ).filter(RadiusSession.started_at >= start_at, RadiusSession.started_at < end_at).one()
+    router_rows = (
+        db.query(Router.name, func.count(RadiusSession.id))
+        .join(Router, Router.id == RadiusSession.router_id)
+        .filter(RadiusSession.started_at >= start_at, RadiusSession.started_at < end_at)
+        .group_by(Router.id, Router.name).order_by(Router.name.asc()).all()
+    )
+    return {
+        "date_from": date_from, "date_to": date_to,
+        "total_sessions": totals[0], "unique_users": totals[1],
+        "session_seconds": int(totals[2] or 0), "upload_bytes": int(totals[3] or 0),
+        "download_bytes": int(totals[4] or 0),
+        "active_sessions": db.query(func.count(RadiusSession.id)).filter(RadiusSession.stopped_at.is_(None)).scalar() or 0,
+        "by_router": [{"router_name": name, "sessions": count} for name, count in router_rows],
+    }
+
+
+@router.get("/batches", dependencies=[Depends(require_permission("cards.view"))])
+def batches_report(
+    date_from: date = Query(...), date_to: date = Query(...),
+    db: Session = Depends(get_db),
+):
+    start_at, end_at = _period_bounds(date_from, date_to)
+    rows = (
+        db.query(CardBatch, Plan.name, PointOfSale.name)
+        .join(Plan, Plan.id == CardBatch.plan_id)
+        .outerjoin(PointOfSale, PointOfSale.id == CardBatch.point_of_sale_id)
+        .filter(CardBatch.created_at >= start_at, CardBatch.created_at < end_at)
+        .order_by(CardBatch.created_at.desc()).all()
+    )
+    batch_ids = [row[0].id for row in rows]
+    counts = {}
+    if batch_ids:
+        count_rows = (
+            db.query(Card.batch_id, func.count(Card.id))
+            .filter(Card.batch_id.in_(batch_ids))
+            .group_by(Card.batch_id).all()
+        )
+        counts = {batch_id: count for batch_id, count in count_rows}
+    return {
+        "date_from": date_from, "date_to": date_to, "total_batches": len(rows),
+        "total_cards": sum(counts.get(row[0].id, 0) for row in rows),
+        "items": [{
+            "batch_id": str(batch.id), "batch_number": batch.batch_number,
+            "created_at": batch.created_at, "plan_name": plan_name,
+            "point_of_sale_name": point_name, "quantity": batch.quantity,
+            "generated_cards": counts.get(batch.id, 0),
+        } for batch, plan_name, point_name in rows],
+    }
+
+
+@router.get("/printing", dependencies=[Depends(require_permission("cards.view"))])
+def printing_report(
+    date_from: date = Query(...), date_to: date = Query(...),
+    db: Session = Depends(get_db),
+):
+    start_at, end_at = _period_bounds(date_from, date_to)
+    totals = db.query(
+        func.count(PrintJob.id), func.coalesce(func.sum(PrintJob.card_count), 0),
+        func.coalesce(func.sum(case((PrintJob.is_reprint.is_(True), 1), else_=0)), 0),
+    ).filter(PrintJob.created_at >= start_at, PrintJob.created_at < end_at).one()
+    rows = (
+        db.query(PrintJob, PointOfSale.name)
+        .outerjoin(PointOfSale, PointOfSale.id == PrintJob.point_of_sale_id)
+        .filter(PrintJob.created_at >= start_at, PrintJob.created_at < end_at)
+        .order_by(PrintJob.created_at.desc()).limit(200).all()
+    )
+    return {
+        "date_from": date_from, "date_to": date_to,
+        "total_jobs": totals[0], "total_cards_printed": int(totals[1] or 0),
+        "reprint_jobs": int(totals[2] or 0),
+        "items": [{
+            "id": str(job.id), "created_at": job.created_at,
+            "point_of_sale_name": point_name or "غير محددة",
+            "card_count": job.card_count, "is_reprint": job.is_reprint,
+            "template_code": job.template_code,
+        } for job, point_name in rows],
+    }
