@@ -10,6 +10,7 @@ from app.models.auth import AdminUser
 from app.schemas.auth import CurrentUserResponse, LoginRequest, TokenResponse
 from app.security import create_access_token, verify_password
 from app.services.audit import record_audit
+from app.services.permissions import effective_permission_codes
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
@@ -44,8 +45,6 @@ def current_identity(user: AdminUser = Depends(get_current_user)) -> CurrentUser
         display_name=user.display_name,
         roles=[role.code for role in user.roles],
         point_of_sale_ids=sorted(point.id for point in user.point_of_sales),
-        permissions=(
-            ["*"] if any(role.code == "owner" for role in user.roles)
-            else sorted({permission.code for role in user.roles for permission in role.permissions})
-        ),
+        card_visibility=user.card_visibility,
+        permissions=sorted(effective_permission_codes(user)),
     )
