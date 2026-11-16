@@ -181,7 +181,7 @@ def list_radius_sessions(
     assigned_pos_ids = [point.id for point in user.point_of_sales]
     session_query = db.query(RadiusSession)
     if not is_owner:
-        session_query = session_query.join(Card, Card.id == RadiusSession.card_id).filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else session_query.filter(RadiusSession.id.is_(None))
+        session_query = session_query.filter(RadiusSession.card_id.in_(db.query(Card.id).filter(Card.assigned_pos_id.in_(assigned_pos_ids)))) if assigned_pos_ids else session_query.filter(RadiusSession.id.is_(None))
     active_count = (
         session_query.with_entities(func.count(RadiusSession.id))
         .filter(RadiusSession.stopped_at.is_(None))
@@ -193,11 +193,11 @@ def list_radius_sessions(
         .scalar() or 0
     )
     total_count = session_query.with_entities(func.count(RadiusSession.id)).scalar() or 0
+    rows_query = db.query(RadiusSession, Card, Router).join(Card, Card.id == RadiusSession.card_id).join(Router, Router.id == RadiusSession.router_id)
+    if not is_owner:
+        rows_query = rows_query.filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else rows_query.filter(RadiusSession.id.is_(None))
     rows = (
-        db.query(RadiusSession, Card, Router)
-        .join(Card, Card.id == RadiusSession.card_id)
-        .filter(RadiusSession.card_id.in_(db.query(Card.id).filter(Card.assigned_pos_id.in_(assigned_pos_ids))) if not is_owner and assigned_pos_ids else True)
-        .join(Router, Router.id == RadiusSession.router_id)
+        rows_query
         .filter(RadiusSession.stopped_at.is_(None))
         .order_by(RadiusSession.started_at.desc())
         .limit(limit)
