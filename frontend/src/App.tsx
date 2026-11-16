@@ -811,7 +811,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         }),
       });
       setPrintTemplate(job.template_code ?? "classic-green");
-      setPrintOptions({ show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true, show_limits: true, sequential: false, ...job.print_options });
+      setPrintOptions(Object.assign({ show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true, show_limits: true, sequential: false }, job.print_options));
       setPrintPreviewCards(result.items);
       await loadPrintHistory(selectedPosId);
       setNotice(`تم تسجيل إعادة طباعة ${result.card_count} كرت دون إضافة قيمة تجارية جديدة.`);
@@ -840,7 +840,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       });
       setSelectedPrintCardIds([]);
       setPrintTemplate(result.template_code || printTemplate);
-      setPrintOptions({ show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true, show_limits: true, sequential: false, ...result.print_options });
+      setPrintOptions(Object.assign({ show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true, show_limits: true, sequential: false }, result.print_options));
       setPrintPreviewCards(result.items);
       await Promise.all([loadCards(), loadPosInventory(selectedPosId), loadPrintHistory(selectedPosId), loadPosAccount(selectedPosId)]);
       setNotice(`تم تسجيل طباعة ${result.card_count} كرت: ${result.commercial_card_count} تجاري و${result.free_card_count} مجاني. القيمة التجارية: ${Number(result.total_amount).toFixed(2)}.`);
