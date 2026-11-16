@@ -612,6 +612,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
   const [generatedBatchNumber, setGeneratedBatchNumber] = useState("");
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
+  const [planEditorOpen, setPlanEditorOpen] = useState(false);
   const [cardSearch, setCardSearch] = useState("");
   const [cardStatusFilter, setCardStatusFilter] = useState("");
   const [cardManagementTab, setCardManagementTab] = useState<"all" | "expired" | "batches" | "sessions">("all");
@@ -1648,6 +1649,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setPlanDraft({ code: "", name: "", price: "", commissionType: "none", commissionValue: "", dataAmount: "", dataUnit: "GB", timeHours: "", validityDays: "", speedProfile: "", sharedUsers: "", groupName: "", rateRx: "", rateTx: "", rateUnit: "Kbps", scheduleEnabled: false, scheduleDays: ["0","1","2","3","4","5","6"], scheduleFrom: "00:00", scheduleTo: "23:59", notificationsEnabled: false, notifyRemaining: "70", notifyExhausted: "95" });
       const wasEditing = editingPlanId !== null;
       setEditingPlanId(null);
+      setPlanEditorOpen(false);
       await loadPlans();
       setNotice(wasEditing ? "تم تحديث الباقة بنجاح." : "تم إنشاء الباقة بنجاح.");
     } catch (err) {
@@ -1659,6 +1661,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   function editPlan(plan: Plan) {
     setEditingPlanId(plan.id);
+    setPlanEditorOpen(true);
     setPlanDraft({
       code: plan.code,
       name: plan.name,
@@ -1988,21 +1991,26 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setEditingPlanId(null);
       setPlanDraft({ code: "", name: "", price: "", commissionType: "none", commissionValue: "", dataAmount: "", dataUnit: "GB", timeHours: "", validityDays: "", speedProfile: "", sharedUsers: "", groupName: "", rateRx: "", rateTx: "", rateUnit: "Kbps", scheduleEnabled: false, scheduleDays: ["0","1","2","3","4","5","6"], scheduleFrom: "00:00", scheduleTo: "23:59", notificationsEnabled: false, notifyRemaining: "70", notifyExhausted: "95" });
       setNotice("");
+      setPlanEditorOpen(false);
     };
     return (
       <section className="plans-workspace">
         <div className="section-heading plans-page-heading">
           <div><span className="eyebrow">إعدادات الاشتراكات والخدمات</span><h2>إدارة الباقات</h2><p>أنشئ باقات الإنترنت وحدد أسعارها وحدود الاستخدام والسرعة والعمولات والإضافات المرتبطة بها.</p></div>
-          <span className="count-tag">{plans.length.toLocaleString("ar")} باقة</span>
+          <div className="plans-heading-actions">
+            <span className="count-tag">{plans.length.toLocaleString("ar")} باقة</span>
+            {!planEditorOpen && can("plans.create") && <button type="button" className="plans-add-button" onClick={() => { resetPlanDraft(); setPlanEditorOpen(true); setError(""); }}>إضافة باقة جديدة</button>}
+          </div>
         </div>
 
+        {!planEditorOpen && <>
         <div className="plans-summary">
           <article><span>إجمالي الباقات</span><strong>{plans.length.toLocaleString("ar")}</strong><small>الباقات المحفوظة في النظام</small></article>
           <article><span>باقات مفعّلة</span><strong>{activePlans.toLocaleString("ar")}</strong><small>متاحة لإنشاء الكروت</small></article>
           <article><span>باقات متوقفة</span><strong>{inactivePlans.toLocaleString("ar")}</strong><small>محفوظة ويمكن إعادة تفعيلها</small></article>
         </div>
 
-        {(can("plans.create") || (editingPlanId !== null && can("plans.update"))) && (
+        {planEditorOpen && (can("plans.create") || (editingPlanId !== null && can("plans.update"))) && (
 <form className="panel plan-editor plans-editor-panel" onSubmit={createPlan}>
           <div className="plans-editor-title">
             <div><span className="eyebrow">{editingPlanId !== null ? "تحديث باقة محفوظة" : "إعداد باقة جديدة"}</span><h3>{editingPlanId !== null ? "تعديل بيانات الباقة" : "إضافة باقة جديدة"}</h3><p>الحقول الاختيارية التي تتركها فارغة تعني أن الحد مفتوح.</p></div>
@@ -2044,7 +2052,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           </div>
 
           <div className="notice">تُحفظ إعدادات الإضافات والجدولة ضمن الباقة. تفعيلها فعلياً على الراوتر وإرسال الإشعارات يحتاج ربط محرك التنفيذ لاحقاً.</div>
-          <div className="form-actions plans-form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPlanId ? "حفظ التعديلات" : "إنشاء الباقة"}</button>{editingPlanId !== null && <button type="button" className="secondary-button" onClick={resetPlanDraft}>إلغاء التعديل</button>}</div>
+          <div className="form-actions plans-form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPlanId ? "حفظ التعديلات" : "إنشاء الباقة"}</button><button type="button" className="secondary-button" disabled={busy} onClick={resetPlanDraft}>العودة إلى قائمة الباقات</button></div>
         </form>
 )}
 
@@ -2054,6 +2062,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <tbody>{plans.map((plan) => <tr key={plan.id}><td><span className="plan-code">{plan.code}</span></td><td><strong>{plan.name}</strong></td><td>{Number(plan.price).toLocaleString("en-US")} ريال</td><td>{plan.commission_type === "none" ? "بدون" : plan.commission_type === "percentage" ? `${Number(plan.commission_value)}%` : `${Number(plan.commission_value).toFixed(2)} ريال`}</td><td>{plan.data_limit_bytes === null ? "مفتوح" : `${plan.data_limit_bytes % (1024 ** 3) === 0 ? (plan.data_limit_bytes / 1024 ** 3).toFixed(2) + " GB" : (plan.data_limit_bytes / 1024 ** 2).toFixed(0) + " MB"}`}</td><td>{plan.session_time_limit_seconds === null ? "مفتوح" : `${(plan.session_time_limit_seconds / 3600).toFixed(2)} ساعة`}</td><td>{plan.validity_period_seconds === null ? "مفتوح" : `${(plan.validity_period_seconds / 86400).toFixed(2)} يوم`}</td><td>{plan.settings?.shared_users == null ? "غير محدود" : String(plan.settings.shared_users)}</td><td>{String(plan.settings?.group ?? "—")}</td><td>{plan.speed_profile || "—"}</td><td><span className={plan.is_active ? "plan-status active" : "plan-status inactive"}>{plan.is_active ? "مفعّلة" : "متوقفة"}</span></td><td>{can("plans.update") && <><button type="button" className="table-action" disabled={busy} onClick={() => editPlan(plan)}>تعديل</button><button type="button" className={plan.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePlan(plan)}>{plan.is_active ? "إيقاف" : "تفعيل"}</button></>}</td></tr>)}</tbody>
           </table>{plans.length === 0 && <div className="empty-state">لا توجد باقات بعد. أنشئ أول باقة من النموذج أعلاه.</div>}</div>
         </section>
+        </>}
       </section>
     );
   }
