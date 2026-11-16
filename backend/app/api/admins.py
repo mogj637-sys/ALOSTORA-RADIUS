@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import get_current_owner
 from app.db.session import get_db
 from app.models.auth import AdminUser, Role, Permission
-from app.schemas.admins import AdminRoleResponse, AdminUserCreate, AdminUserResponse, AdminUserUpdate
+from app.schemas.admins import AdminRoleCreate, AdminRoleResponse, AdminUserCreate, AdminUserResponse, AdminUserUpdate
 from app.security import hash_password
 from app.services.audit import record_audit
 
@@ -43,6 +43,29 @@ def list_roles(
         AdminRoleResponse(code=role.code, name=role.name, description=role.description)
         for role in db.query(Role).order_by(Role.id).all()
     ]
+
+
+@router.post("/roles", response_model=AdminRoleResponse, status_code=status.HTTP_201_CREATED)
+def create_role(
+    payload: AdminRoleCreate,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_owner),
+) -> AdminRoleResponse:
+    if payload.code == "owner":
+        raise HTTPException(status_code=422, detail="رمز owner محجوز لمدير النظام")
+    if db.query(Role).filter(Role.code == payload.code).first():
+        raise HTTPException(status_code=409, detail="رمز الدور مستخدم بالفعل")
+    role = Role(code=payload.code, name=payload.name, description=payload.description)
+    db.add(role)
+    db.flush()
+    record_audit(
+        db, current_user, "role.created", "role",
+        f"إنشاء دور إداري: {role.name}", entity_id=role.id,
+        details={"code": role.code, "description": role.description},
+    )
+    db.commit()
+    db.refresh(role)
+    return AdminRoleResponse(code=role.code, name=role.name, description=role.description)
 
 
 @router.get("", response_model=list[AdminUserResponse])
