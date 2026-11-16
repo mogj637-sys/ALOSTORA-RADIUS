@@ -100,6 +100,9 @@ class PointOfSale(TimestampMixin, Base):
     contact_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    debt_limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    allow_card_creation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    allow_printing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class CardBatch(TimestampMixin, Base):
