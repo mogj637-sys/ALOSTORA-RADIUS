@@ -229,15 +229,38 @@ def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db),
         raise HTTPException(status_code=409, detail="اسم المستخدم مستخدم من قبل")
 
     password = _credential_for(payload.card_type, payload.username, payload.password)
+    point = db.get(PointOfSale, payload.point_of_sale_id) if payload.point_of_sale_id else None
+    if payload.point_of_sale_id and (point is None or not point.is_active):
+        raise HTTPException(status_code=422, detail="اختر نقطة بيع موجودة ومفعلة")
+    template = db.query(CardTemplate).filter(CardTemplate.code == payload.template_code).first() if payload.template_code else None
+    if payload.template_code and template is None:
+        raise HTTPException(status_code=404, detail="قالب الطباعة غير موجود")
+    if template and template.plan_id is not None and template.plan_id != plan.id:
+        raise HTTPException(status_code=422, detail="الباقة لا تطابق الباقة المرتبطة بقالب الطباعة")
     _ensure_encryption_ready()
+    batch = CardBatch(
+        batch_number="BAT" + secrets.token_hex(5).upper(),
+        plan_id=plan.id,
+        point_of_sale_id=point.id if point else None,
+        template_code=payload.template_code,
+        quantity=1,
+        card_type=payload.card_type,
+        generation_mode="single",
+        username_length=len(payload.username),
+        password_length=len(password),
+        prefix="",
+        requested_by=user.username,
+    )
     try:
-        card = _build_card(plan, payload.username, password, payload.card_type, payload.is_free)
+        db.add(batch)
+        db.flush()
+        card = _build_card(plan, payload.username, password, payload.card_type, payload.is_free, batch_id=batch.id)
         db.add(card)
         db.flush()
         db.add(CardEvent(
             card_id=card.id,
             event_type="created",
-            details={"plan_id": plan.id, "is_free": payload.is_free, "card_type": payload.card_type},
+            details={"plan_id": plan.id, "is_free": payload.is_free, "card_type": payload.card_type, "batch_id": str(batch.id)},
             actor=user.username,
         ))
         db.commit()
@@ -248,6 +271,10 @@ def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db),
 
     return CardCreateResponse(
         id=card.id,
+        batch_id=batch.id,
+        batch_number=batch.batch_number,
+        template_code=batch.template_code,
+        point_of_sale_id=batch.point_of_sale_id,
         serial_number=card.serial_number,
         username=card.username,
         password=password,
