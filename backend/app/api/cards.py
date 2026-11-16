@@ -158,7 +158,7 @@ def get_radius_overview(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/sessions")
+@router.get("/sessions", dependencies=[Depends(require_permission("sessions.view"))])
 def list_radius_sessions(
     limit: int = Query(default=200, ge=1, le=500),
     db: Session = Depends(get_db),
