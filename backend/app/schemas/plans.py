@@ -7,6 +7,54 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 CommissionType = Literal["none", "fixed", "percentage"]
 
 
+def _validate_plan_settings(settings: dict | None) -> None:
+    if settings is None:
+        return
+    shared_users = settings.get("shared_users")
+    if shared_users not in (None, ""):
+        try:
+            numeric_shared_users = Decimal(str(shared_users))
+        except Exception as exc:
+            raise ValueError("عدد المستخدمين المتزامنين يجب أن يكون عدداً صحيحاً موجباً") from exc
+        if numeric_shared_users < 1 or numeric_shared_users != numeric_shared_users.to_integral_value():
+            raise ValueError("عدد المستخدمين المتزامنين يجب أن يكون عدداً صحيحاً موجباً")
+
+    rx = settings.get("rate_limit_rx")
+    tx = settings.get("rate_limit_tx")
+    if (rx in (None, "")) != (tx in (None, "")):
+        raise ValueError("يجب تحديد سرعتي التنزيل والرفع معاً")
+    if rx not in (None, ""):
+        try:
+            if Decimal(str(rx)) <= 0 or Decimal(str(tx)) <= 0:
+                raise ValueError("قيم السرعة يجب أن تكون أكبر من صفر")
+        except Exception as exc:
+            raise ValueError("قيم السرعة يجب أن تكون أرقاماً موجبة") from exc
+        if settings.get("rate_limit_unit", "Kbps") not in {"Kbps", "Mbps"}:
+            raise ValueError("وحدة السرعة غير مدعومة")
+
+    schedule = settings.get("schedule") or {}
+    if schedule.get("enabled"):
+        days = schedule.get("days")
+        if not isinstance(days, list) or not days or any(str(day) not in {"0", "1", "2", "3", "4", "5", "6"} for day in days):
+            raise ValueError("اختر يوماً واحداً على الأقل لجدولة الباقة")
+        for key in ("from", "to"):
+            value = schedule.get(key)
+            if not isinstance(value, str) or len(value) != 5 or value[2] != ":":
+                raise ValueError("وقت الجدولة يجب أن يكون بصيغة HH:MM")
+            try:
+                hour, minute = (int(part) for part in value.split(":"))
+            except ValueError as exc:
+                raise ValueError("وقت الجدولة يجب أن يكون بصيغة HH:MM") from exc
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                raise ValueError("وقت الجدولة غير صحيح")
+
+    notifications = settings.get("notifications") or {}
+    for key in ("remaining_percent", "exhausted_percent"):
+        value = notifications.get(key)
+        if value is not None and not 1 <= int(value) <= 100:
+            raise ValueError("نسب التنبيهات يجب أن تكون بين 1 و100")
+
+
 class PlanCreate(BaseModel):
     code: str = Field(min_length=2, max_length=50, pattern=r"^[A-Za-z0-9_-]+$")
     name: str = Field(min_length=2, max_length=120)
@@ -22,6 +70,7 @@ class PlanCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_commission(self):
+        _validate_plan_settings(self.settings)
         if self.commission_type == "percentage" and self.commission_value > 100:
             raise ValueError("نسبة العمولة لا يمكن أن تتجاوز 100%")
         if self.commission_type == "fixed" and self.commission_value > self.price:
@@ -47,6 +96,8 @@ class PlanUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_commission(self):
+        if "settings" in self.model_fields_set:
+            _validate_plan_settings(self.settings)
         if not self.model_fields_set:
             raise ValueError("يجب إرسال حقل واحد على الأقل للتعديل")
         if "commission_type" in self.model_fields_set and self.commission_type == "percentage" and self.commission_value > 100:
