@@ -799,7 +799,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setError("");
       loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقارير المالية"));
     }
-    if (page === "plans" || page === "cards" || page === "card-create" || page === "pos" || page === "routers") {
+    if (page === "plans" || page === "cards" || page === "card-create" || page === "pos" || page === "pos-management" || page === "routers") {
       setError("");
       Promise.all([
         loadPlans(),
