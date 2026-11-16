@@ -420,6 +420,7 @@ tbody tr:hover { background: #fbfdfc; }
 .card-selection-toolbar span { margin-right: auto; }
 .card-selection-toolbar button { border: 0; border-radius: 7px; background: #168767; color: #fff; padding: 9px 13px; font: inherit; cursor: pointer; }
 .card-selection-toolbar button:disabled { opacity: .45; cursor: not-allowed; }
+.card-selection-toolbar button.secondary-button { background: #edf3f1; color: #236b56; }
 .template-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 13px; margin-top: 18px; }
 .template-item h3 { font-size: 13px; margin: 12px 0 5px; }
 .template-item small { color: #788397; font-size: 10px; }
@@ -683,7 +684,7 @@ tbody tr:hover { background: #fbfdfc; }
 /* Card management filters */
 .card-management-filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(150px, .8fr)) auto;
+  grid-template-columns: minmax(220px, 1.4fr) auto repeat(3, minmax(140px, .8fr)) auto;
   align-items: end;
   gap: 11px;
   margin: 14px 0;
