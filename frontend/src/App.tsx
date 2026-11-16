@@ -406,6 +406,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [accountDraft, setAccountDraft] = useState({ amount: "", entryType: "payment", direction: "credit" as "debit" | "credit", description: "", reference: "" });
   const [printHistory, setPrintHistory] = useState<PrintJobHistory[]>([]);
   const [posDraft, setPosDraft] = useState({ code: "", name: "", contactName: "", phone: "" });
+  const [editingPosId, setEditingPosId] = useState<number | null>(null);
   const [selectedPrintCardIds, setSelectedPrintCardIds] = useState<string[]>([]);
   const [printPreviewCards, setPrintPreviewCards] = useState<PrintJobResult["items"]>([]);
   const [printTemplate, setPrintTemplate] = useState("classic-green");
@@ -751,20 +752,21 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     event.preventDefault();
     setBusy(true); setError(""); setNotice("");
     try {
-      const point = await apiRequest<PointOfSale>(token, "/api/v1/points-of-sale", {
-        method: "POST",
-        body: JSON.stringify({
-          code: posDraft.code,
-          name: posDraft.name,
-          contact_name: posDraft.contactName || null,
-          phone: posDraft.phone || null,
-        }),
-      });
+      const point = editingPosId
+        ? await apiRequest<PointOfSale>(token, `/api/v1/points-of-sale/${editingPosId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ name: posDraft.name, contact_name: posDraft.contactName || null, phone: posDraft.phone || null }),
+          })
+        : await apiRequest<PointOfSale>(token, "/api/v1/points-of-sale", {
+            method: "POST",
+            body: JSON.stringify({ code: posDraft.code, name: posDraft.name, contact_name: posDraft.contactName || null, phone: posDraft.phone || null }),
+          });
       setPosDraft({ code: "", name: "", contactName: "", phone: "" });
+      setEditingPosId(null);
       await loadPointsOfSale();
       setSelectedPosId(String(point.id));
       await Promise.all([loadPosInventory(String(point.id)), loadPrintHistory(String(point.id)), loadPosAccount(String(point.id))]);
-      setNotice("تم إنشاء نقطة البيع بنجاح.");
+      setNotice(editingPosId ? "تم تحديث نقطة البيع." : "تم إنشاء نقطة البيع بنجاح.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر إنشاء نقطة البيع");
     } finally { setBusy(false); }
@@ -1264,18 +1266,18 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <span className="count-tag">{points.length} نقطة بيع</span>
         </div>
         <form className="panel form-grid" onSubmit={createPointOfSale}>
-          <label>رمز نقطة البيع<input value={posDraft.code} onChange={(e) => setPosDraft({ ...posDraft, code: e.target.value })} required minLength={2} maxLength={50} pattern="[A-Za-z0-9_-]+" /></label>
+          <label>رمز نقطة البيع<input value={posDraft.code} onChange={(e) => setPosDraft({ ...posDraft, code: e.target.value })} disabled={editingPosId !== null} required minLength={2} maxLength={50} pattern="[A-Za-z0-9_-]+" /></label>
           <label>اسم نقطة البيع<input value={posDraft.name} onChange={(e) => setPosDraft({ ...posDraft, name: e.target.value })} required minLength={2} maxLength={150} /></label>
           <label>اسم المسؤول<input value={posDraft.contactName} onChange={(e) => setPosDraft({ ...posDraft, contactName: e.target.value })} maxLength={150} /></label>
           <label>رقم الهاتف<input value={posDraft.phone} onChange={(e) => setPosDraft({ ...posDraft, phone: e.target.value })} maxLength={40} /></label>
-          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : "إضافة نقطة بيع"}</button></div>
+          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPosId ? "حفظ تعديلات نقطة البيع" : "إضافة نقطة بيع"}</button>{editingPosId !== null && <button type="button" className="secondary-button" onClick={() => { setEditingPosId(null); setPosDraft({ code: "", name: "", contactName: "", phone: "" }); }}>إلغاء التعديل</button>}</div>
         </form>
         <div className="table-wrap">
           <table><thead><tr><th>الرمز</th><th>اسم نقطة البيع</th><th>المسؤول</th><th>الهاتف</th><th>الحالة</th><th>الإجراء</th></tr></thead>
             <tbody>{points.map((point) => <tr key={point.id}>
               <td>{point.code}</td><td>{point.name}</td><td>{point.contact_name || "—"}</td><td>{point.phone || "—"}</td>
               <td>{point.is_active ? "مفعلة" : "متوقفة"}</td>
-              <td><button type="button" className="table-action" disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف" : "تفعيل"}</button></td>
+              <td><button type="button" className="table-action" disabled={busy} onClick={() => { setEditingPosId(point.id); setPosDraft({ code: point.code, name: point.name, contactName: point.contact_name || "", phone: point.phone || "" }); }}>تعديل</button><button type="button" className="table-action" disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف" : "تفعيل"}</button></td>
             </tr>)}</tbody>
           </table>
           {points.length === 0 && <div className="empty-state">لا توجد نقاط بيع. أضف أول نقطة بيع من النموذج أعلاه.</div>}
