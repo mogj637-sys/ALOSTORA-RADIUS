@@ -126,7 +126,10 @@ def list_print_jobs(
     point_of_sale_id: int = Query(gt=0),
     limit: int = Query(default=30, ge=1, le=100),
     db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("cards.view")),
 ):
+    if not any(role.code == "owner" for role in user.roles) and point_of_sale_id not in {point.id for point in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية الاطلاع على عمليات نقطة البيع هذه")
     point = db.get(PointOfSale, point_of_sale_id)
     if point is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
@@ -173,6 +176,8 @@ def create_print_job(
     if existing is not None:
         return existing
 
+    if not any(role.code == "owner" for role in user.roles) and payload.point_of_sale_id not in {point.id for point in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية الطباعة لنقطة البيع هذه")
     point_of_sale = db.get(PointOfSale, payload.point_of_sale_id)
     if point_of_sale is None or not point_of_sale.is_active:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة أو غير مفعلة")
