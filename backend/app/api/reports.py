@@ -23,7 +23,6 @@ from app.schemas.reports import (
 router = APIRouter(
     prefix="/api/v1/reports",
     tags=["reports"],
-    dependencies=[Depends(require_permission("reports.view"))],
 )
 
 
