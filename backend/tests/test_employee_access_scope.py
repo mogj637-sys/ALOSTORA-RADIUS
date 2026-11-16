@@ -185,6 +185,11 @@ def test_employee_can_search_any_pos_card_but_cannot_browse_all_cards_or_pos_fin
         assert {item["router_name"] for item in history.json()["items"]} == {
             "CI employee session router"
         }
+        mismatched_search = client.get(
+            f"/api/v1/cards/{card_b['id']}/sessions?search={card_a['username']}",
+            headers=staff_headers,
+        )
+        assert mismatched_search.status_code == 404
 
         # Reading a card's sessions does not grant permission to disconnect it.
         disconnect = client.post(
