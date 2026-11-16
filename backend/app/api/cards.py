@@ -29,7 +29,7 @@ from app.schemas.cards import (
 from app.services.card_generator import generate_password, generate_username
 from app.services.credentials import CredentialEncryptionNotConfigured, encrypt_credential
 from app.services.pos_credit import ensure_pos_card_creation_allowed
-from app.services.permissions import card_visibility, is_owner
+from app.services.permissions import card_visibility, has_permission, is_owner
 
 router = APIRouter(prefix="/api/v1/cards", tags=["cards"])
 
@@ -165,21 +165,30 @@ def get_radius_overview(db: Session = Depends(get_db), user: AdminUser = Depends
         card_query = card_query.filter(Card.id.is_(None))
         session_query = session_query.filter(RadiusSession.id.is_(None))
     card_counts = dict(card_query.with_entities(Card.status, func.count(Card.id)).group_by(Card.status).all())
-    active_sessions = (
-        session_query.with_entities(func.count(RadiusSession.id))
-        .filter(RadiusSession.stopped_at.is_(None))
-        .scalar() or 0
-    )
-    active_users = (
-        session_query.with_entities(func.count(func.distinct(RadiusSession.card_id)))
-        .filter(RadiusSession.stopped_at.is_(None))
-        .scalar() or 0
-    )
-    total_sessions = session_query.with_entities(func.count(RadiusSession.id)).scalar() or 0
-    routers_total = db.query(func.count(Router.id)).scalar() or 0
-    routers_enabled = db.query(func.count(Router.id)).filter(Router.is_active.is_(True)).scalar() or 0
-    plans_total = db.query(func.count(Plan.id)).scalar() or 0
-    plans_enabled = db.query(func.count(Plan.id)).filter(Plan.is_active.is_(True)).scalar() or 0
+    if has_permission(user, "sessions.view"):
+        active_sessions = (
+            session_query.with_entities(func.count(RadiusSession.id))
+            .filter(RadiusSession.stopped_at.is_(None))
+            .scalar() or 0
+        )
+        active_users = (
+            session_query.with_entities(func.count(func.distinct(RadiusSession.card_id)))
+            .filter(RadiusSession.stopped_at.is_(None))
+            .scalar() or 0
+        )
+        total_sessions = session_query.with_entities(func.count(RadiusSession.id)).scalar() or 0
+    else:
+        active_sessions = active_users = total_sessions = 0
+    if has_permission(user, "routers.view"):
+        routers_total = db.query(func.count(Router.id)).scalar() or 0
+        routers_enabled = db.query(func.count(Router.id)).filter(Router.is_active.is_(True)).scalar() or 0
+    else:
+        routers_total = routers_enabled = 0
+    if has_permission(user, "plans.view"):
+        plans_total = db.query(func.count(Plan.id)).scalar() or 0
+        plans_enabled = db.query(func.count(Plan.id)).filter(Plan.is_active.is_(True)).scalar() or 0
+    else:
+        plans_total = plans_enabled = 0
     return {
         "database_status": "connected",
         "cards_total": int(sum(card_counts.values())),
