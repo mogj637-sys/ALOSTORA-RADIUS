@@ -2288,7 +2288,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     const selectableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
     return <>
       <div className="section-heading"><div><h2>{user.card_visibility !== "search_any" ? "إدارة الكروت" : "البحث عن كرت"}</h2><p>{user.card_visibility === "all" ? "عرض وإدارة جميع كروت النظام." : user.card_visibility === "assigned" ? "عرض وإدارة كروت نقاط البيع المرتبطة بحسابك." : "ابحث باسم المستخدم أو الرقم التسلسلي الكامل للوصول إلى كرت من أي نقطة بيع، ثم اعرض بياناته وجلساته."}</p></div>{user.card_visibility !== "search_any" && <span className="count-tag">200 كرت لكل صفحة</span>}</div>
-      {user.card_visibility !== "search_any" && cardBatchFilter && <div className="notice">تُعرض كروت الدفعة المحددة فقط. <button type="button" className="table-action" onClick={() => { setCardBatchFilter(""); loadCards(cardSearch, 0, "").catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت")); }}>إلغاء فلتر الدفعة</button></div>}
+      {user.card_visibility !== "search_any" && cardBatchFilter && <div className="notice">تُعرض كروت الدفعة المحددة فقط. <button type="button" className="table-action" onClick={() => { setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards(cardSearch, 0, "").catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت")); }}>إلغاء فلتر الدفعة</button></div>}
       {user.card_visibility !== "search_any" && <div className="card-management-tabs" role="tablist" aria-label="تصنيفات إدارة الكروت">
         <button type="button" role="tab" aria-selected={cardManagementTab === "all"} className={cardManagementTab === "all" ? "active" : ""} onClick={() => { setCardManagementTab("all"); setSelectedCardIds([]); setCardStatusFilter(""); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "", cardPlanFilter, cardFreeFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جميع الكروت")); }}>{user.card_visibility === "all" ? "جميع كروت النظام" : "كروت نقاط البيع المرتبطة"}</button>
         <button type="button" role="tab" aria-selected={cardManagementTab === "expired"} className={cardManagementTab === "expired" ? "active" : ""} onClick={() => { setCardManagementTab("expired"); setSelectedCardIds([]); setCardStatusFilter("expired"); setCardOffset(0); loadCards(cardSearch, 0, cardBatchFilter, "expired", cardPlanFilter, cardFreeFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت المنتهية")); }}>الكروت المنتهية</button>
@@ -2322,12 +2322,6 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           const totalConsumedBytes = Math.max(0, Number(card.upload_bytes || 0)) + Math.max(0, Number(card.download_bytes || 0));
           const remainingDataBytes = dataLimit === null ? null : Math.max(0, dataLimit - totalConsumedBytes);
           const expiryTimestamp = card.expires_at ? Date.parse(card.expires_at) : Number.NaN;
-          const validityRemainingLabel = Number.isFinite(expiryTimestamp)
-            ? expiryTimestamp <= Date.now() ? "انتهت" : formatDuration(Math.ceil((expiryTimestamp - Date.now()) / 1000))
-            : card.expires_at ? "غير متاح"
-            : typeof snapshot.validity_period_seconds === "number" && snapshot.validity_period_seconds > 0
-              ? card.first_used_at ? "غير متاح" : "تبدأ بعد أول استخدام"
-              : "مفتوحة";
           const planSettings = snapshot.settings && typeof snapshot.settings === "object" ? snapshot.settings as Record<string, unknown> : {};
           const sharedUsers = planSettings.shared_users;
           const sharedUsersLabel = sharedUsers === undefined || sharedUsers === null || sharedUsers === "" ? "غير محدود" : String(sharedUsers);
@@ -2346,6 +2340,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             const minutes = Math.floor((safe % 3600) / 60);
             return days ? `${days} يوم ${hours} س` : hours ? `${hours} س ${minutes} د` : `${minutes} د`;
           };
+          const validityRemainingLabel = Number.isFinite(expiryTimestamp)
+            ? expiryTimestamp <= Date.now() ? "انتهت" : formatDuration(Math.ceil((expiryTimestamp - Date.now()) / 1000))
+            : card.expires_at ? "غير متاح"
+            : typeof snapshot.validity_period_seconds === "number" && snapshot.validity_period_seconds > 0
+              ? card.first_used_at ? "غير متاح" : "تبدأ بعد أول استخدام"
+              : "مفتوحة";
           const formatBytes = (bytes: number) => {
             if (bytes <= 0) return "0 ميجابايت";
             const mb = bytes / (1024 * 1024);
