@@ -1092,43 +1092,77 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderPlans() {
+    const activePlans = plans.filter((plan) => plan.is_active).length;
+    const inactivePlans = plans.length - activePlans;
+    const resetPlanDraft = () => {
+      setEditingPlanId(null);
+      setPlanDraft({ code: "", name: "", price: "", commissionType: "none", commissionValue: "", dataAmount: "", dataUnit: "GB", timeHours: "", validityDays: "", speedProfile: "", sharedUsers: "", groupName: "", rateRx: "", rateTx: "", rateUnit: "Kbps", scheduleEnabled: false, scheduleDays: ["0","1","2","3","4","5","6"], scheduleFrom: "00:00", scheduleTo: "23:59", notificationsEnabled: false, notifyRemaining: "70", notifyExhausted: "95" });
+      setNotice("");
+    };
     return (
-      <>
-        <div className="section-heading"><div><h2>إدارة الباقات</h2><p>حدد السعر وحدود الاستخدام والصلاحية والسرعة، ويمكنك تعديل الباقة أو إيقافها دون حذفها.</p></div></div>
-        <form className="panel plan-editor" onSubmit={createPlan}>
-          <div className="plan-form-section"><h3>بيانات الباقة الأساسية</h3><div className="form-grid">
-            <label>رمز الباقة<input value={planDraft.code} onChange={(e) => setPlanDraft({ ...planDraft, code: e.target.value })} required /></label>
-            <label>اسم الباقة<input value={planDraft.name} onChange={(e) => setPlanDraft({ ...planDraft, name: e.target.value })} required /></label>
-            <label>السعر<input type="number" min="0" step="0.01" value={planDraft.price} onChange={(e) => setPlanDraft({ ...planDraft, price: e.target.value })} required /></label>
-            <label>الصلاحية بالأيام <span className="field-hint">تبدأ من أول دخول</span><input type="number" min="0.01" step="0.01" value={planDraft.validityDays} onChange={(e) => setPlanDraft({ ...planDraft, validityDays: e.target.value })} /></label>
-            <label>وقت الاستخدام بالساعات<input type="number" min="0.01" step="0.01" value={planDraft.timeHours} onChange={(e) => setPlanDraft({ ...planDraft, timeHours: e.target.value })} /></label>
-            <label>الحجم<input type="number" min="0.001" step="0.001" value={planDraft.dataAmount} onChange={(e) => setPlanDraft({ ...planDraft, dataAmount: e.target.value })} placeholder="فارغ = مفتوح" /></label>
+      <section className="plans-workspace">
+        <div className="section-heading plans-page-heading">
+          <div><span className="eyebrow">إعدادات الاشتراكات والخدمات</span><h2>إدارة الباقات</h2><p>أنشئ باقات الإنترنت وحدد أسعارها وحدود الاستخدام والسرعة والعمولات والإضافات المرتبطة بها.</p></div>
+          <span className="count-tag">{plans.length.toLocaleString("ar")} باقة</span>
+        </div>
+
+        <div className="plans-summary">
+          <article><span>إجمالي الباقات</span><strong>{plans.length.toLocaleString("ar")}</strong><small>الباقات المحفوظة في النظام</small></article>
+          <article><span>باقات مفعّلة</span><strong>{activePlans.toLocaleString("ar")}</strong><small>متاحة لإنشاء الكروت</small></article>
+          <article><span>باقات متوقفة</span><strong>{inactivePlans.toLocaleString("ar")}</strong><small>محفوظة ويمكن إعادة تفعيلها</small></article>
+        </div>
+
+        <form className="panel plan-editor plans-editor-panel" onSubmit={createPlan}>
+          <div className="plans-editor-title">
+            <div><span className="eyebrow">{editingPlanId !== null ? "تحديث باقة محفوظة" : "إعداد باقة جديدة"}</span><h3>{editingPlanId !== null ? "تعديل بيانات الباقة" : "إضافة باقة جديدة"}</h3><p>الحقول الاختيارية التي تتركها فارغة تعني أن الحد مفتوح.</p></div>
+            <span className="plans-editor-symbol">◷</span>
+          </div>
+
+          <div className="plan-form-section"><div className="plan-section-title"><span>01</span><div><h3>البيانات الأساسية والسعر</h3><p>اسم الباقة ورمزها والسعر والحدود الرئيسية</p></div></div><div className="form-grid">
+            <label>رمز الباقة<input value={planDraft.code} onChange={(e) => setPlanDraft({ ...planDraft, code: e.target.value })} required placeholder="مثال: BASIC-100" /></label>
+            <label>اسم الباقة<input value={planDraft.name} onChange={(e) => setPlanDraft({ ...planDraft, name: e.target.value })} required placeholder="اسم يظهر في الكروت والقوائم" /></label>
+            <label>السعر (ريال)<input type="number" min="0" step="0.01" value={planDraft.price} onChange={(e) => setPlanDraft({ ...planDraft, price: e.target.value })} required /></label>
+            <label>الصلاحية بالأيام <span className="field-hint">تبدأ من أول دخول</span><input type="number" min="0.01" step="0.01" value={planDraft.validityDays} onChange={(e) => setPlanDraft({ ...planDraft, validityDays: e.target.value })} placeholder="فارغ = مفتوح" /></label>
+            <label>وقت الاستخدام بالساعات<input type="number" min="0.01" step="0.01" value={planDraft.timeHours} onChange={(e) => setPlanDraft({ ...planDraft, timeHours: e.target.value })} placeholder="فارغ = مفتوح" /></label>
+            <label>كمية التحميل<input type="number" min="0.001" step="0.001" value={planDraft.dataAmount} onChange={(e) => setPlanDraft({ ...planDraft, dataAmount: e.target.value })} placeholder="فارغ = مفتوح" /></label>
             <label>وحدة الحجم<select value={planDraft.dataUnit} onChange={(e) => setPlanDraft({ ...planDraft, dataUnit: e.target.value as "MB" | "GB" })}><option>MB</option><option>GB</option></select></label>
+          </div></div>
+
+          <div className="plan-form-section"><div className="plan-section-title"><span>02</span><div><h3>السعر والعمولات</h3><p>تحديد عمولة نقطة البيع لكل كرت</p></div></div><div className="form-grid">
             <label>نوع العمولة<select value={planDraft.commissionType} onChange={(e) => setPlanDraft({ ...planDraft, commissionType: e.target.value as "none" | "fixed" | "percentage", commissionValue: e.target.value === "none" ? "" : planDraft.commissionValue })}><option value="none">بدون عمولة</option><option value="percentage">نسبة مئوية</option><option value="fixed">مبلغ ثابت لكل كرت</option></select></label>
             {planDraft.commissionType !== "none" && <label>{planDraft.commissionType === "percentage" ? "نسبة العمولة (%)" : "العمولة لكل كرت (ريال)"}<input type="number" min="0" max={planDraft.commissionType === "percentage" ? "100" : planDraft.price || undefined} step="0.01" value={planDraft.commissionValue} onChange={(e) => setPlanDraft({ ...planDraft, commissionValue: e.target.value })} required /></label>}
           </div></div>
-          <div className="plan-form-section"><h3>إضافات وحدود الباقة</h3><div className="form-grid">
-            <label>عدد المستخدمين المتزامنين <span className="field-hint">فارغ = unlimited</span><input type="number" min="1" value={planDraft.sharedUsers} onChange={(e) => setPlanDraft({ ...planDraft, sharedUsers: e.target.value })} placeholder="unlimited" /></label>
-            <label>المجموعة<input value={planDraft.groupName} onChange={(e) => setPlanDraft({ ...planDraft, groupName: e.target.value })} placeholder="اسم المجموعة في User Manager" /></label>
+
+          <div className="plan-form-section"><div className="plan-section-title"><span>03</span><div><h3>المستخدمون والمجموعة والسرعة</h3><p>حدود الاتصال وإعدادات السرعة المرتبطة بالباقة</p></div></div><div className="form-grid">
+            <label>عدد المستخدمين المتزامنين <span className="field-hint">فارغ = غير محدود</span><input type="number" min="1" value={planDraft.sharedUsers} onChange={(e) => setPlanDraft({ ...planDraft, sharedUsers: e.target.value })} placeholder="غير محدود" /></label>
+            <label>المجموعة<input value={planDraft.groupName} onChange={(e) => setPlanDraft({ ...planDraft, groupName: e.target.value })} placeholder="اسم المجموعة" /></label>
             <label>ملف السرعة<input value={planDraft.speedProfile} onChange={(e) => setPlanDraft({ ...planDraft, speedProfile: e.target.value })} placeholder="مثال: 2M" /></label>
             <label>سرعة التنزيل<input value={planDraft.rateRx} onChange={(e) => setPlanDraft({ ...planDraft, rateRx: e.target.value })} placeholder="مثال: 2" /></label>
             <label>سرعة الرفع<input value={planDraft.rateTx} onChange={(e) => setPlanDraft({ ...planDraft, rateTx: e.target.value })} placeholder="مثال: 1" /></label>
             <label>وحدة السرعة<select value={planDraft.rateUnit} onChange={(e) => setPlanDraft({ ...planDraft, rateUnit: e.target.value as "Kbps" | "Mbps" })}><option>Kbps</option><option>Mbps</option></select></label>
           </div></div>
-          <div className="plan-form-section"><h3>جدولة استخدام الباقة</h3><label className="checkbox-label"><input type="checkbox" checked={planDraft.scheduleEnabled} onChange={(e) => setPlanDraft({ ...planDraft, scheduleEnabled: e.target.checked })} /> تفعيل أيام وساعات محددة</label>
+
+          <div className="plan-form-section"><div className="plan-section-title"><span>04</span><div><h3>جدولة استخدام الباقة</h3><p>تحديد الأيام والساعات التي يسمح فيها باستخدام الباقة</p></div></div>
+            <label className="checkbox-label plan-feature-toggle"><input type="checkbox" checked={planDraft.scheduleEnabled} onChange={(e) => setPlanDraft({ ...planDraft, scheduleEnabled: e.target.checked })} /> تفعيل أيام وساعات محددة</label>
             {planDraft.scheduleEnabled && <><div className="day-selector">{["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"].map((day,i)=><label key={day}><input type="checkbox" checked={planDraft.scheduleDays.includes(String(i))} onChange={(e)=>setPlanDraft({...planDraft,scheduleDays:e.target.checked?[...planDraft.scheduleDays,String(i)]:planDraft.scheduleDays.filter(x=>x!==String(i))})}/>{day}</label>)}</div><div className="form-grid"><label>من الساعة<input type="time" value={planDraft.scheduleFrom} onChange={(e)=>setPlanDraft({...planDraft,scheduleFrom:e.target.value})}/></label><label>إلى الساعة<input type="time" value={planDraft.scheduleTo} onChange={(e)=>setPlanDraft({...planDraft,scheduleTo:e.target.value})}/></label></div></>}
           </div>
-          <div className="plan-form-section"><h3>التنبيهات والإضافات</h3><label className="checkbox-label"><input type="checkbox" checked={planDraft.notificationsEnabled} onChange={(e)=>setPlanDraft({...planDraft,notificationsEnabled:e.target.checked})}/> تفعيل نظام الإشعارات لهذه الباقة</label>
+
+          <div className="plan-form-section"><div className="plan-section-title"><span>05</span><div><h3>التنبيهات</h3><p>إعداد نسب التنبيه عند قرب انتهاء الصلاحية أو الرصيد</p></div></div>
+            <label className="checkbox-label plan-feature-toggle"><input type="checkbox" checked={planDraft.notificationsEnabled} onChange={(e)=>setPlanDraft({...planDraft,notificationsEnabled:e.target.checked})}/> تفعيل نظام الإشعارات لهذه الباقة</label>
             {planDraft.notificationsEnabled && <div className="form-grid"><label>تنبيه عند اقتراب انتهاء الصلاحية (%)<input type="number" min="1" max="99" value={planDraft.notifyRemaining} onChange={(e)=>setPlanDraft({...planDraft,notifyRemaining:e.target.value})}/></label><label>تنبيه عند استهلاك الرصيد (%)<input type="number" min="1" max="100" value={planDraft.notifyExhausted} onChange={(e)=>setPlanDraft({...planDraft,notifyExhausted:e.target.value})}/></label></div>}
           </div>
+
           <div className="notice">تُحفظ إعدادات الإضافات والجدولة ضمن الباقة. تفعيلها فعلياً على الراوتر وإرسال الإشعارات يحتاج ربط محرك التنفيذ لاحقاً.</div>
-          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPlanId ? "حفظ التعديلات" : "إنشاء الباقة"}</button>{editingPlanId !== null && <button type="button" className="secondary-button" onClick={() => { setEditingPlanId(null); setPlanDraft({ code: "", name: "", price: "", commissionType: "none", commissionValue: "", dataAmount: "", dataUnit: "GB", timeHours: "", validityDays: "", speedProfile: "", sharedUsers: "", groupName: "", rateRx: "", rateTx: "", rateUnit: "Kbps", scheduleEnabled: false, scheduleDays: ["0","1","2","3","4","5","6"], scheduleFrom: "00:00", scheduleTo: "23:59", notificationsEnabled: false, notifyRemaining: "70", notifyExhausted: "95" }); setNotice(""); }}>إلغاء التعديل</button>}</div>
+          <div className="form-actions plans-form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPlanId ? "حفظ التعديلات" : "إنشاء الباقة"}</button>{editingPlanId !== null && <button type="button" className="secondary-button" onClick={resetPlanDraft}>إلغاء التعديل</button>}</div>
         </form>
-        <div className="section-heading compact-heading"><div><h2>الباقات المسجلة</h2></div><span className="count-tag">{plans.length} باقة</span></div>
-        <div className="table-wrap"><table><thead><tr><th>الرمز</th><th>اسم الباقة</th><th>السعر</th><th>عمولة نقطة البيع</th><th>الحجم</th><th>الوقت</th><th>الصلاحية</th><th>المستخدمون</th><th>المجموعة</th><th>السرعة</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
-          <tbody>{plans.map((plan) => <tr key={plan.id}><td>{plan.code}</td><td>{plan.name}</td><td>{Number(plan.price).toLocaleString("en-US")}</td><td>{plan.commission_type === "none" ? "بدون" : plan.commission_type === "percentage" ? `${Number(plan.commission_value)}%` : `${Number(plan.commission_value).toFixed(2)} ريال`}</td><td>{plan.data_limit_bytes === null ? "مفتوح" : `${plan.data_limit_bytes % (1024 ** 3) === 0 ? (plan.data_limit_bytes / 1024 ** 3).toFixed(2) + " GB" : (plan.data_limit_bytes / 1024 ** 2).toFixed(0) + " MB"}`}</td><td>{plan.session_time_limit_seconds === null ? "مفتوح" : `${(plan.session_time_limit_seconds / 3600).toFixed(2)} ساعة`}</td><td>{plan.validity_period_seconds === null ? "مفتوح" : `${(plan.validity_period_seconds / 86400).toFixed(2)} يوم`}</td><td>{plan.settings?.shared_users == null ? "unlimited" : String(plan.settings.shared_users)}</td><td>{String(plan.settings?.group ?? "—")}</td><td>{plan.speed_profile || "—"}</td><td>{plan.is_active ? "مفعلة" : "متوقفة"}</td><td><button type="button" className="table-action" onClick={() => editPlan(plan)}>تعديل</button><button type="button" className="table-action" disabled={busy} onClick={() => togglePlan(plan)}>{plan.is_active ? "إيقاف" : "تفعيل"}</button></td></tr>)}</tbody>
-        </table>{plans.length === 0 && <div className="empty-state">لا توجد باقات بعد. أنشئ أول باقة من النموذج أعلاه.</div>}</div>
-      </>
+
+        <section className="plans-directory">
+          <div className="section-heading compact-heading"><div><span className="eyebrow">دليل الاشتراكات</span><h2>الباقات المسجلة</h2><p>جميع الباقات الحالية وحالتها وحدودها، دون حذف السجلات عند الإيقاف.</p></div><span className="count-tag">{plans.length.toLocaleString("ar")} باقة</span></div>
+          <div className="table-wrap plans-table-wrap"><table><thead><tr><th>الرمز</th><th>اسم الباقة</th><th>السعر</th><th>عمولة نقطة البيع</th><th>الحجم</th><th>الوقت</th><th>الصلاحية</th><th>المستخدمون</th><th>المجموعة</th><th>السرعة</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+            <tbody>{plans.map((plan) => <tr key={plan.id}><td><span className="plan-code">{plan.code}</span></td><td><strong>{plan.name}</strong></td><td>{Number(plan.price).toLocaleString("en-US")} ريال</td><td>{plan.commission_type === "none" ? "بدون" : plan.commission_type === "percentage" ? `${Number(plan.commission_value)}%` : `${Number(plan.commission_value).toFixed(2)} ريال`}</td><td>{plan.data_limit_bytes === null ? "مفتوح" : `${plan.data_limit_bytes % (1024 ** 3) === 0 ? (plan.data_limit_bytes / 1024 ** 3).toFixed(2) + " GB" : (plan.data_limit_bytes / 1024 ** 2).toFixed(0) + " MB"}`}</td><td>{plan.session_time_limit_seconds === null ? "مفتوح" : `${(plan.session_time_limit_seconds / 3600).toFixed(2)} ساعة`}</td><td>{plan.validity_period_seconds === null ? "مفتوح" : `${(plan.validity_period_seconds / 86400).toFixed(2)} يوم`}</td><td>{plan.settings?.shared_users == null ? "غير محدود" : String(plan.settings.shared_users)}</td><td>{String(plan.settings?.group ?? "—")}</td><td>{plan.speed_profile || "—"}</td><td><span className={plan.is_active ? "plan-status active" : "plan-status inactive"}>{plan.is_active ? "مفعّلة" : "متوقفة"}</span></td><td><button type="button" className="table-action" disabled={busy} onClick={() => editPlan(plan)}>تعديل</button><button type="button" className={plan.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePlan(plan)}>{plan.is_active ? "إيقاف" : "تفعيل"}</button></td></tr>)}</tbody>
+          </table>{plans.length === 0 && <div className="empty-state">لا توجد باقات بعد. أنشئ أول باقة من النموذج أعلاه.</div>}</div>
+        </section>
+      </section>
     );
   }
 
