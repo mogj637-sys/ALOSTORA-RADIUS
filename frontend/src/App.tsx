@@ -513,6 +513,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     return false;
   };
   const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
+  const [openNavGroup, setOpenNavGroup] = useState<"system" | "cards" | "printing" | null>(null);
   const [systemStatus, setSystemStatus] = useState<{ api: string; database: string; version: string; checkedAt: string } | null>(null);
   const [systemStatusLoading, setSystemStatusLoading] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -3104,17 +3105,36 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
           {user.roles.includes("owner") && <button className={page === "admins" ? "nav-item active" : "nav-item"} onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات</button>}
 
-          {(can("cards.view") || can("cards.create") || can("plans.view") || can("routers.view") || can("reports.view") || can("finance.view") || can("templates.view")) && <div className="nav-group"><span>إدارة النظام</span>
-            {can("cards.create") && can("cards.credentials") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
-            {can("cards.view") && <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>}
-            {can("plans.view") && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>}
-            {can("routers.view") && <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات</button>}
-            {(can("reports.view") || can("finance.view")) && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
+          {(can("plans.view") || can("routers.view") || can("reports.view") || can("finance.view")) && <div className="nav-group">
+            <button type="button" className={openNavGroup === "system" ? "nav-group-toggle expanded" : "nav-group-toggle"} aria-expanded={openNavGroup === "system"} onClick={() => setOpenNavGroup((current) => current === "system" ? null : "system")}>
+              <span>إدارة النظام</span><span className="nav-chevron" aria-hidden="true">⌄</span>
+            </button>
+            {openNavGroup === "system" && <div className="nav-group-items">
+              {can("plans.view") && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>}
+              {can("routers.view") && <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات</button>}
+              {(can("reports.view") || can("finance.view")) && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
+            </div>}
+          </div>}
+          {(can("cards.create") && can("cards.credentials") || can("cards.view") || can("templates.view")) && <div className="nav-group">
+            <button type="button" className={openNavGroup === "cards" ? "nav-group-toggle expanded" : "nav-group-toggle"} aria-expanded={openNavGroup === "cards"} onClick={() => setOpenNavGroup((current) => current === "cards" ? null : "cards")}>
+              <span>إدارة الكروت</span><span className="nav-chevron" aria-hidden="true">⌄</span>
+            </button>
+            {openNavGroup === "cards" && <div className="nav-group-items">
+              {can("cards.create") && can("cards.credentials") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
+              {can("cards.view") && <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>}
+              {can("cards.view") && user.card_visibility !== "search_any" && <button className={page === "batches" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("batches")}>دفعات الكروت</button>}
+              {can("templates.view") && <button className={page === "templates" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("templates")}>تصاميم الكروت</button>}
+            </div>}
           </div>}
           {can("pos.view") && <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>}
-          {(can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>}
-          {can("cards.view") && user.card_visibility !== "search_any" && <button className={page === "batches" ? "nav-item active" : "nav-item"} onClick={() => setPage("batches")}>دفعات الكروت</button>}
-          {can("templates.view") && <button className={page === "templates" ? "nav-item active" : "nav-item"} onClick={() => setPage("templates")}>تصاميم الكروت</button>}
+          {(can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && <div className="nav-group">
+            <button type="button" className={openNavGroup === "printing" ? "nav-group-toggle expanded" : "nav-group-toggle"} aria-expanded={openNavGroup === "printing"} onClick={() => setOpenNavGroup((current) => current === "printing" ? null : "printing")}>
+              <span>الطباعة</span><span className="nav-chevron" aria-hidden="true">⌄</span>
+            </button>
+            {openNavGroup === "printing" && <div className="nav-group-items">
+              <button className={page === "pos" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>
+            </div>}
+          </div>}
           {can("audit.view") && <button className={page === "audit" ? "nav-item active" : "nav-item"} onClick={() => setPage("audit")}>سجل عمليات النظام</button>}
           {user.roles.includes("owner") && <button className={page === "settings" ? "nav-item active" : "nav-item"} onClick={() => setPage("settings")}>الإعدادات والصيانة</button>}
         </nav>
