@@ -2072,7 +2072,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </div>
 
         <div className="pos-management-layout">
-          <form className="panel pos-editor-panel" onSubmit={createPointOfSale}>
+          {can("pos.manage") && <form className="panel pos-editor-panel" onSubmit={createPointOfSale}>
             <div className="pos-editor-heading">
               <div><span className="eyebrow">{editingPosId !== null ? "تحديث البيانات" : "نقطة بيع جديدة"}</span><h3>{editingPosId !== null ? "تعديل نقطة البيع" : "إضافة نقطة بيع"}</h3></div>
               <span className="pos-editor-icon">＋</span>
@@ -2087,7 +2087,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPosId !== null ? "حفظ التعديلات" : "إضافة نقطة البيع"}</button>
               {editingPosId !== null && <button type="button" className="secondary-button" onClick={() => { setEditingPosId(null); setPosDraft({ code: "", name: "", contactName: "", phone: "" }); }}>إلغاء التعديل</button>}
             </div>
-          </form>
+          </form>}
 
           <section className="panel pos-directory-panel">
             <div className="pos-directory-heading">
@@ -2104,8 +2104,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                     <td>{point.phone || "—"}</td>
                     <td><span className={point.is_active ? "pos-status active" : "pos-status inactive"}>{point.is_active ? "مفعّلة" : "متوقفة"}</span></td>
                     <td className="actions-cell">
-                      <button type="button" className="table-action" disabled={busy} onClick={() => { setEditingPosId(point.id); setPosDraft({ code: point.code, name: point.name, contactName: point.contact_name || "", phone: point.phone || "" }); }}>تعديل</button>
-                      <button type="button" className={point.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف" : "تفعيل"}</button>
+                      {can("pos.manage") ? <><button type="button" className="table-action" disabled={busy} onClick={() => { setEditingPosId(point.id); setPosDraft({ code: point.code, name: point.name, contactName: point.contact_name || "", phone: point.phone || "" }); }}>تعديل</button>
+                      <button type="button" className={point.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف" : "تفعيل"}</button></> : <span className="field-hint">عرض فقط</span>}
                     </td>
                   </tr>
                 ))}</tbody>
@@ -2141,13 +2141,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               const id = e.target.value;
               setPrintPreviewCards([]);
               setSelectedPosId(id);
-              Promise.all([loadPosInventory(id), loadPrintHistory(id), loadPosAccount(id)]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل بيانات نقطة البيع"));
+              Promise.all([loadPosInventory(id), loadPrintHistory(id), ...(can("finance.view") ? [loadPosAccount(id)] : [])]).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل بيانات نقطة البيع"));
             }}>
               <option value="">-- اختر نقطة بيع --</option>
               {points.map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}</option>)}
             </select>
           </label>
-          {selectedPoint && <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOfSale(selectedPoint)}>{selectedPoint.is_active ? "إيقاف النقطة" : "تفعيل النقطة"}</button>}
+          {selectedPoint && can("pos.manage") && <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOfSale(selectedPoint)}>{selectedPoint.is_active ? "إيقاف النقطة" : "تفعيل النقطة"}</button>}
         </div>
 
         {selectedPosId && posInventory && (
@@ -2160,7 +2160,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           </div>
         )}
 
-        {selectedPosId && posAccount && (
+        {can("finance.view") && selectedPosId && posAccount && (
           <section className="pos-account-section">
             <div className="section-heading compact-heading"><div><h2>الحساب المالي لنقطة البيع</h2><p>الرصيد يُحدّث تلقائياً عند تخصيص الكروت التجارية، ولا تُحتسب إعادة الطباعة أو الكروت المجانية.</p></div></div>
             <div className="pos-stats account-stats">
@@ -2168,7 +2168,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <div><span>إجمالي السداد والخصومات</span><strong>{Number(posAccount.total_credit).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</strong></div>
               <div><span>الرصيد المستحق</span><strong>{Number(posAccount.balance_due).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</strong></div>
             </div>
-            <form className="panel form-grid account-entry-form" onSubmit={createAccountEntry}>
+            {can("finance.manage") && <form className="panel form-grid account-entry-form" onSubmit={createAccountEntry}>
               <label>نوع الحركة<select value={accountDraft.entryType} onChange={(e) => setAccountDraft({ ...accountDraft, entryType: e.target.value, direction: e.target.value === "payment" || e.target.value === "commission" || e.target.value === "return" ? "credit" : accountDraft.direction })}>
                 <option value="payment">سداد من نقطة البيع</option><option value="commission">عمولة مستحقة للنقطة</option><option value="return">مرتجع / خصم</option><option value="adjustment">تسوية يدوية</option>
               </select></label>
@@ -2177,7 +2177,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <label>البيان<input value={accountDraft.description} onChange={(e) => setAccountDraft({ ...accountDraft, description: e.target.value })} maxLength={500} placeholder="مثال: سداد نقدي" /></label>
               <label>رقم مرجعي (اختياري)<input value={accountDraft.reference} onChange={(e) => setAccountDraft({ ...accountDraft, reference: e.target.value })} maxLength={120} /></label>
               <div className="form-actions"><button type="submit" disabled={busy || !accountDraft.amount || Number(accountDraft.amount) <= 0}>{busy ? "جارٍ التسجيل..." : "تسجيل الحركة"}</button></div>
-            </form>
+            </form>}
             <div className="section-heading compact-heading"><div><h2>كشف الحساب</h2><p>آخر 100 حركة مالية، مرتبة من الأحدث إلى الأقدم.</p></div><span className="count-tag">{posEntries.length} حركة</span></div>
             <div className="table-wrap"><table><thead><tr><th>التاريخ</th><th>نوع الحركة</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الموظف</th><th>المرجع</th></tr></thead><tbody>
               {posEntries.map((entry) => <tr key={entry.id}><td>{new Date(entry.created_at).toLocaleString("ar")}</td><td>{({ card_delivery: "تسليم كروت", payment: "سداد", commission: "عمولة", return: "مرتجع", adjustment: "تسوية" } as Record<string, string>)[entry.entry_type] ?? entry.entry_type}</td><td>{entry.description || "—"}</td><td>{entry.direction === "debit" ? Number(entry.amount).toFixed(2) : "—"}</td><td>{entry.direction === "credit" ? Number(entry.amount).toFixed(2) : "—"}</td><td>{entry.created_by || "—"}</td><td>{entry.reference || "—"}</td></tr>)}
