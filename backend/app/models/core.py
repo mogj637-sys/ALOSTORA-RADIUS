@@ -66,8 +66,29 @@ class Plan(TimestampMixin, Base):
     # Starts at first successful authentication; counts wall-clock time continuously.
     validity_period_seconds: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     speed_profile: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class CardTemplate(TimestampMixin, Base):
+    __tablename__ = "card_templates"
+    __table_args__ = (
+        CheckConstraint("width_mm > 0 AND width_mm <= 300", name="ck_card_templates_width"),
+        CheckConstraint("height_mm > 0 AND height_mm <= 300", name="ck_card_templates_height"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    width_mm: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=90)
+    height_mm: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, default=50)
+    background_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#ffffff")
+    text_color: Mapped[str] = mapped_column(String(7), nullable=False, default="#173b2d")
+    layout: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    plan_id: Mapped[int | None] = mapped_column(ForeignKey("plans.id", ondelete="RESTRICT"), nullable=True)
+    plan: Mapped[Plan | None] = relationship()
 
 
 class PointOfSale(TimestampMixin, Base):
@@ -79,6 +100,33 @@ class PointOfSale(TimestampMixin, Base):
     contact_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    debt_limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    allow_card_creation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    allow_printing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class CardBatch(TimestampMixin, Base):
+    __tablename__ = "card_batches"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_card_batches_quantity_positive"),
+        Index("ix_card_batches_created_at", "created_at"),
+        Index("ix_card_batches_pos_created", "point_of_sale_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    batch_number: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id", ondelete="RESTRICT"), nullable=False)
+    point_of_sale_id: Mapped[int | None] = mapped_column(ForeignKey("points_of_sale.id", ondelete="RESTRICT"), nullable=True)
+    template_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    card_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    generation_mode: Mapped[str] = mapped_column(String(30), nullable=False, default="digits")
+    username_length: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
+    password_length: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
+    prefix: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    requested_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    is_online_sale: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Router(TimestampMixin, Base):
@@ -89,7 +137,7 @@ class Router(TimestampMixin, Base):
     nas_identifier: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
     management_host: Mapped[str] = mapped_column(String(255), nullable=False)
     radius_client_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    api_port: Mapped[int] = mapped_column(Integer, nullable=False, default=8728)
+    api_port: Mapped[int] = mapped_column(Integer, nullable=False, default=8729)
     api_username: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # Router API and RADIUS shared secrets are stored only as ciphertext.
     api_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -122,6 +170,7 @@ class Card(TimestampMixin, Base):
     is_free: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id", ondelete="RESTRICT"), nullable=False)
+    batch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("card_batches.id", ondelete="RESTRICT"), nullable=True)
     plan_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     price_snapshot: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
 
@@ -150,6 +199,7 @@ class PrintJob(TimestampMixin, Base):
         ForeignKey("points_of_sale.id", ondelete="RESTRICT"), nullable=True
     )
     template_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    print_options: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     card_count: Mapped[int] = mapped_column(Integer, nullable=False)
     is_reprint: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     requested_by: Mapped[str | None] = mapped_column(String(120), nullable=True)

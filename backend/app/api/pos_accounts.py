@@ -5,10 +5,11 @@ from sqlalchemy import func, case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_owner
+from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import PointOfSale, PosAccountEntry
+from app.services.audit import record_audit
 from app.schemas.pos_accounts import (
     PosAccountEntryCreate,
     PosAccountEntryResponse,
@@ -18,12 +19,13 @@ from app.schemas.pos_accounts import (
 router = APIRouter(
     prefix="/api/v1/points-of-sale/{point_id}/account",
     tags=["point-of-sale-accounting"],
-    dependencies=[Depends(get_current_owner)],
 )
 
 
-@router.get("", response_model=PosAccountSummaryResponse)
-def account_summary(point_id: int, db: Session = Depends(get_db)):
+@router.get("", response_model=PosAccountSummaryResponse, dependencies=[Depends(require_permission("finance.view"))])
+def account_summary(point_id: int, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("finance.view"))):
+    if not any(role.code == "owner" for role in user.roles) and point_id not in {point.id for point in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية الاطلاع على حساب نقطة البيع هذه")
     point = db.get(PointOfSale, point_id)
     if point is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
@@ -40,12 +42,15 @@ def account_summary(point_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/entries", response_model=list[PosAccountEntryResponse])
+@router.get("/entries", response_model=list[PosAccountEntryResponse], dependencies=[Depends(require_permission("finance.view"))])
 def list_account_entries(
     point_id: int,
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("finance.view")),
 ):
+    if not any(role.code == "owner" for role in user.roles) and point_id not in {point.id for point in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية الاطلاع على حساب نقطة البيع هذه")
     if db.get(PointOfSale, point_id) is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
     return (
@@ -57,13 +62,15 @@ def list_account_entries(
     )
 
 
-@router.post("/entries", response_model=PosAccountEntryResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/entries", response_model=PosAccountEntryResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("finance.create")), Depends(require_permission("finance.view"))])
 def create_account_entry(
     point_id: int,
     payload: PosAccountEntryCreate,
     db: Session = Depends(get_db),
-    user: AdminUser = Depends(get_current_owner),
+    user: AdminUser = Depends(require_permission("finance.create")),
 ):
+    if not any(role.code == "owner" for role in user.roles) and point_id not in {point.id for point in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة حساب نقطة البيع هذه")
     point = db.get(PointOfSale, point_id)
     if point is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
@@ -95,6 +102,8 @@ def create_account_entry(
     )
     db.add(entry)
     try:
+        db.flush()
+        record_audit(db, user, "finance.entry_created", "pos_account_entry", f"تسجيل حركة مالية لنقطة البيع {point.name}", entity_id=entry.id, details={"entry_type": entry.entry_type, "direction": entry.direction, "amount": str(entry.amount), "reference": entry.reference})
         db.commit()
     except IntegrityError:
         db.rollback()

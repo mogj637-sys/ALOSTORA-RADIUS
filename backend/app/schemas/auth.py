@@ -17,3 +17,7 @@ class CurrentUserResponse(BaseModel):
     username: str
     display_name: str
     roles: list[str]
+    permissions: list[str]
+    point_of_sale_ids: list[int] = []
+    card_visibility: str = "search_any"
+    permission_overrides: list[dict] = Field(default_factory=list)

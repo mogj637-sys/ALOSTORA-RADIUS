@@ -32,6 +32,68 @@ def _snapshot_limit(card: Card, key: str) -> int | None:
     return int(value) if value is not None else None
 
 
+def _snapshot_shared_users(card: Card) -> int | None:
+    snapshot = card.plan_snapshot or {}
+    # Legacy snapshots predate configurable sharing and retain the former one-session rule.
+    if "settings" not in snapshot:
+        return 1
+    settings = snapshot.get("settings") or {}
+    value = settings.get("shared_users")
+    if value in (None, ""):
+        return None
+    try:
+        limit = int(value)
+    except (TypeError, ValueError):
+        return 1
+    return max(1, limit)
+
+
+def _restore_status_after_sessions(card: Card, sessions: list[RadiusSession]) -> None:
+    previous = None
+    if sessions:
+        oldest = min(sessions, key=lambda item: _utc(item.started_at))
+        previous = oldest.card_status_before_session
+    if previous not in ALLOWED_PRE_SESSION_STATES:
+        previous = "allocated" if card.assigned_pos_id is not None else (
+            "printed_free" if card.is_free else "generated"
+        )
+    card.status = previous
+
+
+def _attempt_disconnect_all_active(
+    db: Session,
+    card: Card,
+    reason: str,
+) -> bool | None:
+    active = (
+        db.query(RadiusSession)
+        .filter(
+            RadiusSession.card_id == card.id,
+            RadiusSession.stopped_at.is_(None),
+        )
+        .order_by(RadiusSession.id.asc())
+        .all()
+    )
+    if not active:
+        return None
+    results = [_attempt_disconnect(db, item, card, reason) for item in active]
+    return all(result is True for result in results)
+
+
+def _snapshot_rate_limit(card: Card) -> str | None:
+    snapshot = card.plan_snapshot or {}
+    configured = snapshot.get("speed_profile")
+    if configured:
+        return str(configured)
+    settings = snapshot.get("settings") or {}
+    rx = settings.get("rate_limit_rx")
+    tx = settings.get("rate_limit_tx")
+    if rx in (None, "") or tx in (None, ""):
+        return None
+    unit = str(settings.get("rate_limit_unit") or "Kbps")
+    return f"{rx}{unit}/{tx}{unit}"
+
+
 def _remaining_limits(card: Card, now: datetime) -> tuple[int | None, int | None]:
     time_limit = _snapshot_limit(card, "session_time_limit_seconds")
     data_limit = _snapshot_limit(card, "data_limit_bytes")
@@ -108,6 +170,8 @@ def authorize_card(
         return {"accepted": False, "reason": "الكرت غير موجود", "reply": {}}
 
     if card.status in BLOCKED_CARD_STATES:
+        if card.status in {"suspended", "expired", "exhausted"}:
+            _attempt_disconnect_all_active(db, card, "الكرت موقوف أو منتهي")
         return {"accepted": False, "reason": "الكرت موقوف أو منتهي", "reply": {}}
 
     if card.radius_auth_reserved_until is not None:
@@ -129,44 +193,48 @@ def authorize_card(
         .with_for_update()
         .all()
     )
-    if active_sessions:
-        stale_sessions = []
-        for active_session in active_sessions:
-            last_activity = _utc(active_session.last_update_at or active_session.started_at)
-            age = (now - last_activity).total_seconds()
-            if active_session.router_id != router.id or age <= STALE_SESSION_GRACE_SECONDS:
-                return {
-                    "accepted": False,
-                    "reason": "الكرت لديه جلسة نشطة ويسمح باتصال واحد فقط",
-                    "reply": {},
-                }
+    stale_sessions = []
+    for active_session in active_sessions:
+        last_activity = _utc(active_session.last_update_at or active_session.started_at)
+        age = (now - last_activity).total_seconds()
+        if active_session.router_id == router.id and age > STALE_SESSION_GRACE_SECONDS:
             stale_sessions.append(active_session)
 
-        for stale_session in stale_sessions:
-            last_activity = _utc(stale_session.last_update_at or stale_session.started_at)
-            stale_session.stopped_at = max(now, last_activity)
-            stale_session.last_update_at = stale_session.stopped_at
-            db.add(CardEvent(
-                card_id=card.id,
-                event_type="radius_session_stale_closed",
-                details={
-                    "acct_session_id": stale_session.acct_session_id,
-                    "reason": "new_start_after_missing_stop",
-                },
-                actor="radius",
-            ))
+    for stale_session in stale_sessions:
+        last_activity = _utc(stale_session.last_update_at or stale_session.started_at)
+        stale_session.stopped_at = max(now, last_activity)
+        stale_session.last_update_at = stale_session.stopped_at
+        db.add(CardEvent(
+            card_id=card.id,
+            event_type="radius_session_stale_closed",
+            details={
+                "acct_session_id": stale_session.acct_session_id,
+                "reason": "new_start_after_missing_stop",
+            },
+            actor="radius",
+        ))
 
-        latest_stale = max(stale_sessions, key=lambda item: _utc(item.started_at))
-        restored_status = latest_stale.card_status_before_session
-        if restored_status not in ALLOWED_PRE_SESSION_STATES:
-            restored_status = "allocated" if card.assigned_pos_id is not None else (
-                "printed_free" if card.is_free else "generated"
-            )
-        card.status = restored_status
+    if stale_sessions:
+        stale_ids = {item.id for item in stale_sessions}
+        active_sessions = [item for item in active_sessions if item.id not in stale_ids]
+        if not active_sessions:
+            _restore_status_after_sessions(card, stale_sessions)
+
+    shared_limit = _snapshot_shared_users(card)
+    if shared_limit is not None and len(active_sessions) >= shared_limit:
+        return {
+            "accepted": False,
+            "reason": f"وصل الكرت إلى الحد الأقصى للمستخدمين المتزامنين ({shared_limit})",
+            "reply": {},
+        }
+    if active_sessions:
+        card.status = "active"
     elif card.status == "active":
         _restore_stale_active_status(db, card)
 
-    if card.status not in ALLOWED_PRE_SESSION_STATES:
+    if card.status not in ALLOWED_PRE_SESSION_STATES and not (
+        card.status == "active" and active_sessions
+    ):
         return {"accepted": False, "reason": "حالة الكرت لا تسمح بالدخول", "reply": {}}
 
     try:
@@ -239,6 +307,7 @@ def authorize_card(
             )
         )
         db.commit()
+        _attempt_disconnect_all_active(db, card, "انتهت صلاحية الكرت")
         return {"accepted": False, "reason": "انتهت صلاحية الكرت", "reply": {}}
 
     remaining_time, remaining_data = _remaining_limits(card, now)
@@ -246,11 +315,13 @@ def authorize_card(
         card.status = "exhausted"
         card.radius_auth_reserved_until = None
         db.commit()
+        _attempt_disconnect_all_active(db, card, "انتهى رصيد وقت الاستخدام")
         return {"accepted": False, "reason": "انتهى رصيد وقت الاستخدام", "reply": {}}
     if remaining_data is not None and remaining_data <= 0:
         card.status = "exhausted"
         card.radius_auth_reserved_until = None
         db.commit()
+        _attempt_disconnect_all_active(db, card, "انتهى رصيد البيانات")
         return {"accepted": False, "reason": "انتهى رصيد البيانات", "reply": {}}
 
     # Reserve the card atomically before Access-Accept. Accounting-Start consumes this lease.
@@ -258,12 +329,13 @@ def authorize_card(
     router.last_seen_at = now
 
     reply: dict[str, str | int] = {
-        "Port-Limit": 1,
         "Acct-Interim-Interval": 60,
     }
-    speed_profile = (card.plan_snapshot or {}).get("speed_profile")
-    if speed_profile:
-        reply["Mikrotik-Rate-Limit"] = str(speed_profile)
+    if shared_limit is not None:
+        reply["Port-Limit"] = shared_limit
+    rate_limit = _snapshot_rate_limit(card)
+    if rate_limit:
+        reply["Mikrotik-Rate-Limit"] = rate_limit
     if remaining_time is not None:
         reply["Session-Timeout"] = remaining_time
     if remaining_data is not None:
@@ -375,20 +447,28 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         if card.status in BLOCKED_CARD_STATES:
             return {"processed": False, "reason": "حالة الكرت لا تسمح ببدء الجلسة"}
 
-        other_active_session = (
-            db.query(RadiusSession.id)
+        active_sessions = (
+            db.query(RadiusSession)
             .filter(
                 RadiusSession.card_id == card.id,
                 RadiusSession.stopped_at.is_(None),
             )
-            .first()
+            .order_by(RadiusSession.started_at.asc())
+            .with_for_update()
+            .all()
         )
-        if other_active_session is not None:
-            return {"processed": False, "reason": "للكرت جلسة نشطة أخرى"}
+        shared_limit = _snapshot_shared_users(card)
+        if shared_limit is not None and len(active_sessions) >= shared_limit:
+            return {
+                "processed": False,
+                "reason": f"وصل الكرت إلى الحد الأقصى للمستخدمين المتزامنين ({shared_limit})",
+            }
 
-        if card.status == "active":
+        if card.status == "active" and not active_sessions:
             _restore_stale_active_status(db, card)
-        if card.status not in ALLOWED_PRE_SESSION_STATES:
+        if card.status not in ALLOWED_PRE_SESSION_STATES and not (
+            card.status == "active" and active_sessions
+        ):
             return {"processed": False, "reason": "حالة الكرت لا تسمح ببدء الجلسة"}
         if card.expires_at is not None and _utc(card.expires_at) <= event_time:
             card.status = "expired"
@@ -423,7 +503,11 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         input_total = _octets(payload, "input_octets", "input_gigawords")
         output_total = _octets(payload, "output_octets", "output_gigawords")
         session_time = int(payload.get("session_time_seconds", 0))
-        previous_status = card.status
+        previous_status = (
+            active_sessions[0].card_status_before_session
+            if active_sessions
+            else card.status
+        )
         session = RadiusSession(
             card_id=card.id,
             router_id=router.id,
@@ -466,7 +550,7 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         db.commit()
         reason = "بدأت الجلسة؛ يجب الفصل فوراً لتجاوز أحد الحدود" if disconnect_required else "بدأت الجلسة"
         disconnect_sent = (
-            _attempt_disconnect(db, session, card, reason)
+            _attempt_disconnect_all_active(db, card, reason)
             if disconnect_required
             else None
         )
@@ -547,15 +631,22 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
         stop_time = max(event_time, _utc(session.last_update_at))
         session.stopped_at = stop_time
         card.radius_auth_reserved_until = None
+        db.flush()
         if card.expires_at is not None and _utc(card.expires_at) <= stop_time:
             card.status = "expired"
         elif card.status == "active":
-            previous_status = session.card_status_before_session
-            if previous_status not in ALLOWED_PRE_SESSION_STATES:
-                previous_status = "allocated" if card.assigned_pos_id is not None else (
-                    "printed_free" if card.is_free else "generated"
+            remaining_active = (
+                db.query(RadiusSession)
+                .filter(
+                    RadiusSession.card_id == card.id,
+                    RadiusSession.stopped_at.is_(None),
                 )
-            card.status = previous_status
+                .all()
+            )
+            if remaining_active:
+                card.status = "active"
+            else:
+                _restore_status_after_sessions(card, [session])
         db.add(
             CardEvent(
                 card_id=card.id,
@@ -569,12 +660,16 @@ def process_accounting(db: Session, payload: dict[str, Any]) -> dict[str, Any]:
                 actor="radius",
             )
         )
-        disconnect_required = False
-        reason = "انتهت الجلسة"
+        if card.status in {"suspended", "exhausted", "expired"}:
+            disconnect_required = True
+            reason = "الكرت موقوف أو انتهى رصيده ويجب فصل الجلسات المتبقية"
+        else:
+            disconnect_required = False
+            reason = "انتهت الجلسة"
 
     db.commit()
     disconnect_sent = (
-        _attempt_disconnect(db, session, card, reason)
+        _attempt_disconnect_all_active(db, card, reason)
         if disconnect_required and session.stopped_at is None
         else None
     )

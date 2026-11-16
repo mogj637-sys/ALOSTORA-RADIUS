@@ -9,6 +9,9 @@ class PointOfSaleCreate(BaseModel):
     name: str = Field(min_length=2, max_length=150)
     contact_name: str | None = Field(default=None, max_length=150)
     phone: str | None = Field(default=None, max_length=40)
+    debt_limit: Decimal | None = Field(default=None, ge=0)
+    allow_card_creation: bool = True
+    allow_printing: bool = True
 
 
 class PointOfSaleUpdate(BaseModel):
@@ -16,6 +19,9 @@ class PointOfSaleUpdate(BaseModel):
     contact_name: str | None = Field(default=None, max_length=150)
     phone: str | None = Field(default=None, max_length=40)
     is_active: bool | None = None
+    debt_limit: Decimal | None = Field(default=None, ge=0)
+    allow_card_creation: bool | None = None
+    allow_printing: bool | None = None
 
 
 class PointOfSaleResponse(BaseModel):
@@ -27,6 +33,9 @@ class PointOfSaleResponse(BaseModel):
     contact_name: str | None
     phone: str | None
     is_active: bool
+    debt_limit: Decimal | None
+    allow_card_creation: bool
+    allow_printing: bool
     created_at: datetime
 
 

@@ -10,7 +10,7 @@ class RouterCreate(BaseModel):
     nas_identifier: str = Field(min_length=1, max_length=150, pattern=r"^[A-Za-z0-9_.:-]+$")
     management_host: str = Field(min_length=1, max_length=255)
     radius_client_address: str | None = Field(default=None, max_length=255)
-    api_port: int = Field(default=8728, ge=1, le=65535)
+    api_port: int = Field(default=8729, ge=1, le=65535)
     api_username: str | None = Field(default=None, max_length=120)
     api_secret: str | None = Field(default=None, min_length=8, max_length=500)
     radius_secret: str = Field(min_length=8, max_length=500)

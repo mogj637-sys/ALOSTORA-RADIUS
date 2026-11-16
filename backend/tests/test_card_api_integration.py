@@ -378,3 +378,192 @@ def test_print_idempotency_key_cannot_be_reused_for_different_payload(owner_clie
         json={"idempotency_key": key, "point_of_sale_id": pos_id, "card_ids": [card_ids[1]]},
     )
     assert conflict.status_code == 409
+
+
+def test_card_batch_persists_template_pos_and_print_preferences(owner_client):
+    client, headers, _ = owner_client
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={"code": "BATCH-" + secrets.token_hex(4).upper(), "name": "Linked batch plan", "price": "25.00"},
+    )
+    assert plan.status_code == 201, plan.text
+    plan_id = plan.json()["id"]
+
+    point = client.post(
+        "/api/v1/points-of-sale",
+        headers=headers,
+        json={"code": "POS-" + secrets.token_hex(4).upper(), "name": "Batch point"},
+    )
+    assert point.status_code == 201, point.text
+    point_id = point.json()["id"]
+
+    template_code = "TPL-" + secrets.token_hex(4).upper()
+    template = client.post(
+        "/api/v1/card-templates",
+        headers=headers,
+        json={"code": template_code, "name": "Linked template", "plan_id": plan_id},
+    )
+    assert template.status_code == 201, template.text
+    assert template.json()["plan_id"] == plan_id
+
+    created = client.post(
+        "/api/v1/cards/batch",
+        headers=headers,
+        json={
+            "plan_id": plan_id,
+            "quantity": 2,
+            "card_type": "username_only",
+            "generation_mode": "digits",
+            "username_length": 8,
+            "template_code": template_code,
+            "point_of_sale_id": point_id,
+        },
+    )
+    assert created.status_code == 201, created.text
+    payload = created.json()
+    assert payload["batch_number"].startswith("BAT")
+    assert payload["template_code"] == template_code
+    assert payload["point_of_sale_id"] == point_id
+    assert len(payload["cards"]) == 2
+
+    batch_list = client.get("/api/v1/cards/batches", headers=headers)
+    assert batch_list.status_code == 200, batch_list.text
+    saved_batch = next(item for item in batch_list.json() if item["batch_id"] == payload["batch_id"])
+    assert saved_batch["quantity"] == 2
+    assert saved_batch["plan_name"] == "Linked batch plan"
+    assert saved_batch["point_of_sale_name"] == "Batch point"
+
+    filtered_cards = client.get(
+        f"/api/v1/cards?batch_id={payload['batch_id']}",
+        headers=headers,
+    )
+    assert filtered_cards.status_code == 200, filtered_cards.text
+    assert len(filtered_cards.json()) == 2
+
+    other_point = client.post(
+        "/api/v1/points-of-sale",
+        headers=headers,
+        json={"code": "POS-" + secrets.token_hex(4).upper(), "name": "Other batch point"},
+    )
+    assert other_point.status_code == 201, other_point.text
+    print_payload = {
+        "idempotency_key": "batch-print-" + secrets.token_hex(8),
+        "point_of_sale_id": other_point.json()["id"],
+        "card_ids": [item["id"] for item in payload["cards"]],
+        "template_code": template_code,
+    }
+    rejected = client.post("/api/v1/print-jobs", headers=headers, json=print_payload)
+    assert rejected.status_code == 409
+
+    print_payload["point_of_sale_id"] = point_id
+    print_payload["idempotency_key"] = "batch-print-" + secrets.token_hex(8)
+    print_payload["print_options"] = {"show_username": False, "show_password": True}
+    printed = client.post("/api/v1/print-jobs", headers=headers, json=print_payload)
+    assert printed.status_code == 201, printed.text
+    assert printed.json()["print_options"]["show_username"] is False
+    assert printed.json()["print_options"]["show_password"] is True
+    assert printed.json()["items"][0]["plan_name"] == "Linked batch plan"
+
+
+def test_print_import_resolves_identifiers_across_the_full_database_and_respects_pos_batch_scope(owner_client):
+    client, headers, _ = owner_client
+    code = "IMPORT-" + secrets.token_hex(4).upper()
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={"code": code, "name": "Import selection plan", "price": "10.00"},
+    )
+    assert plan.status_code == 201, plan.text
+
+    point_a = client.post(
+        "/api/v1/points-of-sale",
+        headers=headers,
+        json={"code": "IMPORT-A-" + secrets.token_hex(3).upper(), "name": "Import point A"},
+    )
+    point_b = client.post(
+        "/api/v1/points-of-sale",
+        headers=headers,
+        json={"code": "IMPORT-B-" + secrets.token_hex(3).upper(), "name": "Import point B"},
+    )
+    assert point_a.status_code == 201, point_a.text
+    assert point_b.status_code == 201, point_b.text
+
+    cards = []
+    for point in (point_a.json(), point_a.json(), point_b.json()):
+        username = "IMPORTED" + secrets.token_hex(5).upper()
+        response = client.post(
+            "/api/v1/cards/single",
+            headers=headers,
+            json={
+                "plan_id": plan.json()["id"],
+                "username": username,
+                "card_type": "username_only",
+                "point_of_sale_id": point["id"],
+            },
+        )
+        assert response.status_code == 201, response.text
+        cards.append(response.json())
+
+    resolved = client.post(
+        "/api/v1/cards/print-selection/resolve",
+        headers=headers,
+        json={
+            "point_of_sale_id": point_a.json()["id"],
+            "identifiers": [
+                cards[0]["username"],
+                cards[1]["serial_number"],
+                cards[2]["username"],
+                "NO-SUCH-CARD",
+            ],
+        },
+    )
+    assert resolved.status_code == 200, resolved.text
+    data = resolved.json()
+    assert data["total_requested"] == 4
+    assert data["matched_count"] == 2
+    assert {item["id"] for item in data["items"]} == {cards[0]["id"], cards[1]["id"]}
+    assert set(data["unmatched"]) == {cards[2]["username"], "NO-SUCH-CARD"}
+
+
+def test_card_list_reflects_elapsed_validity_even_before_next_radius_packet(owner_client):
+    from datetime import datetime, timedelta, timezone
+
+    client, headers, _ = owner_client
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "code": "EXPIRED-" + secrets.token_hex(4).upper(),
+            "name": "Expiry display plan",
+            "price": "5.00",
+            "validity_period_seconds": 3600,
+        },
+    )
+    assert plan.status_code == 201, plan.text
+    created = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": "EXPIRED" + secrets.token_hex(4).upper(),
+            "card_type": "username_only",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    db = SessionLocal()
+    card = db.get(Card, UUID(created.json()["id"]))
+    card.first_used_at = datetime.now(timezone.utc) - timedelta(days=2)
+    card.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+    db.commit()
+    db.close()
+
+    expired = client.get("/api/v1/cards?status=expired", headers=headers)
+    assert expired.status_code == 200, expired.text
+    match = next(item for item in expired.json() if item["id"] == created.json()["id"])
+    assert match["status"] == "expired"
+
+    generated = client.get("/api/v1/cards?status=generated", headers=headers)
+    assert generated.status_code == 200
+    assert all(item["id"] != created.json()["id"] for item in generated.json())

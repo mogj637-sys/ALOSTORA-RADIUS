@@ -7,21 +7,29 @@ from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
-from sqlalchemy import case, func
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_owner
+from app.api.deps import get_current_user, require_permission
 from app.db.session import get_db
-from app.models.core import PointOfSale, PosAccountEntry
+from app.models.auth import AdminUser
+from app.models.core import Card, CardBatch, Plan, PointOfSale, PosAccountEntry, PrintJob, RadiusSession, Router
+from app.services.permissions import card_visibility, has_permission
 from app.schemas.reports import (
     PosReportResponse, PosReportRow, PosReportTotals,
     PosStatementEntry, PosStatementResponse,
 )
 
+def require_report_access(user: AdminUser = Depends(get_current_user)) -> AdminUser:
+    if not (has_permission(user, "reports.view") or has_permission(user, "finance.view")):
+        raise HTTPException(status_code=403, detail="تتطلب التقارير صلاحية عرض التقارير أو الحسابات المالية")
+    return user
+
+
 router = APIRouter(
     prefix="/api/v1/reports",
     tags=["reports"],
-    dependencies=[Depends(get_current_owner)],
+    dependencies=[Depends(require_report_access)],
 )
 
 
@@ -37,8 +45,10 @@ def _period_bounds(date_from: date, date_to: date):
     return start_at, end_at
 
 
-def _report_data(date_from: date, date_to: date, db: Session) -> PosReportResponse:
+def _report_data(date_from: date, date_to: date, db: Session, user: AdminUser) -> PosReportResponse:
     start_at, end_at = _period_bounds(date_from, date_to)
+    is_owner = any(role.code == "owner" for role in user.roles)
+    assigned_pos_ids = [point.id for point in user.point_of_sales]
     opening_rows = (
         db.query(
             PosAccountEntry.point_of_sale_id,
@@ -48,6 +58,7 @@ def _report_data(date_from: date, date_to: date, db: Session) -> PosReportRespon
             )), 0),
         )
         .filter(PosAccountEntry.created_at < start_at)
+        .filter(True if is_owner else PosAccountEntry.point_of_sale_id.in_(assigned_pos_ids))
         .group_by(PosAccountEntry.point_of_sale_id)
         .all()
     )
@@ -66,11 +77,15 @@ def _report_data(date_from: date, date_to: date, db: Session) -> PosReportRespon
             func.coalesce(func.sum(case(((PosAccountEntry.direction == "credit") & (~PosAccountEntry.entry_type.in_(("commission", "payment", "return"))), PosAccountEntry.amount), else_=0)), 0).label("other_credits"),
         )
         .filter(PosAccountEntry.created_at >= start_at, PosAccountEntry.created_at < end_at)
+        .filter(True if is_owner else PosAccountEntry.point_of_sale_id.in_(assigned_pos_ids))
         .group_by(PosAccountEntry.point_of_sale_id)
         .all()
     )
     period_by_point = {row[0]: row for row in period_rows}
-    points = db.query(PointOfSale).order_by(PointOfSale.name.asc(), PointOfSale.id.asc()).all()
+    points_query = db.query(PointOfSale)
+    if not is_owner:
+        points_query = points_query.filter(PointOfSale.id.in_(assigned_pos_ids)) if assigned_pos_ids else points_query.filter(PointOfSale.id.is_(None))
+    points = points_query.order_by(PointOfSale.name.asc(), PointOfSale.id.asc()).all()
     report_rows = []
     for point in points:
         aggregate = period_by_point.get(point.id)
@@ -111,8 +126,10 @@ def _report_data(date_from: date, date_to: date, db: Session) -> PosReportRespon
     )
 
 
-def _statement_data(point_id: int, date_from: date, date_to: date, db: Session) -> PosStatementResponse:
+def _statement_data(point_id: int, date_from: date, date_to: date, db: Session, user: AdminUser) -> PosStatementResponse:
     start_at, end_at = _period_bounds(date_from, date_to)
+    if not any(role.code == "owner" for role in user.roles) and point_id not in {point.id for point in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية الاطلاع على كشف نقطة البيع هذه")
     point = db.get(PointOfSale, point_id)
     if point is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
@@ -188,20 +205,20 @@ def _style_sheet(sheet):
             cell.alignment = Alignment(horizontal="right", vertical="center")
 
 
-@router.get("/points-of-sale", response_model=PosReportResponse)
+@router.get("/points-of-sale", response_model=PosReportResponse, dependencies=[Depends(require_permission("finance.view"))])
 def points_of_sale_report(
     date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("finance.view")),
 ):
-    return _report_data(date_from, date_to, db)
+    return _report_data(date_from, date_to, db, user)
 
 
-@router.get("/points-of-sale/export.xlsx")
+@router.get("/points-of-sale/export.xlsx", dependencies=[Depends(require_permission("finance.view"))])
 def export_points_of_sale_report(
     date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("finance.view")),
 ):
-    report = _report_data(date_from, date_to, db)
+    report = _report_data(date_from, date_to, db, user)
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "تقرير نقاط البيع"
@@ -225,20 +242,20 @@ def export_points_of_sale_report(
     return _workbook_response(workbook, f"pos-report-{date_from}-{date_to}.xlsx")
 
 
-@router.get("/points-of-sale/{point_id}/statement", response_model=PosStatementResponse)
+@router.get("/points-of-sale/{point_id}/statement", response_model=PosStatementResponse, dependencies=[Depends(require_permission("finance.view"))])
 def point_of_sale_statement(
     point_id: int, date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("finance.view")),
 ):
-    return _statement_data(point_id, date_from, date_to, db)
+    return _statement_data(point_id, date_from, date_to, db, user)
 
 
-@router.get("/points-of-sale/{point_id}/statement/export.xlsx")
+@router.get("/points-of-sale/{point_id}/statement/export.xlsx", dependencies=[Depends(require_permission("finance.view"))])
 def export_point_of_sale_statement(
     point_id: int, date_from: date = Query(...), date_to: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("finance.view")),
 ):
-    statement = _statement_data(point_id, date_from, date_to, db)
+    statement = _statement_data(point_id, date_from, date_to, db, user)
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "كشف حساب نقطة البيع"
@@ -259,3 +276,171 @@ def export_point_of_sale_statement(
         for cell in row:
             cell.number_format = '#,##0.00'
     return _workbook_response(workbook, f"pos-{point_id}-statement-{date_from}-{date_to}.xlsx")
+
+
+@router.get("/cards", dependencies=[Depends(require_permission("cards.view"))])
+def cards_report(
+    date_from: date = Query(...), date_to: date = Query(...),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.view")),
+):
+    start_at, end_at = _period_bounds(date_from, date_to)
+    visibility = card_visibility(user)
+    pos_ids = [point.id for point in user.point_of_sales]
+    card_scope = (
+        True if visibility == "all"
+        else (
+            Card.id.in_(
+                db.query(Card.id).filter(
+                    or_(
+                        Card.assigned_pos_id.in_(pos_ids),
+                        Card.batch_id.in_(db.query(CardBatch.id).filter(CardBatch.point_of_sale_id.in_(pos_ids))),
+                    )
+                )
+            ) if pos_ids else Card.id.is_(None)
+        )
+        if visibility == "assigned"
+        else Card.id.is_(None)
+    )
+    rows = (
+        db.query(Card.status, func.count(Card.id))
+        .filter(Card.created_at >= start_at, Card.created_at < end_at, card_scope)
+        .group_by(Card.status).all()
+    )
+    plan_rows = (
+        db.query(Plan.name, func.count(Card.id))
+        .join(Card, Card.plan_id == Plan.id)
+        .filter(Card.created_at >= start_at, Card.created_at < end_at, card_scope)
+        .group_by(Plan.id, Plan.name).order_by(Plan.name.asc()).all()
+    )
+    totals = db.query(
+        func.count(Card.id),
+        func.coalesce(func.sum(Card.price_snapshot), 0),
+        func.coalesce(func.sum(Card.used_seconds), 0),
+        func.coalesce(func.sum(Card.upload_bytes), 0),
+        func.coalesce(func.sum(Card.download_bytes), 0),
+    ).filter(Card.created_at >= start_at, Card.created_at < end_at, card_scope).one()
+    return {
+        "date_from": date_from, "date_to": date_to,
+        "total_cards": totals[0], "total_value": _money(totals[1]),
+        "used_seconds": int(totals[2] or 0), "upload_bytes": int(totals[3] or 0),
+        "download_bytes": int(totals[4] or 0),
+        "by_status": [{"status": status, "count": count} for status, count in rows],
+        "by_plan": [{"plan_name": name, "count": count} for name, count in plan_rows],
+    }
+
+
+@router.get("/sessions", dependencies=[Depends(require_permission("sessions.view"))])
+def sessions_report(
+    date_from: date = Query(...), date_to: date = Query(...),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("sessions.view")),
+):
+    start_at, end_at = _period_bounds(date_from, date_to)
+    visibility = card_visibility(user)
+    pos_ids = [point.id for point in user.point_of_sales]
+    scoped_card_ids = db.query(Card.id).filter(Card.assigned_pos_id.in_(pos_ids)) if pos_ids else db.query(Card.id).filter(Card.id.is_(None))
+    session_scope = (
+        True if visibility == "all"
+        else RadiusSession.card_id.in_(scoped_card_ids)
+        if visibility == "assigned"
+        else RadiusSession.id.is_(None)
+    )
+    totals = db.query(
+        func.count(RadiusSession.id),
+        func.count(func.distinct(RadiusSession.card_id)),
+        func.coalesce(func.sum(RadiusSession.session_time_seconds), 0),
+        func.coalesce(func.sum(RadiusSession.input_octets), 0),
+        func.coalesce(func.sum(RadiusSession.output_octets), 0),
+    ).filter(RadiusSession.started_at >= start_at, RadiusSession.started_at < end_at, session_scope).one()
+    router_rows = (
+        db.query(Router.name, func.count(RadiusSession.id))
+        .join(Router, Router.id == RadiusSession.router_id)
+        .filter(RadiusSession.started_at >= start_at, RadiusSession.started_at < end_at, session_scope)
+        .group_by(Router.id, Router.name).order_by(Router.name.asc()).all()
+    )
+    return {
+        "date_from": date_from, "date_to": date_to,
+        "total_sessions": totals[0], "unique_users": totals[1],
+        "session_seconds": int(totals[2] or 0), "upload_bytes": int(totals[3] or 0),
+        "download_bytes": int(totals[4] or 0),
+        "active_sessions": db.query(func.count(RadiusSession.id)).filter(RadiusSession.stopped_at.is_(None), session_scope).scalar() or 0,
+        "by_router": [{"router_name": name, "sessions": count} for name, count in router_rows],
+    }
+
+
+@router.get("/batches", dependencies=[Depends(require_permission("cards.view"))])
+def batches_report(
+    date_from: date = Query(...), date_to: date = Query(...),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.view")),
+):
+    start_at, end_at = _period_bounds(date_from, date_to)
+    visibility = card_visibility(user)
+    pos_ids = [point.id for point in user.point_of_sales]
+    rows_query = (
+        db.query(CardBatch, Plan.name, PointOfSale.name)
+        .join(Plan, Plan.id == CardBatch.plan_id)
+        .outerjoin(PointOfSale, PointOfSale.id == CardBatch.point_of_sale_id)
+        .filter(CardBatch.created_at >= start_at, CardBatch.created_at < end_at)
+        .order_by(CardBatch.created_at.desc())
+    )
+    if visibility == "assigned":
+        rows_query = rows_query.filter(CardBatch.point_of_sale_id.in_(pos_ids)) if pos_ids else rows_query.filter(CardBatch.id.is_(None))
+    elif visibility == "search_any":
+        rows_query = rows_query.filter(CardBatch.id.is_(None))
+    rows = rows_query.all()
+    batch_ids = [row[0].id for row in rows]
+    counts = {}
+    if batch_ids:
+        count_rows = (
+            db.query(Card.batch_id, func.count(Card.id))
+            .filter(Card.batch_id.in_(batch_ids))
+            .group_by(Card.batch_id).all()
+        )
+        counts = {batch_id: count for batch_id, count in count_rows}
+    return {
+        "date_from": date_from, "date_to": date_to, "total_batches": len(rows),
+        "total_cards": sum(counts.get(row[0].id, 0) for row in rows),
+        "items": [{
+            "batch_id": str(batch.id), "batch_number": batch.batch_number,
+            "created_at": batch.created_at, "plan_name": plan_name,
+            "point_of_sale_name": point_name, "quantity": batch.quantity,
+            "generated_cards": counts.get(batch.id, 0),
+            "is_online_sale": batch.is_online_sale, "note": batch.note,
+        } for batch, plan_name, point_name in rows],
+    }
+
+
+@router.get("/printing", dependencies=[Depends(require_permission("printing.view"))])
+def printing_report(
+    date_from: date = Query(...), date_to: date = Query(...),
+    db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("printing.view")),
+):
+    start_at, end_at = _period_bounds(date_from, date_to)
+    visibility = card_visibility(user)
+    pos_ids = [point.id for point in user.point_of_sales]
+    job_scope = (
+        True if visibility == "all"
+        else (PrintJob.point_of_sale_id.in_(pos_ids) if pos_ids else PrintJob.id.is_(None))
+        if visibility == "assigned"
+        else PrintJob.id.is_(None)
+    )
+    totals = db.query(
+        func.count(PrintJob.id), func.coalesce(func.sum(PrintJob.card_count), 0),
+        func.coalesce(func.sum(case((PrintJob.is_reprint.is_(True), 1), else_=0)), 0),
+    ).filter(PrintJob.created_at >= start_at, PrintJob.created_at < end_at, job_scope).one()
+    rows = (
+        db.query(PrintJob, PointOfSale.name)
+        .outerjoin(PointOfSale, PointOfSale.id == PrintJob.point_of_sale_id)
+        .filter(PrintJob.created_at >= start_at, PrintJob.created_at < end_at, job_scope)
+        .order_by(PrintJob.created_at.desc()).limit(200).all()
+    )
+    return {
+        "date_from": date_from, "date_to": date_to,
+        "total_jobs": totals[0], "total_cards_printed": int(totals[1] or 0),
+        "reprint_jobs": int(totals[2] or 0),
+        "items": [{
+            "id": str(job.id), "created_at": job.created_at,
+            "point_of_sale_name": point_name or "غير محددة",
+            "card_count": job.card_count, "is_reprint": job.is_reprint,
+            "template_code": job.template_code,
+        } for job, point_name in rows],
+    }

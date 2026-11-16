@@ -5,12 +5,16 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.auth import router as auth_router
+from app.api.admins import router as admins_router
+from app.api.audit_logs import router as audit_logs_router
 from app.api.cards import router as cards_router
+from app.api.card_templates import router as card_templates_router
 from app.api.plans import router as plans_router
 from app.api.points_of_sale import router as points_of_sale_router
 from app.api.pos_accounts import router as pos_accounts_router
 from app.api.print_jobs import router as print_jobs_router
 from app.api.routers import router as routers_router
+from app.api.user_manager import router as user_manager_router
 from app.api.radius import router as radius_router
 from app.api.reports import router as reports_router
 from app.db.session import engine
@@ -31,12 +35,16 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(admins_router)
+app.include_router(audit_logs_router)
 app.include_router(plans_router)
 app.include_router(cards_router)
+app.include_router(card_templates_router)
 app.include_router(points_of_sale_router)
 app.include_router(pos_accounts_router)
 app.include_router(print_jobs_router)
 app.include_router(routers_router)
+app.include_router(user_manager_router)
 app.include_router(radius_router)
 app.include_router(reports_router)
 

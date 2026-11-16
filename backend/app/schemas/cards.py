@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 CardType = Literal["username_only", "same_credentials", "separate_credentials"]
@@ -17,6 +17,8 @@ class CardSingleCreate(BaseModel):
     card_type: CardType
     password: str | None = Field(default=None, min_length=4, max_length=32)
     is_free: bool = False
+    template_code: str | None = Field(default=None, max_length=80)
+    point_of_sale_id: int | None = Field(default=None, gt=0)
 
 
 class CardBatchCreate(BaseModel):
@@ -27,9 +29,16 @@ class CardBatchCreate(BaseModel):
     username_length: int = Field(default=8, ge=3, le=32)
     password_length: int = Field(default=8, ge=4, le=32)
     prefix: str = Field(default="", max_length=20, pattern=r"^[A-Za-z0-9]*$")
+    template_code: str | None = Field(default=None, max_length=80)
+    point_of_sale_id: int | None = Field(default=None, gt=0)
+    existing_batch_id: UUID | None = None
+    existing_batch_number: str | None = Field(default=None, min_length=4, max_length=40)
+    is_online_sale: bool = False
+    note: str | None = Field(default=None, max_length=500)
 
 
 class CardCreatedSecret(BaseModel):
+    id: UUID
     serial_number: str
     username: str
     password: str
@@ -37,6 +46,10 @@ class CardCreatedSecret(BaseModel):
 
 class CardCreateResponse(BaseModel):
     id: UUID
+    batch_id: UUID
+    batch_number: str
+    template_code: str | None
+    point_of_sale_id: int | None
     serial_number: str
     username: str
     password: str
@@ -46,8 +59,65 @@ class CardCreateResponse(BaseModel):
 
 
 class CardBatchResponse(BaseModel):
+    batch_id: UUID
+    batch_number: str
+    plan_id: int
+    template_code: str | None
+    point_of_sale_id: int | None
+    is_online_sale: bool = False
+    note: str | None = None
     created_count: int
     cards: list[CardCreatedSecret]
+
+
+class CardBatchListItem(BaseModel):
+    batch_id: UUID
+    batch_number: str
+    plan_id: int
+    plan_name: str
+    template_code: str | None
+    point_of_sale_id: int | None
+    point_of_sale_name: str | None
+    quantity: int
+    card_type: str
+    generation_mode: str
+    username_length: int
+    password_length: int
+    prefix: str
+    created_at: datetime
+    printed_count: int
+    is_online_sale: bool = False
+    note: str | None = None
+
+
+class CardPrintSelectionResolveRequest(BaseModel):
+    identifiers: list[str] = Field(min_length=1, max_length=5000)
+    point_of_sale_id: int = Field(gt=0)
+
+    @field_validator("identifiers")
+    @classmethod
+    def validate_identifiers(cls, values: list[str]) -> list[str]:
+        cleaned = [value.strip() for value in values if value and value.strip()]
+        if not cleaned:
+            raise ValueError("أدخل أسماء مستخدمين أو أرقاماً تسلسلية للبحث")
+        if len(cleaned) > 5000:
+            raise ValueError("الحد الأقصى للاستيراد 5000 قيمة")
+        return cleaned
+
+
+class CardPrintSelectionItem(BaseModel):
+    id: UUID
+    username: str
+    serial_number: str
+    plan_id: int
+    is_free: bool
+
+
+class CardPrintSelectionResolveResponse(BaseModel):
+    total_requested: int
+    matched_count: int
+    items: list[CardPrintSelectionItem]
+    unmatched: list[str]
 
 
 class CardStatusUpdate(BaseModel):
@@ -64,7 +134,13 @@ class CardListItem(BaseModel):
     status: str
     is_free: bool
     plan_id: int
+    batch_id: UUID | None
     price_snapshot: Decimal
     assigned_pos_id: int | None
     first_used_at: datetime | None
     expires_at: datetime | None
+    used_seconds: int
+    upload_bytes: int
+    download_bytes: int
+    plan_snapshot: dict
+    active_sessions_count: int = 0

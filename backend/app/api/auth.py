@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -9,12 +9,16 @@ from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.schemas.auth import CurrentUserResponse, LoginRequest, TokenResponse
 from app.security import create_access_token, verify_password
+from app.services.audit import record_audit
+from app.services.permissions import card_visibility, effective_permission_codes
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    response.headers["Pragma"] = "no-cache"
     user = db.query(AdminUser).filter(AdminUser.username == payload.username).first()
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
@@ -24,6 +28,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         )
 
     user.last_login_at = datetime.now(timezone.utc)
+    record_audit(db, user, "auth.login", "admin_user", f"تسجيل دخول ناجح للحساب {user.username}", entity_id=user.id, request=request)
     db.commit()
 
     expires_in = int(os.getenv("JWT_ACCESS_TOKEN_MINUTES", "30")) * 60
@@ -41,4 +46,11 @@ def current_identity(user: AdminUser = Depends(get_current_user)) -> CurrentUser
         username=user.username,
         display_name=user.display_name,
         roles=[role.code for role in user.roles],
+        point_of_sale_ids=sorted(point.id for point in user.point_of_sales),
+        card_visibility=card_visibility(user),
+        permission_overrides=[
+            {"permission_code": item.permission.code, "allowed": item.allowed}
+            for item in user.permission_overrides
+        ],
+        permissions=sorted(effective_permission_codes(user)),
     )

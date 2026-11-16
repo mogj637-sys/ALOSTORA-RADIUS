@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.auth import AdminUser
+from app.services.permissions import has_permission
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -47,3 +48,18 @@ def get_current_owner(
     if not any(role.code == "owner" for role in user.roles):
         raise HTTPException(status_code=403, detail="هذه العملية تتطلب صلاحية مدير النظام")
     return user
+
+
+
+def require_permission(permission_code: str):
+    def permission_dependency(
+        user: AdminUser = Depends(get_current_user),
+    ) -> AdminUser:
+        if not has_permission(user, permission_code):
+            raise HTTPException(
+                status_code=403,
+                detail=f"ليست لديك صلاحية تنفيذ هذه العملية ({permission_code})",
+            )
+        return user
+
+    return permission_dependency

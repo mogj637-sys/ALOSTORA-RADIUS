@@ -1,8 +1,8 @@
-name: Backend tests
+name: Backend tests # extended package options validation
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/admin-dashboard-parity]
   pull_request:
     branches: [main]
 
