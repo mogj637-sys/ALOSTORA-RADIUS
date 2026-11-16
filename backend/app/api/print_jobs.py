@@ -163,7 +163,7 @@ def create_print_job(
     payload: PrintJobCreate,
     response: Response,
     db: Session = Depends(get_db),
-    user: AdminUser = Depends(require_permission("cards.view")),
+    user: AdminUser = Depends(require_permission("printing.manage")),
 ):
     # Voucher credentials are returned only to authenticated owners and must not be cached.
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
