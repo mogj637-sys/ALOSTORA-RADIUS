@@ -223,7 +223,9 @@ def disconnect_radius_session(session_id: int, db: Session = Depends(get_db), us
         raise HTTPException(status_code=503, detail="خدمة فصل الجلسات RADIUS CoA غير مفعلة")
     if not result:
         raise HTTPException(status_code=502, detail="لم يؤكد الراوتر فصل الجلسة")
-    record_audit(db, user, "session.disconnect_requested", "radius_session", f"طلب فصل جلسة المستخدم {session.card.username}", entity_id=session.id, details={"router_id": session.router_id, "acct_session_id": session.acct_session_id})
+    session_card = db.get(Card, session.card_id)
+    session_username = session_card.username if session_card else str(session.card_id)
+    record_audit(db, user, "session.disconnect_requested", "radius_session", f"طلب فصل جلسة المستخدم {session_username}", entity_id=session.id, details={"router_id": session.router_id, "acct_session_id": session.acct_session_id})
     db.commit()
     return {"session_id": session.id, "disconnect_acknowledged": True, "message": "أكد الراوتر استلام طلب فصل الجلسة"}
 
