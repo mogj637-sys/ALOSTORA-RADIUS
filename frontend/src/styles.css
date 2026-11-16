@@ -23,7 +23,11 @@ a { color: inherit; text-decoration: none; }
 .brand-copy span, .side-label { color: #93a0b6; font-size: 11px; }
 .side-label { margin: 42px 8px 13px; }
 nav { display: grid; gap: 7px; }
-.nav-item { padding: 12px 13px; border-radius: 9px; color: #c6cfdd; font-size: 13px; }
+.nav-item {
+  display: block; width: 100%; padding: 12px 13px; border: 0; border-radius: 9px;
+  background: transparent; color: #c6cfdd; text-align: right; font: inherit;
+  font-size: 13px; cursor: pointer; transition: background .15s ease, color .15s ease;
+}
 .nav-item.active { background: #1b8d70; color: white; }
 .sidebar-foot { margin-top: auto; padding: 16px 7px 0; color: #8492a9; font-size: 10px; }
 .workspace { flex: 1; min-width: 0; max-width: 1500px; margin: 0 auto; padding: 32px 42px; }
