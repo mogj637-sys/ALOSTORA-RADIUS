@@ -150,6 +150,8 @@ def test_router_connection_endpoint_uses_saved_credentials_read_only(owner_clien
     assert payload["connected"] is True
     assert payload["read_only"] is True
     assert payload["identity"] == "ci-edge"
+    assert payload["last_seen_at"] is not None
+    assert payload["version"] == "7.16.2"
     assert observed["host"] == "192.0.2.10"
     assert observed["port"] == 8729
     assert observed["username"] == "readonly"
