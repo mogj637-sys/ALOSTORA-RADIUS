@@ -194,6 +194,7 @@ class PrintJob(TimestampMixin, Base):
         ForeignKey("points_of_sale.id", ondelete="RESTRICT"), nullable=True
     )
     template_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    print_options: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     card_count: Mapped[int] = mapped_column(Integer, nullable=False)
     is_reprint: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     requested_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
