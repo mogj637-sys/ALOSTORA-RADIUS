@@ -437,7 +437,14 @@ function formatDuration(value: number): string {
 }
 
 function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string; onLogout: () => void }) {
-  const can = (permission: string) => user.roles.includes("owner") || user.permissions.includes(permission);
+  const can = (permission: string) => {
+    if (user.roles.includes("owner") || user.permissions.includes(permission)) return true;
+    const [module, action] = permission.split(".");
+    return action === "view" && (
+      user.permissions.includes(module + ".manage") ||
+      (module === "sessions" && user.permissions.includes("sessions.disconnect"))
+    );
+  };
   const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
   const [systemStatus, setSystemStatus] = useState<{ api: string; database: string; version: string; checkedAt: string } | null>(null);
   const [systemStatusLoading, setSystemStatusLoading] = useState(false);
