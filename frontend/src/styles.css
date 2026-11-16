@@ -824,3 +824,30 @@ tbody tr:hover { background: #fbfdfc; }
   .radius-session-summary strong { font-size: 19px; }
   .radius-sessions-table th, .radius-sessions-table td { padding: 9px 10px; font-size: 10px; }
 }
+
+
+/* Administrator accounts management */
+.admin-management-workspace { display: grid; gap: 16px; }
+.admin-create-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.admin-create-form .section-heading, .admin-create-form .form-actions { grid-column: 1 / -1; }
+.admin-create-form label { display: grid; gap: 7px; min-width: 0; color: #53665b; font-size: 11px; font-weight: 700; }
+.admin-create-form input, .admin-create-form select, .admin-table select {
+  width: 100%; min-width: 0; min-height: 39px; padding: 8px 10px;
+  border: 1px solid #dce6df; border-radius: 7px; background: #fbfdfc;
+  color: #31483a; font: inherit;
+}
+.admin-directory { display: grid; gap: 12px; }
+.admin-table-wrap { width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.admin-table { width: 100%; min-width: 850px; border-collapse: collapse; }
+.admin-table th, .admin-table td { padding: 11px 12px; border-bottom: 1px solid #edf1ee; text-align: right; white-space: nowrap; font-size: 11px; }
+.admin-table th { color: #718078; background: #f8fbf9; font-weight: 700; }
+.admin-table td { color: #40584a; }
+.admin-table select { min-width: 145px; }
+.admin-status { display: inline-flex; padding: 5px 9px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+.admin-status.active { color: #167452; background: #e8f7ef; }
+.admin-status.inactive { color: #9a5b35; background: #fff3e9; }
+@media (max-width: 650px) {
+  .admin-create-form { grid-template-columns: 1fr; }
+  .admin-create-form .section-heading, .admin-create-form .form-actions { grid-column: auto; }
+  .admin-create-form .form-actions button { width: 100%; }
+}
