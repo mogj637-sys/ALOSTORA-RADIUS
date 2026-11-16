@@ -5,9 +5,11 @@ const API_BASE = "http://localhost:8000";
 const DEFAULT_TEMPLATE_LAYOUT = {
   show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true,
   show_limits: true, show_border: true, font_family: "Arial", font_size: "12", border_width: "1",
-  border_color: "#667085", columns: "2", rows: "5",
+  border_color: "#667085", columns: "2", rows: "5", header_text: "الأسطورة نت", footer_text: "بطاقة إنترنت",
+  page_gap_mm: "4", card_padding_mm: "3",
   username_x: "50", username_y: "48", password_x: "50", password_y: "65",
   serial_x: "8", serial_y: "90", price_x: "92", price_y: "90",
+  plan_x: "50", plan_y: "25", limits_x: "50", limits_y: "82",
 };
 
 type CurrentUser = {
@@ -1184,55 +1186,114 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderTemplates() {
-    return <>
-      <div className="section-heading"><div><h2>استديو تصميم الكروت</h2><p>إدارة قوالب الطباعة وأبعادها وألوانها. يمكن توسيع محرر العناصر في المرحلة التالية.</p></div></div>
-      <form className="panel form-grid" onSubmit={saveCardTemplate}>
-        <label>رمز القالب<input value={templateDraft.code} onChange={(e) => setTemplateDraft({ ...templateDraft, code: e.target.value })} disabled={!!editingTemplateId} required pattern="[A-Za-z0-9_-]+" /></label>
-        <label>اسم القالب<input value={templateDraft.name} onChange={(e) => setTemplateDraft({ ...templateDraft, name: e.target.value })} required minLength={2} /></label>
-        <label>الباقة المرتبطة بالقالب<select value={templateDraft.plan_id} onChange={(e) => setTemplateDraft({ ...templateDraft, plan_id: e.target.value })} required><option value="">اختر الباقة</option>{plans.filter((plan) => plan.is_active).map((plan) => <option key={plan.id} value={plan.id}>{plan.name} — {plan.code}</option>)}</select></label>
-        <label>العرض (مم)<input type="number" min="1" max="300" value={templateDraft.width_mm} onChange={(e) => setTemplateDraft({ ...templateDraft, width_mm: e.target.value })} required /></label>
-        <label>الارتفاع (مم)<input type="number" min="1" max="300" value={templateDraft.height_mm} onChange={(e) => setTemplateDraft({ ...templateDraft, height_mm: e.target.value })} required /></label>
-        <label>لون الخلفية<input type="color" value={templateDraft.background_color} onChange={(e) => setTemplateDraft({ ...templateDraft, background_color: e.target.value })} /></label>
-        <label>لون النص<input type="color" value={templateDraft.text_color} onChange={(e) => setTemplateDraft({ ...templateDraft, text_color: e.target.value })} /></label>
-        <div className="plan-form-section">
-          <h3>عناصر الكرت</h3>
-          <div className="day-selector">
-            <label><input type="checkbox" checked={!!templateLayoutDraft.show_username} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_username: e.target.checked })} /> اسم المستخدم</label>
-            <label><input type="checkbox" checked={!!templateLayoutDraft.show_password} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_password: e.target.checked })} /> كلمة المرور</label>
-            <label><input type="checkbox" checked={!!templateLayoutDraft.show_serial_number} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_serial_number: e.target.checked })} /> الرقم التسلسلي</label>
-            <label><input type="checkbox" checked={!!templateLayoutDraft.show_plan} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_plan: e.target.checked })} /> اسم الباقة</label>
-            <label><input type="checkbox" checked={!!templateLayoutDraft.show_price} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_price: e.target.checked })} /> السعر</label>
-            <label><input type="checkbox" checked={!!templateLayoutDraft.show_limits} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_limits: e.target.checked })} /> الرصيد والوقت والصلاحية</label>
-            <label><input type="checkbox" checked={!!templateLayoutDraft.show_border} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, show_border: e.target.checked })} /> إطار الكرت</label>
-          </div>
+    const previewPlan = plans.find((plan) => String(plan.id) === templateDraft.plan_id);
+    const previewPosition = (xKey: string, yKey: string) => ({
+      position: "absolute" as const,
+      left: String(templateLayoutDraft[xKey] ?? "50") + "%",
+      top: String(templateLayoutDraft[yKey] ?? "50") + "%",
+      transform: "translate(-50%, -50%)",
+      width: "88%",
+      textAlign: "center" as const,
+    });
+    const previewCardStyle = {
+      position: "relative" as const,
+      width: "100%",
+      maxWidth: "520px",
+      aspectRatio: `${templateDraft.width_mm}/${templateDraft.height_mm}`,
+      background: templateDraft.background_color,
+      color: templateDraft.text_color,
+      fontFamily: String(templateLayoutDraft.font_family ?? "Arial"),
+      fontSize: `${Number(templateLayoutDraft.font_size ?? 12)}px`,
+      padding: `${Number(templateLayoutDraft.card_padding_mm ?? 3)}mm`,
+      border: templateLayoutDraft.show_border === false ? "none" : `${Number(templateLayoutDraft.border_width ?? 1)}px solid ${String(templateLayoutDraft.border_color ?? "#667085")}`,
+      borderRadius: "8px",
+      overflow: "hidden" as const,
+      boxSizing: "border-box" as const,
+    };
+    const resetTemplateDraft = () => {
+      setEditingTemplateId(null);
+      setTemplateDraft({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37", plan_id: "" });
+      setTemplateLayoutDraft({ ...DEFAULT_TEMPLATE_LAYOUT });
+    };
+    return (
+      <section className="template-studio">
+        <div className="section-heading template-studio-heading">
+          <div><span className="eyebrow">استديو التصميم والطباعة</span><h2>تصاميم الكروت</h2><p>أنشئ قوالب متعددة، اربط كل قالب بباقة، وشاهد شكل الكرت مباشرة قبل الحفظ والطباعة.</p></div>
+          <span className="count-tag">{cardTemplates.length.toLocaleString("ar")} قالب محفوظ</span>
         </div>
-        <div className="plan-form-section">
-          <h3>الخط والإطار وتخطيط الصفحة</h3>
-          <label>نوع الخط<select value={String(templateLayoutDraft.font_family)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, font_family: e.target.value })}><option>Arial</option><option>Tahoma</option><option>Consolas</option><option>sans-serif</option></select></label>
-          <label>حجم الخط<input type="number" min="6" max="32" value={String(templateLayoutDraft.font_size)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, font_size: e.target.value })} /></label>
-          <label>لون الإطار<input type="color" value={String(templateLayoutDraft.border_color)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, border_color: e.target.value })} /></label>
-          <label>سماكة الإطار<input type="number" min="0" max="5" step="0.5" value={String(templateLayoutDraft.border_width)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, border_width: e.target.value })} /></label>
-          <label>عدد الأعمدة<input type="number" min="1" max="5" value={String(templateLayoutDraft.columns)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, columns: e.target.value })} /></label>
-          <label>عدد الصفوف<input type="number" min="1" max="12" value={String(templateLayoutDraft.rows)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, rows: e.target.value })} /></label>
+
+        <div className="template-studio-grid">
+          <form className="panel template-editor-panel" onSubmit={saveCardTemplate}>
+            <div className="template-editor-heading"><div><span className="eyebrow">{editingTemplateId ? "تعديل تصميم محفوظ" : "تصميم جديد"}</span><h3>{editingTemplateId ? "تحرير القالب" : "إنشاء قالب طباعة"}</h3></div><span className="template-editor-mark">✎</span></div>
+
+            <div className="template-editor-section"><div className="plan-section-title"><span>01</span><div><h3>البيانات وربط الباقة</h3><p>اختر الباقة التي سيحملها هذا القالب تلقائياً</p></div></div><div className="form-grid">
+              <label>رمز القالب<input value={templateDraft.code} onChange={(e) => setTemplateDraft({ ...templateDraft, code: e.target.value })} disabled={!!editingTemplateId} required pattern="[A-Za-z0-9_-]+" /></label>
+              <label>اسم القالب<input value={templateDraft.name} onChange={(e) => setTemplateDraft({ ...templateDraft, name: e.target.value })} required minLength={2} placeholder="مثال: قالب الباقة الاقتصادية" /></label>
+              <label className="template-plan-select">الباقة المرتبطة بالقالب<select value={templateDraft.plan_id} onChange={(e) => setTemplateDraft({ ...templateDraft, plan_id: e.target.value })} required><option value="">اختر الباقة</option>{plans.filter((plan) => plan.is_active).map((plan) => <option key={plan.id} value={plan.id}>{plan.name} — {plan.code}</option>)}</select></label>
+            </div>{previewPlan && <div className="template-linked-plan"><strong>الباقة المرتبطة:</strong> {previewPlan.name} · {Number(previewPlan.price).toLocaleString("en-US")} ريال · {previewPlan.data_limit_bytes == null ? "رصيد مفتوح" : `${(previewPlan.data_limit_bytes / (1024 ** 2)).toFixed(0)} MB`}</div>}</div>
+
+            <div className="template-editor-section"><div className="plan-section-title"><span>02</span><div><h3>أبعاد الكرت وألوانه</h3><p>تظهر التغييرات فوراً في المعاينة</p></div></div><div className="form-grid">
+              <label>العرض (مم)<input type="number" min="25" max="300" value={templateDraft.width_mm} onChange={(e) => setTemplateDraft({ ...templateDraft, width_mm: e.target.value })} required /></label>
+              <label>الارتفاع (مم)<input type="number" min="20" max="300" value={templateDraft.height_mm} onChange={(e) => setTemplateDraft({ ...templateDraft, height_mm: e.target.value })} required /></label>
+              <label>لون الخلفية<input type="color" value={templateDraft.background_color} onChange={(e) => setTemplateDraft({ ...templateDraft, background_color: e.target.value })} /></label>
+              <label>لون النص<input type="color" value={templateDraft.text_color} onChange={(e) => setTemplateDraft({ ...templateDraft, text_color: e.target.value })} /></label>
+              <label>عنوان الكرت<input value={String(templateLayoutDraft.header_text ?? "الأسطورة نت")} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, header_text: e.target.value })} maxLength={60} /></label>
+              <label>النص التعريفي<input value={String(templateLayoutDraft.footer_text ?? "بطاقة إنترنت")} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, footer_text: e.target.value })} maxLength={80} /></label>
+            </div></div>
+
+            <div className="template-editor-section"><div className="plan-section-title"><span>03</span><div><h3>العناصر الظاهرة</h3><p>حدد البيانات التي تظهر على وجه الكرت</p></div></div><div className="template-visibility-grid">
+              {([["show_username","اسم المستخدم"],["show_password","كلمة المرور"],["show_serial_number","الرقم التسلسلي"],["show_plan","اسم الباقة"],["show_price","السعر"],["show_limits","الرصيد والوقت والصلاحية"],["show_border","إطار الكرت"]] as [string,string][]).map(([key,label]) => <label key={key}><input type="checkbox" checked={!!templateLayoutDraft[key]} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, [key]: e.target.checked })} />{label}</label>)}
+            </div></div>
+
+            <div className="template-editor-section"><div className="plan-section-title"><span>04</span><div><h3>الخط والإطار وتوزيع الصفحة</h3><p>ضبط شكل العناصر وعدد الكروت في الصفحة</p></div></div><div className="form-grid">
+              <label>نوع الخط<select value={String(templateLayoutDraft.font_family)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, font_family: e.target.value })}><option>Arial</option><option>Tahoma</option><option>Consolas</option><option>sans-serif</option></select></label>
+              <label>حجم الخط<input type="number" min="6" max="32" value={String(templateLayoutDraft.font_size)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, font_size: e.target.value })} /></label>
+              <label>لون الإطار<input type="color" value={String(templateLayoutDraft.border_color)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, border_color: e.target.value })} /></label>
+              <label>سماكة الإطار<input type="number" min="0" max="5" step="0.5" value={String(templateLayoutDraft.border_width)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, border_width: e.target.value })} /></label>
+              <label>عدد الأعمدة<input type="number" min="1" max="5" value={String(templateLayoutDraft.columns)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, columns: e.target.value })} /></label>
+              <label>عدد الصفوف<input type="number" min="1" max="12" value={String(templateLayoutDraft.rows)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, rows: e.target.value })} /></label>
+              <label>المسافة بين الكروت (مم)<input type="number" min="0" max="20" step="0.5" value={String(templateLayoutDraft.page_gap_mm ?? "4")} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, page_gap_mm: e.target.value })} /></label>
+              <label>الهامش الداخلي للكرت (مم)<input type="number" min="0" max="15" step="0.5" value={String(templateLayoutDraft.card_padding_mm ?? "3")} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, card_padding_mm: e.target.value })} /></label>
+            </div></div>
+
+            <div className="template-editor-section"><div className="plan-section-title"><span>05</span><div><h3>مواضع العناصر X و Y</h3><p>القيم كنسبة مئوية من أبعاد الكرت</p></div></div><div className="form-grid">
+              {([["اسم المستخدم","username"],["كلمة المرور","password"],["اسم الباقة","plan"],["الرصيد والوقت","limits"],["الرقم التسلسلي","serial"],["السعر","price"]] as [string,string][]).map(([label,key]) => <div className="template-position-fields" key={key}><strong>{label}</strong><label>X<input type="number" min="0" max="100" value={String(templateLayoutDraft[`${key}_x`] ?? (key === "serial" ? "8" : key === "price" ? "92" : "50"))} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, [`${key}_x`]: e.target.value })} /></label><label>Y<input type="number" min="0" max="100" value={String(templateLayoutDraft[`${key}_y`] ?? (key === "plan" ? "25" : key === "limits" ? "82" : key === "username" ? "48" : key === "password" ? "65" : "90"))} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, [`${key}_y`]: e.target.value })} /></label></div>)}
+            </div></div>
+
+            <div className="form-actions template-editor-actions"><button type="submit" disabled={busy || !plans.some((plan) => plan.is_active && String(plan.id) === templateDraft.plan_id)}>{busy ? "جارٍ الحفظ..." : editingTemplateId ? "حفظ تعديلات القالب" : "حفظ القالب"}</button><button type="button" className="secondary-button" onClick={resetTemplateDraft}>قالب جديد / إلغاء</button></div>
+          </form>
+
+          <aside className="template-preview-column">
+            <div className="panel template-live-preview">
+              <div className="template-preview-heading"><div><span className="eyebrow">معاينة مباشرة</span><h3>شكل الكرت</h3></div><span className="preview-live-dot">مباشر</span></div>
+              <div className="template-preview-stage">
+                <article className="template-preview-card" style={previewCardStyle}>
+                  <div className="voucher-head"><strong>{String(templateLayoutDraft.header_text ?? "الأسطورة نت")}</strong><span>{String(templateLayoutDraft.footer_text ?? "بطاقة إنترنت")}</span></div>
+                  {templateLayoutDraft.show_plan !== false && <div className="voucher-plan" style={previewPosition("plan_x","plan_y")}><span>الباقة</span><strong>{previewPlan?.name || "اسم الباقة"}</strong></div>}
+                  {templateLayoutDraft.show_username !== false && <div className="voucher-user" style={previewPosition("username_x","username_y")}><span>اسم المستخدم</span><strong>123456789</strong></div>}
+                  {templateLayoutDraft.show_password !== false && <div className="voucher-password" style={previewPosition("password_x","password_y")}><span>كلمة المرور</span><strong>••••••••</strong></div>}
+                  {templateLayoutDraft.show_limits !== false && <div className="voucher-limits" style={previewPosition("limits_x","limits_y")}><span>{previewPlan?.data_limit_bytes == null ? "رصيد مفتوح" : `${(previewPlan.data_limit_bytes / (1024 ** 2)).toFixed(0)} MB`} · {previewPlan?.session_time_limit_seconds == null ? "وقت مفتوح" : `${(previewPlan.session_time_limit_seconds / 3600).toFixed(0)} ساعة`} · {previewPlan?.validity_period_seconds == null ? "صلاحية مفتوحة" : `${(previewPlan.validity_period_seconds / 86400).toFixed(0)} يوم`}</span></div>}
+                  <div className="voucher-foot"><span style={previewPosition("serial_x","serial_y")}>{templateLayoutDraft.show_serial_number !== false ? "AL000001" : ""}</span><strong style={previewPosition("price_x","price_y")}>{templateLayoutDraft.show_price !== false ? `${previewPlan ? Number(previewPlan.price).toLocaleString("en-US") : "100"} ريال` : ""}</strong></div>
+                </article>
+              </div>
+              <div className="template-preview-meta"><span>{templateDraft.width_mm} × {templateDraft.height_mm} مم</span><span>{templateLayoutDraft.columns} أعمدة × {templateLayoutDraft.rows} صفوف</span></div>
+              <p className="field-hint">هذه معاينة توضيحية ببيانات تجريبية؛ بيانات الكروت الفعلية تظهر عند الطباعة.</p>
+            </div>
+          </aside>
         </div>
-        <div className="plan-form-section">
-          <h3>مواضع العناصر (X و Y بالنسبة المئوية)</h3>
-          <div className="form-grid">
-            <label>اسم المستخدم X<input type="number" min="0" max="100" value={String(templateLayoutDraft.username_x)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, username_x: e.target.value })} /></label>
-            <label>اسم المستخدم Y<input type="number" min="0" max="100" value={String(templateLayoutDraft.username_y)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, username_y: e.target.value })} /></label>
-            <label>كلمة المرور X<input type="number" min="0" max="100" value={String(templateLayoutDraft.password_x)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, password_x: e.target.value })} /></label>
-            <label>كلمة المرور Y<input type="number" min="0" max="100" value={String(templateLayoutDraft.password_y)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, password_y: e.target.value })} /></label>
-            <label>الرقم التسلسلي X<input type="number" min="0" max="100" value={String(templateLayoutDraft.serial_x)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, serial_x: e.target.value })} /></label>
-            <label>الرقم التسلسلي Y<input type="number" min="0" max="100" value={String(templateLayoutDraft.serial_y)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, serial_y: e.target.value })} /></label>
-            <label>السعر X<input type="number" min="0" max="100" value={String(templateLayoutDraft.price_x)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, price_x: e.target.value })} /></label>
-            <label>السعر Y<input type="number" min="0" max="100" value={String(templateLayoutDraft.price_y)} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, price_y: e.target.value })} /></label>
-          </div>
-        </div>
-        <div className="form-actions"><button type="submit" disabled={busy}>{editingTemplateId ? "حفظ التعديلات" : "إنشاء قالب"}</button><button type="button" className="secondary-button" onClick={() => { setEditingTemplateId(null); setTemplateDraft({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37", plan_id: "" }); setTemplateLayoutDraft({ ...DEFAULT_TEMPLATE_LAYOUT }); }}>جديد / إلغاء</button></div>
-      </form>
-      <div className="template-gallery">{cardTemplates.map((item) => <article className="panel template-item" key={item.id}><div className="template-sample" style={{ background: item.background_color, color: item.text_color, aspectRatio: `${item.width_mm}/${item.height_mm}` }}><strong>اسم المستخدم</strong><span>الأسطورة نت</span></div><h3>{item.name} {item.is_default ? "— افتراضي" : ""}</h3><small>{item.width_mm} × {item.height_mm} مم · {item.code} · الباقة: {plans.find((plan) => plan.id === item.plan_id)?.name ?? "غير مرتبطة"}</small><div className="form-actions"><button type="button" className="table-action" onClick={() => { setEditingTemplateId(item.id); setTemplateDraft({ code: item.code, name: item.name, width_mm: String(item.width_mm), height_mm: String(item.height_mm), background_color: item.background_color, text_color: item.text_color, plan_id: item.plan_id ? String(item.plan_id) : "" }); setTemplateLayoutDraft({ ...DEFAULT_TEMPLATE_LAYOUT, ...item.layout } as Record<string, string | boolean>); }}>تعديل</button><button type="button" className="table-action" disabled={busy || item.is_default} onClick={() => apiRequest<CardTemplate>(token, `/api/v1/card-templates/${item.id}`, { method: "PATCH", body: JSON.stringify({ is_default: true }) }).then(() => loadCardTemplates()).then(() => setNotice("تم تعيين القالب الافتراضي.")).catch((err) => setError(err instanceof Error ? err.message : "تعذر تعيين القالب الافتراضي"))}>جعله افتراضياً</button><button type="button" className="table-action danger-action" disabled={busy || item.is_default} onClick={() => deleteCardTemplate(item)}>حذف</button></div></article>)}</div>
-      {cardTemplates.length === 0 && <div className="empty-state">لا توجد قوالب محفوظة بعد.</div>}
-    </>;
+
+        <div className="template-gallery-heading"><div><span className="eyebrow">مكتبة التصاميم</span><h3>القوالب المحفوظة</h3><p>يمكنك فتح أي قالب للتعديل أو تعيينه قالباً افتراضياً.</p></div><span className="count-tag">{cardTemplates.length} قالب</span></div>
+        <div className="template-gallery">{cardTemplates.map((item) => {
+          const savedLayout = { ...DEFAULT_TEMPLATE_LAYOUT, ...item.layout } as Record<string, string | boolean>;
+          return <article className="panel template-item" key={item.id}>
+            <div className="template-sample" style={{ background: item.background_color, color: item.text_color, aspectRatio: `${item.width_mm}/${item.height_mm}`, border: savedLayout.show_border === false ? "none" : `${Number(savedLayout.border_width ?? 1)}px solid ${String(savedLayout.border_color ?? "#667085")}` }}><strong>{String(savedLayout.header_text ?? "الأسطورة نت")}</strong><span>{item.name}</span><small>{plans.find((plan) => plan.id === item.plan_id)?.name ?? "غير مرتبطة"}</small></div>
+            <h3>{item.name} {item.is_default ? "— افتراضي" : ""}</h3><small>{item.width_mm} × {item.height_mm} مم · {item.code} · الباقة: {plans.find((plan) => plan.id === item.plan_id)?.name ?? "غير مرتبطة"}</small>
+            <div className="form-actions"><button type="button" className="table-action" onClick={() => { setEditingTemplateId(item.id); setTemplateDraft({ code: item.code, name: item.name, width_mm: String(item.width_mm), height_mm: String(item.height_mm), background_color: item.background_color, text_color: item.text_color, plan_id: item.plan_id ? String(item.plan_id) : "" }); setTemplateLayoutDraft({ ...DEFAULT_TEMPLATE_LAYOUT, ...item.layout } as Record<string, string | boolean>); }}>تعديل</button><button type="button" className="table-action" disabled={busy || item.is_default} onClick={() => apiRequest<CardTemplate>(token, `/api/v1/card-templates/${item.id}`, { method: "PATCH", body: JSON.stringify({ is_default: true }) }).then(() => loadCardTemplates()).then(() => setNotice("تم تعيين القالب الافتراضي.")).catch((err) => setError(err instanceof Error ? err.message : "تعذر تعيين القالب الافتراضي"))}>جعله افتراضياً</button><button type="button" className="table-action danger-action" disabled={busy || item.is_default} onClick={() => deleteCardTemplate(item)}>حذف</button></div>
+          </article>;
+        })}</div>
+        {cardTemplates.length === 0 && <div className="empty-state">لا توجد قوالب محفوظة بعد. أنشئ أول قالب من المحرر.</div>}
+      </section>
+    );
   }
 
   function renderCardCreate() {
@@ -1499,14 +1560,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                     <button type="button" className="secondary-button" onClick={() => setPrintPreviewCards([])}>إغلاق المعاينة</button>
                   </div>
                 </div>
-                <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"} style={selectedTemplate ? { gridTemplateColumns: `repeat(${Math.max(1, Math.min(5, Number(selectedLayout.columns ?? 2)))}, minmax(0, 1fr))` } : undefined}>
+                <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"} style={selectedTemplate ? { gridTemplateColumns: `repeat(${Math.max(1, Math.min(5, Number(selectedLayout.columns ?? 2)))}, minmax(0, 1fr))`, gap: `${Number(selectedLayout.page_gap_mm ?? 4)}mm` } : undefined}>
                   {printPreviewCards.map((card, index) => (
-                    <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { position: "relative", background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, minHeight: `${selectedTemplate.height_mm}mm`, fontFamily: String(selectedLayout.font_family ?? "Arial"), fontSize: `${Number(selectedLayout.font_size ?? 12)}px`, border: selectedLayout.show_border === false ? "none" : `${Number(selectedLayout.border_width ?? 1)}px solid ${String(selectedLayout.border_color ?? "#b9d9c8")}`, breakAfter: (index + 1) % cardsPerPage === 0 && index < printPreviewCards.length - 1 ? "page" : undefined } : undefined}>
-                      <div className="voucher-head"><strong>الأسطورة نت</strong><span>{card.is_free ? "كرت مجاني" : "بطاقة إنترنت"}</span></div>
-                      {printOptions.show_plan && selectedLayout.show_plan !== false && <div className="voucher-plan"><span>الباقة</span><strong>{card.plan_name}</strong></div>}
+                    <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { position: "relative", background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, minHeight: `${selectedTemplate.height_mm}mm`, fontFamily: String(selectedLayout.font_family ?? "Arial"), fontSize: `${Number(selectedLayout.font_size ?? 12)}px`, padding: `${Number(selectedLayout.card_padding_mm ?? 3)}mm`, border: selectedLayout.show_border === false ? "none" : `${Number(selectedLayout.border_width ?? 1)}px solid ${String(selectedLayout.border_color ?? "#b9d9c8")}`, breakAfter: (index + 1) % cardsPerPage === 0 && index < printPreviewCards.length - 1 ? "page" : undefined } : undefined}>
+                      <div className="voucher-head"><strong>{String(selectedLayout.header_text ?? "الأسطورة نت")}</strong><span>{String(selectedLayout.footer_text ?? (card.is_free ? "كرت مجاني" : "بطاقة إنترنت"))}</span></div>
+                      {printOptions.show_plan && selectedLayout.show_plan !== false && <div className="voucher-plan" style={layoutPosition("plan_x", "plan_y")}><span>الباقة</span><strong>{card.plan_name}</strong></div>}
                       {printOptions.show_username && selectedLayout.show_username !== false && <div className="voucher-user" style={layoutPosition("username_x", "username_y")}><span>اسم المستخدم</span><strong>{card.username}</strong></div>}
                       {printOptions.show_password && selectedLayout.show_password !== false && <div className="voucher-password" style={layoutPosition("password_x", "password_y")}><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>}
-                      {printOptions.show_limits && selectedLayout.show_limits !== false && <div className="voucher-limits"><span>{card.data_limit_bytes == null ? "رصيد مفتوح" : (Number(card.data_limit_bytes) / (1024 ** 2)).toFixed(0) + " MB"} · {card.session_time_limit_seconds == null ? "وقت مفتوح" : (Number(card.session_time_limit_seconds) / 3600).toFixed(0) + " ساعة"} · {card.validity_period_seconds == null ? "صلاحية مفتوحة" : (Number(card.validity_period_seconds) / 86400).toFixed(0) + " يوم"}</span></div>}
+                      {printOptions.show_limits && selectedLayout.show_limits !== false && <div className="voucher-limits" style={layoutPosition("limits_x", "limits_y")}><span>{card.data_limit_bytes == null ? "رصيد مفتوح" : (Number(card.data_limit_bytes) / (1024 ** 2)).toFixed(0) + " MB"} · {card.session_time_limit_seconds == null ? "وقت مفتوح" : (Number(card.session_time_limit_seconds) / 3600).toFixed(0) + " ساعة"} · {card.validity_period_seconds == null ? "صلاحية مفتوحة" : (Number(card.validity_period_seconds) / 86400).toFixed(0) + " يوم"}</span></div>}
                       <div className="voucher-foot"><span style={layoutPosition("serial_x", "serial_y")}>{printOptions.show_serial_number && selectedLayout.show_serial_number !== false ? card.serial_number : ""}</span><strong style={layoutPosition("price_x", "price_y")}>{printOptions.show_price && selectedLayout.show_price !== false ? (card.is_free ? "مجاني" : Number(card.price_snapshot).toLocaleString("en-US") + " ريال") : ""}</strong></div>
                     </article>
                   ))}
