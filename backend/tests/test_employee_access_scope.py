@@ -1,7 +1,10 @@
 import secrets
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 from app.db.session import SessionLocal
 from app.models.auth import AdminUser, Role
+from app.models.core import RadiusSession, Router
 
 
 def _create_point(client, headers, label):
@@ -59,6 +62,53 @@ def test_employee_can_search_any_pos_card_but_cannot_browse_all_cards_or_pos_fin
     point_b = _create_point(client, owner_headers, "SCOPEB")
     card_a = _create_card(client, owner_headers, point_a["id"], "CARD_A")
     card_b = _create_card(client, owner_headers, point_b["id"], "CARD_B")
+
+    # Seed one active and one historical session for a card belonging to POS B.
+    db = SessionLocal()
+    now = datetime.now(timezone.utc)
+    router = Router(
+        name="CI employee session router",
+        nas_identifier="ci-employee-session-" + secrets.token_hex(4),
+        management_host="127.0.0.1",
+        radius_secret_encrypted="test-encrypted-secret",
+        is_active=True,
+    )
+    db.add(router)
+    db.flush()
+    db.add_all([
+        RadiusSession(
+            card_id=UUID(card_b["id"]),
+            router_id=router.id,
+            acct_session_id="active-" + secrets.token_hex(4),
+            framed_ip_address="10.10.0.10",
+            calling_station_id="AA:BB:CC:DD:EE:01",
+            started_at=now - timedelta(minutes=30),
+            last_update_at=now,
+            session_time_seconds=1800,
+            input_octets=1024,
+            output_octets=2048,
+        ),
+        RadiusSession(
+            card_id=UUID(card_b["id"]),
+            router_id=router.id,
+            acct_session_id="stopped-" + secrets.token_hex(4),
+            framed_ip_address="10.10.0.11",
+            calling_station_id="AA:BB:CC:DD:EE:02",
+            started_at=now - timedelta(hours=2),
+            last_update_at=now - timedelta(hours=1),
+            stopped_at=now - timedelta(hours=1),
+            session_time_seconds=3600,
+            input_octets=4096,
+            output_octets=8192,
+        ),
+    ])
+    db.commit()
+    active_session_id = (
+        db.query(RadiusSession.id)
+        .filter(RadiusSession.card_id == UUID(card_b["id"]), RadiusSession.stopped_at.is_(None))
+        .scalar()
+    )
+    db.close()
 
     role_code = "ci_card_search_" + secrets.token_hex(4)
     staff_username = "ci_search_staff_" + secrets.token_hex(4)
@@ -121,6 +171,27 @@ def test_employee_can_search_any_pos_card_but_cannot_browse_all_cards_or_pos_fin
         )
         assert by_serial.status_code == 200, by_serial.text
         assert [item["id"] for item in by_serial.json()] == [card_b["id"]]
+
+        # Once a card is found, the employee can inspect its complete session
+        # history, including sessions created through another point of sale.
+        history = client.get(
+            f"/api/v1/cards/{card_b['id']}/sessions",
+            headers=staff_headers,
+        )
+        assert history.status_code == 200, history.text
+        assert history.json()["total_sessions"] == 2
+        assert history.json()["active_sessions"] == 1
+        assert len(history.json()["items"]) == 2
+        assert {item["router_name"] for item in history.json()["items"]} == {
+            "CI employee session router"
+        }
+
+        # Reading a card's sessions does not grant permission to disconnect it.
+        disconnect = client.post(
+            f"/api/v1/cards/sessions/{active_session_id}/disconnect",
+            headers=staff_headers,
+        )
+        assert disconnect.status_code == 403
 
         # The owner retains the unrestricted card list.
         owner_cards = client.get("/api/v1/cards", headers=owner_headers)
