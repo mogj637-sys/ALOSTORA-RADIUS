@@ -2807,11 +2807,15 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <div className="section-heading">
           <div><h2>التقارير الشاملة</h2><p>تقارير الكروت والاستهلاك والجلسات والدفعات والطباعة والحسابات حسب الفترة.</p></div>
         </div>
-        <form className="panel form-grid" onSubmit={(event) => { event.preventDefault(); setBusy(true); setError(""); loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقرير")).finally(() => setBusy(false)); }}>
+        <form className="panel form-grid report-period-filter" onSubmit={(event) => { event.preventDefault(); setBusy(true); setError(""); loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقرير")).finally(() => setBusy(false)); }}>
           <label>من تاريخ<input type="date" value={reportFrom} max={reportTo} onChange={(event) => setReportFrom(event.target.value)} required /></label>
           <label>إلى تاريخ<input type="date" value={reportTo} min={reportFrom} onChange={(event) => setReportTo(event.target.value)} required /></label>
           <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ إعداد التقرير..." : "عرض التقرير"}</button></div>
         </form>
+        <div className="report-period-indicator" aria-live="polite">
+          <span className="report-period-mark" aria-hidden="true">◷</span>
+          <div><span>الفترة المحددة للتقرير</span><strong>{new Date(reportFrom + "T00:00:00").toLocaleDateString("ar")} — {new Date(reportTo + "T00:00:00").toLocaleDateString("ar")}</strong></div>
+        </div>
         <div className="report-tabs" role="tablist" aria-label="أقسام التقارير">
           {can("cards.view") && <button type="button" className={reportTab === "cards" ? "active" : ""} onClick={() => setReportTab("cards")}>الكروت</button>}
           {can("sessions.view") && <button type="button" className={reportTab === "usage" ? "active" : ""} onClick={() => setReportTab("usage")}>الاستهلاك والوقت</button>}
