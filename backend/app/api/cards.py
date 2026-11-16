@@ -88,15 +88,21 @@ def _build_card(plan: Plan, username: str, password: str, card_type: str, is_fre
 def list_card_batches(
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("cards.view")),
 ):
-    rows = (
+    is_owner = any(role.code == "owner" for role in user.roles)
+    assigned_pos_ids = [point.id for point in user.point_of_sales]
+    if not is_owner and not assigned_pos_ids:
+        return []
+    rows_query = (
         db.query(CardBatch, Plan, PointOfSale)
         .join(Plan, Plan.id == CardBatch.plan_id)
         .outerjoin(PointOfSale, PointOfSale.id == CardBatch.point_of_sale_id)
         .order_by(CardBatch.created_at.desc())
-        .limit(limit)
-        .all()
     )
+    if not is_owner:
+        rows_query = rows_query.filter(CardBatch.point_of_sale_id.in_(assigned_pos_ids))
+    rows = rows_query.limit(limit).all()
     results = []
     for batch, plan, point in rows:
         printed = (
@@ -125,22 +131,27 @@ def list_card_batches(
 
 
 @router.get("/overview")
-def get_radius_overview(db: Session = Depends(get_db)):
+def get_radius_overview(db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.view"))):
     """Return database-backed totals for the admin dashboard."""
-    card_counts = dict(
-        db.query(Card.status, func.count(Card.id)).group_by(Card.status).all()
-    )
+    is_owner = any(role.code == "owner" for role in user.roles)
+    assigned_pos_ids = [point.id for point in user.point_of_sales]
+    card_query = db.query(Card)
+    session_query = db.query(RadiusSession)
+    if not is_owner:
+        card_query = card_query.filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else card_query.filter(Card.id.is_(None))
+        session_query = session_query.join(Card, Card.id == RadiusSession.card_id).filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else session_query.filter(RadiusSession.id.is_(None))
+    card_counts = dict(card_query.with_entities(Card.status, func.count(Card.id)).group_by(Card.status).all())
     active_sessions = (
-        db.query(func.count(RadiusSession.id))
+        session_query.with_entities(func.count(RadiusSession.id))
         .filter(RadiusSession.stopped_at.is_(None))
         .scalar() or 0
     )
     active_users = (
-        db.query(func.count(func.distinct(RadiusSession.card_id)))
+        session_query.with_entities(func.count(func.distinct(RadiusSession.card_id)))
         .filter(RadiusSession.stopped_at.is_(None))
         .scalar() or 0
     )
-    total_sessions = db.query(func.count(RadiusSession.id)).scalar() or 0
+    total_sessions = session_query.with_entities(func.count(RadiusSession.id)).scalar() or 0
     routers_total = db.query(func.count(Router.id)).scalar() or 0
     routers_enabled = db.query(func.count(Router.id)).filter(Router.is_active.is_(True)).scalar() or 0
     plans_total = db.query(func.count(Plan.id)).scalar() or 0
@@ -163,21 +174,27 @@ def get_radius_overview(db: Session = Depends(get_db)):
 def list_radius_sessions(
     limit: int = Query(default=200, ge=1, le=500),
     db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("sessions.view")),
 ):
     """Return live RADIUS sessions and aggregate counters for the admin dashboard."""
+    is_owner = any(role.code == "owner" for role in user.roles)
+    assigned_pos_ids = [point.id for point in user.point_of_sales]
+    session_query = db.query(RadiusSession)
+    if not is_owner:
+        session_query = session_query.join(Card, Card.id == RadiusSession.card_id).filter(Card.assigned_pos_id.in_(assigned_pos_ids)) if assigned_pos_ids else session_query.filter(RadiusSession.id.is_(None))
     active_count = (
-        db.query(func.count(RadiusSession.id))
+        session_query.with_entities(func.count(RadiusSession.id))
         .filter(RadiusSession.stopped_at.is_(None))
         .scalar() or 0
     )
     active_users_count = (
-        db.query(func.count(func.distinct(RadiusSession.card_id)))
+        session_query.with_entities(func.count(func.distinct(RadiusSession.card_id)))
         .filter(RadiusSession.stopped_at.is_(None))
         .scalar() or 0
     )
-    total_count = db.query(func.count(RadiusSession.id)).scalar() or 0
+    total_count = session_query.with_entities(func.count(RadiusSession.id)).scalar() or 0
     rows = (
-        db.query(RadiusSession, Card, Router)
+        session_query.with_entities(RadiusSession, Card, Router)
         .join(Card, Card.id == RadiusSession.card_id)
         .join(Router, Router.id == RadiusSession.router_id)
         .filter(RadiusSession.stopped_at.is_(None))
