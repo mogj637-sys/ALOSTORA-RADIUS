@@ -509,6 +509,52 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [adminPermissions, setAdminPermissions] = useState<AdminPermission[]>([]);
   const [selectedPermissionRole, setSelectedPermissionRole] = useState("manager");
   const [rolePermissionCodes, setRolePermissionCodes] = useState<string[]>([]);
+  const managedPermissionActions: Record<string, string[]> = {
+    cards: ["create", "update"],
+    plans: ["create", "update"],
+    routers: ["create", "update"],
+    pos: ["create", "update"],
+    finance: ["create"],
+    templates: ["create", "update", "delete"],
+    printing: ["create", "reprint"],
+  };
+  const isRolePermissionChecked = (permissionCode: string) => {
+    if (rolePermissionCodes.includes(permissionCode)) return true;
+    const [module, action] = permissionCode.split(".");
+    if (action === "view") {
+      return rolePermissionCodes.includes(module + ".manage") ||
+        (module === "sessions" && rolePermissionCodes.includes("sessions.disconnect"));
+    }
+    return managedPermissionActions[module]?.includes(action) === true &&
+      rolePermissionCodes.includes(module + ".manage");
+  };
+  const toggleRolePermission = (permissionCode: string, checked: boolean) => {
+    const [module, action] = permissionCode.split(".");
+    const actions = managedPermissionActions[module] ?? [];
+    setRolePermissionCodes((current) => {
+      let next = [...current];
+      const manageCode = module + ".manage";
+      if (action === "manage") {
+        if (checked) {
+          next = next.filter((code) => code !== module + ".view" && !actions.some((item) => code === module + "." + item));
+          next.push(permissionCode);
+        } else {
+          next = next.filter((code) => code !== permissionCode);
+        }
+      } else {
+        if (current.includes(manageCode) && (action === "view" || actions.includes(action))) {
+          next = next.filter((code) => code !== manageCode);
+          next.push(module + ".view", ...actions.map((item) => module + "." + item));
+        }
+        if (module === "sessions" && action === "view" && !checked) {
+          next = next.filter((code) => code !== "sessions.disconnect");
+        }
+        if (checked) next.push(permissionCode);
+        else next = next.filter((code) => code !== permissionCode);
+      }
+      return Array.from(new Set(next));
+    });
+  };
   const [adminDraft, setAdminDraft] = useState({ username: "", displayName: "", password: "", roleCode: "operator", pointOfSaleIds: [] as number[], cardVisibility: "search_any" as CardVisibility });
   const [selectedAdminId, setSelectedAdminId] = useState<number | null>(null);
   const [adminOverrideDraft, setAdminOverrideDraft] = useState<Record<string, "inherit" | "allow" | "deny">>({});
@@ -1223,7 +1269,6 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
     if (can("finance.view")) {
       keys.push("finance"); requests.push(apiRequest<PosReport>(token, "/api/v1/reports/points-of-sale?" + query));
-      keys.push("points"); requests.push(apiRequest<PointOfSale[]>(token, "/api/v1/points-of-sale?include_inactive=true"));
     }
     const results = await Promise.all(requests);
     const data = Object.fromEntries(keys.map((key, index) => [key, results[index]]));
@@ -1231,11 +1276,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     if (data.sessions) setSessionsReport(data.sessions as SessionsReportData);
     if (data.batches) setBatchesReport(data.batches as BatchesReportData);
     if (data.printing) setPrintingReport(data.printing as PrintingReportData);
-    if (data.finance) setPosReport(data.finance as PosReport);
-    if (data.points) {
-      const availablePoints = data.points as PointOfSale[];
-      setPoints(availablePoints);
-      const currentPoint = statementPointId && availablePoints.some((point) => String(point.id) === statementPointId) ? statementPointId : String(availablePoints[0]?.id ?? "");
+    if (data.finance) {
+      const financeData = data.finance as PosReport;
+      setPosReport(financeData);
+      const currentPoint = statementPointId && financeData.points.some((point) => String(point.point_of_sale_id) === statementPointId)
+        ? statementPointId
+        : String(financeData.points[0]?.point_of_sale_id ?? "");
       setStatementPointId(currentPoint);
       if (currentPoint) await loadPosStatement(currentPoint, from, to);
       else setPosStatement(null);
@@ -1507,7 +1553,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     if (page === "card-create" && can("cards.view")) {
       loadCardBatches().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الدفعات السابقة"));
     }
-    if (page === "reports" && can("reports.view")) {
+    if (page === "reports" && (can("reports.view") || can("finance.view"))) {
       setError("");
       loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقارير"));
     }
@@ -1745,7 +1791,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div className="form-actions"><button type="submit" disabled={busy || adminRoles.length === 0}>{busy ? "جارٍ الحفظ..." : "إنشاء حساب"}</button></div>
         </form>
         <section className="panel admin-permission-matrix">
-          <div className="section-heading"><div><h3>مصفوفة صلاحيات الأدوار</h3><p>حدد ما يمكن لكل دور مشاهدته أو إدارته. لا يمكن تعديل دور مدير النظام.</p></div></div>
+          <div className="section-heading"><div><h3>مصفوفة صلاحيات الأدوار</h3><p>حدد العرض والإضافة والتعديل والحذف حيث تدعمها الواجهة. صلاحية إدارة القسم تشمل عملياته المتاحة؛ وعند تعديل عملية مفردة تتحول إلى صلاحيات تفصيلية. لا يمكن تعديل دور مدير النظام.</p></div></div>
           <label className="permission-role-picker">الدور الإداري
             <select value={selectedPermissionRole} onChange={(event) => selectPermissionRole(event.target.value)}>
               {adminRoles.filter((role) => role.code !== "owner").map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}
@@ -1759,8 +1805,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 <h4>{{cards:"الكروت",templates:"تصاميم الكروت",audit:"سجل العمليات",sessions:"الجلسات",plans:"الباقات",routers:"الراوترات",pos:"نقاط البيع",finance:"الحسابات المالية",reports:"التقارير",printing:"الطباعة"}[module] ?? module}</h4>
                 {permissions.map((permission) => (
                   <label className="permission-option" key={permission.code}>
-                    <input type="checkbox" checked={rolePermissionCodes.includes(permission.code)} disabled={busy}
-                      onChange={(event) => setRolePermissionCodes((current) => event.target.checked ? [...current, permission.code] : current.filter((code) => code !== permission.code))} />
+                    <input type="checkbox" checked={isRolePermissionChecked(permission.code)} disabled={busy}
+                      onChange={(event) => toggleRolePermission(permission.code, event.target.checked)} />
                     <span><strong>{permission.name}</strong><small>{permission.description}</small></span>
                   </label>
                 ))}
@@ -1778,7 +1824,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 {adminRoles.filter((role) => role.code !== "owner" || account.roles.includes("owner")).map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}
               </select></td>
               <td>{account.card_visibility === "all" ? "جميع الكروت" : account.card_visibility === "assigned" ? "نقاطه فقط" : "بحث عن كرت محدد"}</td>
-              <td><select aria-label={`نقاط البيع المسموحة لـ ${account.username}`} multiple size={Math.min(4, Math.max(2, points.length))} value={account.point_of_sale_ids.map(String)} onChange={(event) => updateAdminAccount(account, { point_of_sale_ids: Array.from(event.target.selectedOptions, (option) => Number(option.value)) })} disabled={busy || account.id === user.id}>{points.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></td>
+              <td><select aria-label={`نقاط البيع المسموحة لـ ${account.username}`} multiple size={Math.min(4, Math.max(2, points.length))} value={account.point_of_sale_ids.map(String)} onChange={(event) => updateAdminAccount(account, { point_of_sale_ids: Array.from(event.target.selectedOptions, (option) => Number(option.value)) })} disabled={busy || account.id === user.id}>{posReport.points.map((point) => <option key={point.point_of_sale_id} value={point.point_of_sale_id}>{point.point_of_sale_name}</option>)}</select></td>
               <td>{account.last_login_at ? new Date(account.last_login_at).toLocaleString("ar") : "لم يسجل الدخول"}</td>
               <td><span className={account.is_active ? "admin-status active" : "admin-status inactive"}>{account.is_active ? "نشط" : "متوقف"}</span></td>
               <td className="actions-cell">
@@ -3000,12 +3046,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
           {user.roles.includes("owner") && <button className={page === "admins" ? "nav-item active" : "nav-item"} onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات</button>}
 
-          {(can("cards.view") || can("cards.create") || can("plans.view") || can("routers.view") || can("reports.view") || can("templates.view")) && <div className="nav-group"><span>إدارة النظام</span>
+          {(can("cards.view") || can("cards.create") || can("plans.view") || can("routers.view") || can("reports.view") || can("finance.view") || can("templates.view")) && <div className="nav-group"><span>إدارة النظام</span>
             {can("cards.create") && can("cards.credentials") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
             {can("cards.view") && <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>}
             {can("plans.view") && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>}
             {can("routers.view") && <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات</button>}
-            {can("reports.view") && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
+            {(can("reports.view") || can("finance.view")) && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
           </div>}
           {can("pos.view") && <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>}
           {can("printing.view") && can("cards.view") && can("pos.view") && <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>}
@@ -3023,7 +3069,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("cards.credentials") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "pos" && can("printing.view") && can("cards.view") && can("pos.view") ? renderPos() : page === "pos-management" && can("pos.view") ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && can("reports.view") ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("cards.credentials") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "pos" && can("printing.view") && can("cards.view") && can("pos.view") ? renderPos() : page === "pos-management" && can("pos.view") ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
