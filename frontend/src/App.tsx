@@ -842,7 +842,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         .map((line) => line.split(/[;,\t]/)[0].trim().replace(/^["']|["']$/g, ""))
         .filter((value) => value && !["username", "user", "serial", "serial_number", "اسم المستخدم", "الرقم التسلسلي"].includes(value.toLowerCase()));
       const available = new Map<string, string>();
-      cards.forEach((card) => {
+      cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null).forEach((card) => {
         available.set(card.username.toLowerCase(), card.id);
         available.set(card.serial_number.toLowerCase(), card.id);
       });
