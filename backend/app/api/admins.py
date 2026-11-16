@@ -194,7 +194,17 @@ def update_admin(
         if active_owners <= 1:
             raise HTTPException(status_code=400, detail="لا يمكن تعطيل أو تخفيض صلاحية آخر مدير نظام")
 
-    before = {"display_name": user.display_name, "is_active": user.is_active, "role_codes": sorted(role.code for role in user.roles)}
+    before = {
+        "display_name": user.display_name,
+        "is_active": user.is_active,
+        "role_codes": sorted(role.code for role in user.roles),
+        "point_of_sale_ids": sorted(point.id for point in user.point_of_sales),
+        "card_visibility": user.card_visibility,
+        "permission_overrides": [
+            {"permission_code": item.permission.code, "allowed": item.allowed}
+            for item in user.permission_overrides
+        ],
+    }
     if payload.display_name is not None:
         user.display_name = payload.display_name
     if payload.password:
