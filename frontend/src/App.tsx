@@ -1900,12 +1900,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </div>
         <div className="section-heading"><div><h2>ملخص الشبكة والنظام</h2><p>الأعداد الفعلية المسجلة في قاعدة بيانات RADIUS.</p></div><span className="phase-tag">لوحة معلومات مباشرة</span></div>
         <div className="overview-stat-grid">
-          <article><span>إجمالي المستخدمين / الكروت</span><strong>{(radiusOverview?.cards_total ?? 0).toLocaleString("ar")}</strong><small>كل سجلات الكروت في النظام</small></article>
-          <article><span>المستخدمون المتصلون (اكتف)</span><strong>{(radiusOverview?.active_users ?? 0).toLocaleString("ar")}</strong><small>مستخدمون فريدون لديهم جلسة نشطة</small></article>
-          <article><span>جلسات الاتصال النشطة</span><strong>{(radiusOverview?.active_sessions ?? 0).toLocaleString("ar")}</strong><small>جلسات لم يصلها حدث إيقاف</small></article>
-          <article><span>إجمالي الجلسات المسجلة</span><strong>{(radiusOverview?.sessions_total ?? 0).toLocaleString("ar")}</strong><small>سجل المحاسبة الكامل</small></article>
-          <article><span>أجهزة الراوتر المسجلة</span><strong>{(radiusOverview?.routers_total ?? 0).toLocaleString("ar")}</strong><small>{(radiusOverview?.routers_enabled ?? 0).toLocaleString("ar")} مفعّلة إدارياً</small></article>
-          <article><span>الباقات</span><strong>{(radiusOverview?.plans_total ?? 0).toLocaleString("ar")}</strong><small>{(radiusOverview?.plans_enabled ?? 0).toLocaleString("ar")} باقات مفعّلة</small></article>
+          {can("cards.view") && user.card_visibility !== "search_any" && <article><span>إجمالي المستخدمين / الكروت</span><strong>{(radiusOverview?.cards_total ?? 0).toLocaleString("ar")}</strong><small>{user.card_visibility === "all" ? "كل سجلات الكروت في النظام" : "كروت نقاط البيع المرتبطة بحسابك"}</small></article>}
+          {can("sessions.view") && user.card_visibility !== "search_any" && <>
+            <article><span>المستخدمون المتصلون (اكتف)</span><strong>{(radiusOverview?.active_users ?? 0).toLocaleString("ar")}</strong><small>مستخدمون فريدون ضمن نطاقك لديهم جلسة نشطة</small></article>
+            <article><span>جلسات الاتصال النشطة</span><strong>{(radiusOverview?.active_sessions ?? 0).toLocaleString("ar")}</strong><small>جلسات ضمن نطاق الصلاحيات لم يصلها حدث إيقاف</small></article>
+            <article><span>إجمالي الجلسات المسجلة</span><strong>{(radiusOverview?.sessions_total ?? 0).toLocaleString("ar")}</strong><small>سجل الجلسات ضمن نطاقك</small></article>
+          </>}
+          {can("routers.view") && <article><span>أجهزة الراوتر المسجلة</span><strong>{(radiusOverview?.routers_total ?? 0).toLocaleString("ar")}</strong><small>{(radiusOverview?.routers_enabled ?? 0).toLocaleString("ar")} مفعّلة إدارياً</small></article>}
+          {can("plans.view") && <article><span>الباقات</span><strong>{(radiusOverview?.plans_total ?? 0).toLocaleString("ar")}</strong><small>{(radiusOverview?.plans_enabled ?? 0).toLocaleString("ar")} باقات مفعّلة</small></article>}
         </div>
         <div className="overview-lower-grid">
           <section className="panel overview-status-panel">
@@ -1914,13 +1916,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <div className="overview-status-row"><span>قاعدة البيانات</span><strong className={radiusOverview?.database_status === "connected" ? "status-ok" : "status-unknown"}>{radiusOverview?.database_status === "connected" ? "متصلة" : radiusOverview ? "غير متاحة" : "لم يتم الفحص"}</strong></div>
             <p className="overview-disclaimer">هذه الحالة تؤكد استجابة API واتصال قاعدة البيانات وقت جلب الملخص، ولا تعني أن جميع أجهزة الراوتر متصلة فعلياً أو أن خدمة FreeRADIUS تم فحصها تشغيلياً.</p>
           </section>
-          <section className="panel overview-status-panel">
+          {can("cards.view") && user.card_visibility !== "search_any" && <section className="panel overview-status-panel">
             <h3>حالة الكروت</h3>
             <div className="overview-status-row"><span>منشأة</span><strong>{statusCount("generated").toLocaleString("ar")}</strong></div>
             <div className="overview-status-row"><span>نشطة</span><strong>{statusCount("active").toLocaleString("ar")}</strong></div>
             <div className="overview-status-row"><span>منتهية</span><strong>{statusCount("expired").toLocaleString("ar")}</strong></div>
             <div className="overview-status-row"><span>موقوفة</span><strong>{statusCount("suspended").toLocaleString("ar")}</strong></div>
-          </section>
+          </section>}
         </div>
         <div className="section-heading"><div><h2>الوصول السريع</h2><p>انتقل مباشرة إلى أقسام إدارة النظام.</p></div></div>
         <div className="module-grid">
