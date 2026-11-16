@@ -57,6 +57,7 @@ def _response(job: PrintJob, db: Session) -> PrintJobResponse:
                 password=decrypt_credential(cards_by_id[item.card_id].credential_ciphertext),
                 is_free=item.is_free,
                 price_snapshot=item.price_snapshot,
+                plan_snapshot=cards_by_id[item.card_id].plan_snapshot or {},
             )
             for item in items
         ]
