@@ -8,6 +8,7 @@ from app.models.core import PointOfSale
 from app.schemas.admins import AdminPermissionOverride, AdminRoleCreate, AdminRoleResponse, AdminUserCreate, AdminUserResponse, AdminUserUpdate
 from app.security import hash_password
 from app.services.audit import record_audit
+from app.services.permissions import card_visibility
 
 router = APIRouter(prefix="/api/v1/admins", tags=["administrators"])
 
@@ -20,7 +21,7 @@ def _user_response(user: AdminUser) -> AdminUserResponse:
         is_active=user.is_active,
         roles=sorted(role.code for role in user.roles),
         point_of_sale_ids=sorted(point.id for point in user.point_of_sales),
-        card_visibility=user.card_visibility,
+        card_visibility=card_visibility(user),
         permission_overrides=[
             AdminPermissionOverride(
                 permission_code=item.permission.code,
