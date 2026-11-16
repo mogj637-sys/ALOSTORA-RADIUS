@@ -2,12 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_owner
+from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.core import Plan
 from app.schemas.plans import PlanCreate, PlanResponse, PlanUpdate
 
-router = APIRouter(prefix="/api/v1/plans", tags=["plans"], dependencies=[Depends(get_current_owner)])
+router = APIRouter(prefix="/api/v1/plans", tags=["plans"], dependencies=[Depends(require_permission("plans.view"))])
 
 
 @router.get("", response_model=list[PlanResponse])
@@ -21,7 +21,7 @@ def list_plans(
     return query.order_by(Plan.id.desc()).all()
 
 
-@router.post("", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PlanResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("plans.manage"))])
 def create_plan(payload: PlanCreate, db: Session = Depends(get_db)):
     plan = Plan(**payload.model_dump())
     db.add(plan)
@@ -34,7 +34,7 @@ def create_plan(payload: PlanCreate, db: Session = Depends(get_db)):
     return plan
 
 
-@router.patch("/{plan_id}", response_model=PlanResponse)
+@router.patch("/{plan_id}", response_model=PlanResponse, dependencies=[Depends(require_permission("plans.manage"))])
 def update_plan(plan_id: int, payload: PlanUpdate, db: Session = Depends(get_db)):
     plan = db.get(Plan, plan_id)
     if plan is None:
