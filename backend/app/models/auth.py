@@ -14,6 +14,14 @@ user_roles = Table(
 )
 
 
+admin_user_points_of_sale = Table(
+    "admin_user_points_of_sale",
+    Base.metadata,
+    Column("user_id", ForeignKey("admin_users.id", ondelete="CASCADE"), primary_key=True),
+    Column("point_of_sale_id", ForeignKey("points_of_sale.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 role_permissions = Table(
     "role_permissions",
     Base.metadata,
@@ -32,6 +40,7 @@ class AdminUser(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     roles = relationship("Role", secondary=user_roles, back_populates="users", lazy="selectin")
+    point_of_sales = relationship("PointOfSale", secondary=admin_user_points_of_sale, lazy="selectin")
 
 
 class Role(TimestampMixin, Base):
