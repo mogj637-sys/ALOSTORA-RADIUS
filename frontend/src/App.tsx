@@ -1277,31 +1277,70 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderPosManagement() {
+    const activePoints = points.filter((point) => point.is_active).length;
+    const inactivePoints = points.length - activePoints;
     return (
-      <>
-        <div className="section-heading">
-          <div><h2>إدارة نقاط البيع</h2><p>أضف نقاط البيع هنا مرة واحدة، ثم اخترها لاحقاً عند إنشاء دفعات الكروت والطباعة.</p></div>
-          <span className="count-tag">{points.length} نقطة بيع</span>
+      <section className="pos-management-page">
+        <div className="section-heading pos-page-heading">
+          <div>
+            <span className="eyebrow">إدارة المخزون والتوزيع</span>
+            <h2>نقاط البيع</h2>
+            <p>سجّل نقاط البيع مرة واحدة، ثم اختر النقطة المسجلة عند إنشاء الكروت أو تنفيذ الطباعة.</p>
+          </div>
+          <span className="count-tag">{points.length.toLocaleString("ar")} نقطة بيع</span>
         </div>
-        <form className="panel form-grid" onSubmit={createPointOfSale}>
-          <label>رمز نقطة البيع<input value={posDraft.code} onChange={(e) => setPosDraft({ ...posDraft, code: e.target.value })} disabled={editingPosId !== null} required minLength={2} maxLength={50} pattern="[A-Za-z0-9_-]+" /></label>
-          <label>اسم نقطة البيع<input value={posDraft.name} onChange={(e) => setPosDraft({ ...posDraft, name: e.target.value })} required minLength={2} maxLength={150} /></label>
-          <label>اسم المسؤول<input value={posDraft.contactName} onChange={(e) => setPosDraft({ ...posDraft, contactName: e.target.value })} maxLength={150} /></label>
-          <label>رقم الهاتف<input value={posDraft.phone} onChange={(e) => setPosDraft({ ...posDraft, phone: e.target.value })} maxLength={40} /></label>
-          <div className="form-actions"><button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPosId ? "حفظ تعديلات نقطة البيع" : "إضافة نقطة بيع"}</button>{editingPosId !== null && <button type="button" className="secondary-button" onClick={() => { setEditingPosId(null); setPosDraft({ code: "", name: "", contactName: "", phone: "" }); }}>إلغاء التعديل</button>}</div>
-        </form>
-        <div className="table-wrap">
-          <table><thead><tr><th>الرمز</th><th>اسم نقطة البيع</th><th>المسؤول</th><th>الهاتف</th><th>الحالة</th><th>الإجراء</th></tr></thead>
-            <tbody>{points.map((point) => <tr key={point.id}>
-              <td>{point.code}</td><td>{point.name}</td><td>{point.contact_name || "—"}</td><td>{point.phone || "—"}</td>
-              <td>{point.is_active ? "مفعلة" : "متوقفة"}</td>
-              <td><button type="button" className="table-action" disabled={busy} onClick={() => { setEditingPosId(point.id); setPosDraft({ code: point.code, name: point.name, contactName: point.contact_name || "", phone: point.phone || "" }); }}>تعديل</button><button type="button" className="table-action" disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف" : "تفعيل"}</button></td>
-            </tr>)}</tbody>
-          </table>
-          {points.length === 0 && <div className="empty-state">لا توجد نقاط بيع. أضف أول نقطة بيع من النموذج أعلاه.</div>}
+
+        <div className="pos-management-summary">
+          <article><span>إجمالي النقاط</span><strong>{points.length.toLocaleString("ar")}</strong><small>جميع النقاط المسجلة</small></article>
+          <article><span>نقاط مفعّلة</span><strong>{activePoints.toLocaleString("ar")}</strong><small>متاحة للعمليات الجديدة</small></article>
+          <article><span>نقاط متوقفة</span><strong>{inactivePoints.toLocaleString("ar")}</strong><small>محفوظة دون حذف سجلاتها</small></article>
         </div>
-        <div className="notice">إيقاف نقطة البيع يمنع اختيارها في عمليات الطباعة الجديدة، ولا يحذف سجلها أو حركاتها السابقة.</div>
-      </>
+
+        <div className="pos-management-layout">
+          <form className="panel pos-editor-panel" onSubmit={createPointOfSale}>
+            <div className="pos-editor-heading">
+              <div><span className="eyebrow">{editingPosId !== null ? "تحديث البيانات" : "نقطة بيع جديدة"}</span><h3>{editingPosId !== null ? "تعديل نقطة البيع" : "إضافة نقطة بيع"}</h3></div>
+              <span className="pos-editor-icon">＋</span>
+            </div>
+            <div className="form-grid pos-editor-grid">
+              <label>رمز نقطة البيع<input value={posDraft.code} onChange={(e) => setPosDraft({ ...posDraft, code: e.target.value })} disabled={editingPosId !== null} required minLength={2} maxLength={50} pattern="[A-Za-z0-9_-]+" placeholder="مثال: POS-01" /><span className="field-hint">أحرف إنجليزية وأرقام وشرطة فقط</span></label>
+              <label>اسم نقطة البيع<input value={posDraft.name} onChange={(e) => setPosDraft({ ...posDraft, name: e.target.value })} required minLength={2} maxLength={150} placeholder="اسم المحل أو الموزع" /></label>
+              <label>اسم المسؤول<input value={posDraft.contactName} onChange={(e) => setPosDraft({ ...posDraft, contactName: e.target.value })} maxLength={150} placeholder="اسم المسؤول (اختياري)" /></label>
+              <label>رقم الهاتف<input value={posDraft.phone} onChange={(e) => setPosDraft({ ...posDraft, phone: e.target.value })} maxLength={40} placeholder="رقم التواصل (اختياري)" /></label>
+            </div>
+            <div className="pos-editor-actions">
+              <button type="submit" disabled={busy}>{busy ? "جارٍ الحفظ..." : editingPosId !== null ? "حفظ التعديلات" : "إضافة نقطة البيع"}</button>
+              {editingPosId !== null && <button type="button" className="secondary-button" onClick={() => { setEditingPosId(null); setPosDraft({ code: "", name: "", contactName: "", phone: "" }); }}>إلغاء التعديل</button>}
+            </div>
+          </form>
+
+          <section className="panel pos-directory-panel">
+            <div className="pos-directory-heading">
+              <div><span className="eyebrow">دليل الموزعين</span><h3>النقاط المسجلة</h3><p>يمكنك تعديل بيانات النقطة أو إيقافها وإعادة تفعيلها.</p></div>
+              <span className="count-tag">{points.length.toLocaleString("ar")} سجل</span>
+            </div>
+            <div className="table-wrap pos-directory-table">
+              <table><thead><tr><th>الرمز</th><th>اسم نقطة البيع</th><th>المسؤول</th><th>رقم الهاتف</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                <tbody>{points.map((point) => (
+                  <tr key={point.id}>
+                    <td><span className="pos-code">{point.code}</span></td>
+                    <td><strong>{point.name}</strong></td>
+                    <td>{point.contact_name || "—"}</td>
+                    <td>{point.phone || "—"}</td>
+                    <td><span className={point.is_active ? "pos-status active" : "pos-status inactive"}>{point.is_active ? "مفعّلة" : "متوقفة"}</span></td>
+                    <td className="actions-cell">
+                      <button type="button" className="table-action" disabled={busy} onClick={() => { setEditingPosId(point.id); setPosDraft({ code: point.code, name: point.name, contactName: point.contact_name || "", phone: point.phone || "" }); }}>تعديل</button>
+                      <button type="button" className={point.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف" : "تفعيل"}</button>
+                    </td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              {points.length === 0 && <div className="empty-state">لا توجد نقاط بيع مسجلة بعد. أضف أول نقطة بيع من النموذج.</div>}
+            </div>
+            <div className="pos-directory-note"><span>معلومة</span> إيقاف نقطة البيع يمنع استخدامها في عمليات الطباعة الجديدة، مع الاحتفاظ بسجلها وحركاتها السابقة.</div>
+          </section>
+        </div>
+      </section>
     );
   }
 
