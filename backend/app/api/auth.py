@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -16,7 +16,9 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    response.headers["Pragma"] = "no-cache"
     user = db.query(AdminUser).filter(AdminUser.username == payload.username).first()
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
