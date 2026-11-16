@@ -432,3 +432,32 @@ tbody tr:hover { background: #fbfdfc; }
 .voucher-plan strong { font-size: 12px; }
 .voucher-limits { line-height: 1.5; }
 .sequential-vouchers { grid-auto-flow: row; }
+
+
+.um-preview-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.um-preview-count {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #dce4ef);
+  border-radius: 10px;
+  background: var(--surface-soft, #f7f9fc);
+  text-align: center;
+}
+
+.um-preview-count strong {
+  font-size: 1.2rem;
+  color: var(--primary, #6d5ce8);
+}
+
+.um-preview-count span {
+  font-size: 0.82rem;
+  color: var(--text-muted, #64748b);
+}
