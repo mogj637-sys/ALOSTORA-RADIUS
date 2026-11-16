@@ -1014,6 +1014,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function loadCards(search = cardSearch, offset = cardOffset, batchId = cardBatchFilter, statusFilter = cardStatusFilter, planFilter = cardPlanFilter) {
+    if (!user.roles.includes("owner") && user.point_of_sale_ids.length === 0 && !search.trim()) {
+      setCards([]);
+      setHasMoreCards(false);
+      return;
+    }
     const params = new URLSearchParams({ offset: String(offset), limit: "200" });
     if (search.trim()) params.set("search", search.trim());
     if (batchId) params.set("batch_id", batchId);
