@@ -2872,8 +2872,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             {can("reports.view") && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
           </div>}
           {can("pos.view") && <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>}
-          {can("printing.manage") && <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>}
-          {can("cards.view") && <button className={page === "batches" ? "nav-item active" : "nav-item"} onClick={() => setPage("batches")}>دفعات الكروت</button>}
+          {can("printing.manage") && can("cards.view") && can("pos.view") && <button className={page === "pos" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>}
+          {can("cards.view") && user.card_visibility !== "search_any" && <button className={page === "batches" ? "nav-item active" : "nav-item"} onClick={() => setPage("batches")}>دفعات الكروت</button>}
           {can("cards.manage") && <button className={page === "templates" ? "nav-item active" : "nav-item"} onClick={() => setPage("templates")}>تصاميم الكروت</button>}
           {can("audit.view") && <button className={page === "audit" ? "nav-item active" : "nav-item"} onClick={() => setPage("audit")}>سجل عمليات النظام</button>}
           {user.roles.includes("owner") && <button className={page === "settings" ? "nav-item active" : "nav-item"} onClick={() => setPage("settings")}>الإعدادات والصيانة</button>}
