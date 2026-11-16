@@ -1,9 +1,6 @@
 import secrets
 from decimal import Decimal
 
-from app.db.session import SessionLocal
-from app.models.core import Card
-
 
 def _point(client, headers, **settings):
     response = client.post(
@@ -65,8 +62,10 @@ def test_pos_debt_limit_blocks_delivery_until_payment_reduces_balance(owner_clie
     plan_id = _plan(client, headers, "30.00")
     first_card = _card(client, headers, point["id"], plan_id)
     second_card = _card(client, headers, point["id"], plan_id)
+    third_card = _card(client, headers, point["id"], plan_id)
     assert first_card.status_code == 201, first_card.text
     assert second_card.status_code == 201, second_card.text
+    assert third_card.status_code == 201, third_card.text
 
     first_print = _print(client, headers, point["id"], first_card.json()["id"])
     assert first_print.status_code == 201, first_print.text
@@ -96,6 +95,12 @@ def test_pos_debt_limit_blocks_delivery_until_payment_reduces_balance(owner_clie
     assert allowed_after_payment.status_code == 201, allowed_after_payment.text
     final_account = client.get(account_url, headers=headers)
     assert Decimal(final_account.json()["balance_due"]) == Decimal("50.00")
+
+    blocked_at_limit = _print(client, headers, point["id"], third_card.json()["id"])
+    assert blocked_at_limit.status_code == 409
+
+    blocked_creation_at_limit = _card(client, headers, point["id"], plan_id)
+    assert blocked_creation_at_limit.status_code == 409
 
 
 def test_admin_can_stop_card_creation_and_printing_independently(owner_client):
