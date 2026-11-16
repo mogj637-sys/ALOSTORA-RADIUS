@@ -25,8 +25,11 @@ router = APIRouter(
 
 
 @router.get("", response_model=list[PointOfSaleResponse])
-def list_points_of_sale(include_inactive: bool = False, db: Session = Depends(get_db)):
+def list_points_of_sale(include_inactive: bool = False, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("pos.view"))):
     query = db.query(PointOfSale)
+    if not any(role.code == "owner" for role in user.roles):
+        assigned_ids = [point.id for point in user.point_of_sales]
+        query = query.filter(PointOfSale.id.in_(assigned_ids)) if assigned_ids else query.filter(PointOfSale.id.is_(None))
     if not include_inactive:
         query = query.filter(PointOfSale.is_active.is_(True))
     return query.order_by(PointOfSale.id.desc()).all()
@@ -70,7 +73,9 @@ def update_point_of_sale(
 
 
 @router.get("/{point_id}/inventory", response_model=PointOfSaleInventoryResponse)
-def point_of_sale_inventory(point_id: int, db: Session = Depends(get_db)):
+def point_of_sale_inventory(point_id: int, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("pos.view"))):
+    if not any(role.code == "owner" for role in user.roles) and point_id not in {point.id for point in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية الاطلاع على مخزون نقطة البيع هذه")
     point = db.get(PointOfSale, point_id)
     if point is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
