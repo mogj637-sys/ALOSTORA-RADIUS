@@ -1388,3 +1388,165 @@ button:disabled { cursor: not-allowed; }
   .form-grid { grid-template-columns: minmax(0, 1fr); }
   .table-wrap { border-radius: 10px; }
 }
+
+/* Focused polish: card creation and card inventory */
+.card-management-tabs {
+  align-items: center;
+  padding: 7px;
+  border: 1px solid #e5ede8;
+  border-radius: 11px;
+  background: #f7faf8;
+}
+.card-management-tabs button {
+  transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.card-management-tabs button.active {
+  box-shadow: 0 2px 7px #174b3212;
+}
+.card-management-filters {
+  grid-template-columns: minmax(240px, 1.6fr) minmax(76px, auto) repeat(3, minmax(135px, .85fr)) minmax(100px, auto);
+  box-shadow: 0 4px 16px #183e2c08;
+}
+.card-management-filters label:first-child {
+  grid-column: auto;
+}
+.card-management-filters input:focus,
+.card-management-filters select:focus {
+  border-color: #65aa87;
+  background: #fff;
+  box-shadow: 0 0 0 3px #16876716;
+  outline: none;
+}
+.card-selection-toolbar {
+  border-color: #d6e9dd;
+  background: linear-gradient(110deg, #f4fbf6, #fff);
+  box-shadow: 0 3px 12px #183e2c08;
+}
+.card-selection-toolbar span {
+  color: #47715b;
+  font-weight: 700;
+}
+.card-management-table-wrap {
+  border: 1px solid #e3ebe6;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 5px 18px #183e2c08;
+}
+.card-management-table {
+  min-width: 1500px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.card-management-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #eff6f1;
+  color: #355b46;
+  font-weight: 800;
+  border-bottom: 1px solid #dce9e0;
+}
+.card-management-table tbody tr:nth-child(even) {
+  background: #fbfdfb;
+}
+.card-management-table tbody tr:hover {
+  background: #f0f8f3;
+}
+.card-management-table th,
+.card-management-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #edf2ee;
+  line-height: 1.65;
+}
+.card-management-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.card-management-table td .table-action {
+  min-height: 31px;
+  padding: 5px 10px;
+  border-radius: 7px;
+}
+.card-create-workspace .notice {
+  border-inline-start: 3px solid #d59b35;
+  line-height: 1.8;
+}
+.card-create-setup,
+.card-create-form {
+  border: 1px solid #e5ede8;
+  box-shadow: 0 5px 18px #183e2c08;
+}
+.card-create-setup .form-grid,
+.card-create-form .form-grid {
+  gap: 15px 18px;
+}
+.card-create-setup .form-grid label,
+.card-create-form .form-grid label {
+  gap: 7px;
+  color: #496354;
+  font-weight: 700;
+}
+.card-create-setup select,
+.card-create-form input:not([type="checkbox"]),
+.card-create-form select,
+.card-create-form textarea {
+  min-height: 41px;
+  border-color: #dce8e0;
+  border-radius: 8px;
+  background: #fcfefd;
+}
+.card-create-form textarea {
+  min-height: 76px;
+  padding: 10px;
+}
+.card-create-setup select:focus,
+.card-create-form input:focus,
+.card-create-form select:focus,
+.card-create-form textarea:focus {
+  border-color: #65aa87;
+  box-shadow: 0 0 0 3px #16876716;
+  outline: none;
+}
+.card-create-mode-tabs {
+  padding: 5px;
+  border: 1px solid #e5ede8;
+  border-radius: 10px;
+  background: #f6faf7;
+}
+.card-create-mode-tabs .mode-tab {
+  min-height: 40px;
+  border-radius: 7px;
+}
+.card-create-submit-row {
+  margin-top: 2px;
+}
+.card-create-submit-row button {
+  min-width: 175px;
+  box-shadow: 0 4px 10px #16876720;
+}
+.card-create-steps article {
+  min-height: 65px;
+}
+@media (max-width: 850px) {
+  .card-management-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .card-management-filters label:first-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 520px) {
+  .card-management-filters label:first-child {
+    grid-column: auto;
+  }
+  .card-selection-toolbar {
+    padding: 12px;
+  }
+  .card-management-table {
+    min-width: 1350px;
+  }
+  .card-create-setup,
+  .card-create-form {
+    padding: 14px;
+  }
+}
+
