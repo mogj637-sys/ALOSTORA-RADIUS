@@ -404,10 +404,13 @@ def update_card_status(
     card = db.query(Card).filter(Card.id == card_uuid).with_for_update().first()
     if card is None:
         raise HTTPException(status_code=404, detail="الكرت غير موجود")
-    if not any(role.code == "owner" for role in user.roles):
+    visibility = card_visibility(user)
+    if visibility == "search_any":
+        raise HTTPException(status_code=403, detail="هذا الحساب مخصص للبحث والاطلاع فقط")
+    if visibility == "assigned":
         allowed_pos_ids = {point.id for point in user.point_of_sales}
-        if not allowed_pos_ids or card.assigned_pos_id not in allowed_pos_ids:
-            raise HTTPException(status_code=403, detail="لا تملك صلاحية إدارة هذا الكرت")
+        if card.assigned_pos_id not in allowed_pos_ids:
+            raise HTTPException(status_code=403, detail="الكرت خارج نطاق نقاط البيع المسموح بها")
 
     previous_status = card.status
     if payload.action == "suspend":
@@ -488,6 +491,10 @@ def create_single_card(payload: CardSingleCreate, db: Session = Depends(get_db),
     )
     if payload.point_of_sale_id and point is None:
         raise HTTPException(status_code=422, detail="اختر نقطة بيع موجودة ومفعلة")
+    if not is_owner(user):
+        assigned_ids = {item.id for item in user.point_of_sales}
+        if point is None or point.id not in assigned_ids:
+            raise HTTPException(status_code=403, detail="إنشاء الكروت مسموح فقط لنقاط البيع المرتبطة بحسابك")
     if point is not None:
         ensure_pos_card_creation_allowed(db, point)
     template = db.query(CardTemplate).filter(CardTemplate.code == payload.template_code).first() if payload.template_code else None
@@ -563,7 +570,11 @@ def create_card_batch(payload: CardBatchCreate, db: Session = Depends(get_db), u
         )
         if point is None:
             raise HTTPException(status_code=422, detail="اختر نقطة بيع موجودة ومفعلة")
+        if not is_owner(user) and point.id not in {item.id for item in user.point_of_sales}:
+            raise HTTPException(status_code=403, detail="إنشاء الكروت مسموح فقط لنقاط البيع المرتبطة بحسابك")
         ensure_pos_card_creation_allowed(db, point)
+    elif not is_owner(user):
+        raise HTTPException(status_code=403, detail="يجب ربط الكرت بنقطة بيع مسموح بها")
     template = None
     if payload.template_code:
         template = db.query(CardTemplate).filter(CardTemplate.code == payload.template_code).first()
