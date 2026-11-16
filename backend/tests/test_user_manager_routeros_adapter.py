@@ -31,7 +31,7 @@ class FakeResource:
         queries = dict(queries or {})
         self.calls.append((command, params, queries))
         if "count-only" in params:
-            assert params["count-only"] is None
+            assert params["count-only"] == ""
             return FakeResponse(done_message={"ret": str(self.count)})
         self.last_params = params
         self.last_queries = queries
@@ -112,6 +112,44 @@ def test_v6_probe_only_reads_metadata_and_count_only(monkeypatch):
     assert FakePool.last.kwargs["plaintext_login"] is True
     assert FakePool.last.socket_timeout == 8.0
     assert FakePool.last.disconnected is True
+
+
+
+def test_count_only_uses_empty_string_compatible_with_pinned_routeros_resource():
+    from routeros_api.api_structure import default_structure
+    from routeros_api.resource import RouterOsResource
+
+    class Response:
+        done_message = {"ret": "1"}
+
+        def map(self, _function):
+            return self
+
+    class Promise:
+        def get(self):
+            return Response()
+
+    class Communicator:
+        def __init__(self):
+            self.arguments = None
+            self.queries = None
+
+        def call(self, _path, _command, arguments=None, queries=None, additional_queries=()):
+            self.arguments = arguments
+            self.queries = queries
+            return Promise()
+
+    communicator = Communicator()
+    resource = RouterOsResource(
+        communicator,
+        "/tool/user-manager/user",
+        default_structure,
+    )
+    api = SimpleNamespace(get_resource=lambda _path: resource)
+
+    assert adapter._count_only(api, "/tool/user-manager/user", {"?username": "voucher-100"}) == 1
+    assert communicator.arguments == {"count-only": b""}
+    assert communicator.queries == {"username": b"voucher-100"}
 
 
 def test_v7_is_not_misreported_as_legacy_v6(monkeypatch):
@@ -310,7 +348,7 @@ def test_exact_user_filter_count_prevents_bulk_read_when_router_ignores_query(mo
         )
 
     assert user_resource.calls == [
-        ("print", {"count-only": None}, {"username": "voucher-100"})
+        ("print", {"count-only": ""}, {"username": "voucher-100"})
     ]
     assert FakePool.last.disconnected is True
 
