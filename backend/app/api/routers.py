@@ -35,8 +35,8 @@ def list_routers(include_inactive: bool = False, db: Session = Depends(get_db)):
     return query.order_by(Router.id.desc()).all()
 
 
-@router.post("", response_model=RouterResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("routers.manage"))])
-def create_router(payload: RouterCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("routers.manage"))):
+@router.post("", response_model=RouterResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("routers.create"))])
+def create_router(payload: RouterCreate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("routers.create"))):
     values = payload.model_dump(exclude={"api_secret", "radius_secret"})
     values["radius_secret_encrypted"] = _encrypt(payload.radius_secret)
     values["api_secret_encrypted"] = _encrypt(payload.api_secret) if payload.api_secret else None
@@ -53,8 +53,8 @@ def create_router(payload: RouterCreate, db: Session = Depends(get_db), user: Ad
     return item
 
 
-@router.patch("/{router_id}", response_model=RouterResponse, dependencies=[Depends(require_permission("routers.manage"))])
-def update_router(router_id: int, payload: RouterUpdate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("routers.manage"))):
+@router.patch("/{router_id}", response_model=RouterResponse, dependencies=[Depends(require_permission("routers.update"))])
+def update_router(router_id: int, payload: RouterUpdate, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("routers.update"))):
     item = db.get(Router, router_id)
     if item is None:
         raise HTTPException(status_code=404, detail="الراوتر غير موجود")
