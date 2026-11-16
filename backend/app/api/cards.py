@@ -253,8 +253,6 @@ def disconnect_radius_session(session_id: int, db: Session = Depends(get_db), us
     if session.stopped_at is not None:
         raise HTTPException(status_code=409, detail="الجلسة منتهية بالفعل")
     visibility = card_visibility(user)
-    if visibility == "search_any":
-        raise HTTPException(status_code=403, detail="البحث عن الكرت لا يمنح صلاحية فصل جلساته")
     if visibility == "assigned":
         assigned_pos_ids = {point.id for point in user.point_of_sales}
         session_card = db.get(Card, session.card_id)
@@ -424,8 +422,6 @@ def update_card_status(
     if card is None:
         raise HTTPException(status_code=404, detail="الكرت غير موجود")
     visibility = card_visibility(user)
-    if visibility == "search_any":
-        raise HTTPException(status_code=403, detail="هذا الحساب مخصص للبحث والاطلاع فقط")
     if visibility == "assigned":
         allowed_pos_ids = [point.id for point in user.point_of_sales]
         in_scope = card.assigned_pos_id in allowed_pos_ids or (
