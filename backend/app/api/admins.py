@@ -23,6 +23,8 @@ def _user_response(user: AdminUser) -> AdminUserResponse:
 
 
 def _resolve_roles(db: Session, role_codes: list[str]) -> list[Role]:
+    if "owner" in role_codes:
+        raise HTTPException(status_code=422, detail="لا يمكن إنشاء أو منح صلاحية مدير النظام من شاشة الموظفين")
     roles = db.query(Role).filter(Role.code.in_(role_codes)).all()
     found = {role.code for role in roles}
     missing = sorted(set(role_codes) - found)
