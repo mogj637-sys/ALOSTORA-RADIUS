@@ -1648,7 +1648,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 </div>
                 {printMode === "file" && <label className="print-file-picker">استيراد قائمة أسماء المستخدمين أو الأرقام التسلسلية<input type="file" accept=".csv,.txt,text/csv,text/plain" onChange={importPrintSelection} /><small>العمود الأول فقط، وتتم المطابقة مع الكروت الظاهرة في نتائج الصفحة المحمّلة.</small></label>}
                 {printImportSummary && <div className="notice print-import-summary">{printImportSummary}</div>}
-                <div className="print-selection-tools"><span>المحدد: {selectedPrintCardIds.length} كرت</span><button type="button" className="table-action" onClick={() => setSelectedPrintCardIds([])} disabled={!selectedPrintCardIds.length}>إلغاء التحديد</button></div>
+                <div className="print-selection-tools"><span>المحدد: {selectedPrintCardIds.length} كرت</span><div><button type="button" className="table-action" onClick={() => setSelectedPrintCardIds(printMode === "single" ? (printableCards[0] ? [printableCards[0].id] : []) : printableCards.slice(0, 5000).map((card) => card.id))} disabled={printableCards.length === 0}>تحديد الكروت الظاهرة</button><button type="button" className="table-action" onClick={() => setSelectedPrintCardIds([])} disabled={!selectedPrintCardIds.length}>إلغاء التحديد</button></div></div>
               </div>
               <label>قالب الطباعة
                 <select value={printTemplate} onChange={(e) => setPrintTemplate(e.target.value)}>
