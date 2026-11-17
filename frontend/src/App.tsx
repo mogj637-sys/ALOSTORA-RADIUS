@@ -4,7 +4,7 @@ const API_BASE = "http://localhost:8000";
 
 const DEFAULT_TEMPLATE_LAYOUT = {
   show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true,
-  show_limits: true, show_border: true, font_family: "Arial", font_size: "12", border_width: "1",
+  show_limits: true, show_border: true, show_print_date: true, font_family: "Arial", font_size: "12", border_width: "1",
   border_color: "#667085", columns: "2", rows: "5", header_text: "الأسطورة نت", footer_text: "بطاقة إنترنت",
   page_gap_mm: "4", card_padding_mm: "3",
   username_x: "50", username_y: "48", password_x: "50", password_y: "65",
@@ -2124,6 +2124,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       const key = xKey.replace(/_x$/, "");
       return {
         position: "absolute" as const,
+        cursor: "move",
+        touchAction: "none" as const,
         left: String(templateLayoutDraft[xKey] ?? "50") + "%",
         top: String(templateLayoutDraft[yKey] ?? "50") + "%",
         transform: "translate(-50%, -50%)",
@@ -2204,7 +2206,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             </div></div>
 
             <div className="template-editor-section"><div className="plan-section-title"><span>03</span><div><h3>العناصر الظاهرة</h3><p>حدد البيانات التي تظهر على وجه الكرت</p></div></div><div className="template-visibility-grid">
-              {([["show_username","اسم المستخدم"],["show_password","كلمة المرور"],["show_serial_number","الرقم التسلسلي"],["show_plan","اسم الباقة"],["show_price","السعر"],["show_limits","الرصيد والوقت والصلاحية"],["show_border","إطار الكرت"]] as [string,string][]).map(([key,label]) => <label key={key}><input type="checkbox" checked={!!templateLayoutDraft[key]} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, [key]: e.target.checked })} />{label}</label>)}
+              {([["show_username","اسم المستخدم"],["show_password","كلمة المرور"],["show_serial_number","الرقم التسلسلي"],["show_plan","اسم الباقة"],["show_price","السعر"],["show_limits","الرصيد والوقت والصلاحية"],["show_print_date","تاريخ الطباعة"],["show_border","إطار الكرت"]] as [string,string][]).map(([key,label]) => <label key={key}><input type="checkbox" checked={!!templateLayoutDraft[key]} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, [key]: e.target.checked })} />{label}</label>)}
             </div></div>
 
             <div className="template-editor-section"><div className="plan-section-title"><span>04</span><div><h3>الخط والإطار وتوزيع الصفحة</h3><p>ضبط شكل العناصر وعدد الكروت في الصفحة</p></div></div><div className="form-grid">
@@ -2237,7 +2239,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   {templateLayoutDraft.show_password !== false && <div className="voucher-password" style={previewPosition("password_x","password_y")} {...previewDragHandlers("password")}><span>كلمة المرور</span><strong>••••••••</strong></div>}
                   {templateLayoutDraft.show_limits !== false && <div className="voucher-limits" style={previewPosition("limits_x","limits_y")} {...previewDragHandlers("limits")}><span>{previewPlan?.data_limit_bytes == null ? "رصيد مفتوح" : `${(previewPlan.data_limit_bytes / (1024 ** 2)).toFixed(0)} MB`} · {previewPlan?.session_time_limit_seconds == null ? "وقت مفتوح" : `${(previewPlan.session_time_limit_seconds / 3600).toFixed(0)} ساعة`} · {previewPlan?.validity_period_seconds == null ? "صلاحية مفتوحة" : `${(previewPlan.validity_period_seconds / 86400).toFixed(0)} يوم`}</span></div>}
                   <div className="voucher-foot"><span style={previewPosition("serial_x","serial_y")} {...previewDragHandlers("serial")}>{templateLayoutDraft.show_serial_number !== false ? "AL000001" : ""}</span><strong style={previewPosition("price_x","price_y")} {...previewDragHandlers("price")}>{templateLayoutDraft.show_price !== false ? `${previewPlan ? Number(previewPlan.price).toLocaleString("en-US") : "100"} ريال` : ""}</strong></div>
-                  <div className="voucher-print-date" style={previewPosition("date_x","date_y")} {...previewDragHandlers("date")}>{new Date().toLocaleDateString("ar")}</div>
+                  {templateLayoutDraft.show_print_date !== false && <div className="voucher-print-date" style={previewPosition("date_x","date_y")} {...previewDragHandlers("date")}>{new Date().toLocaleDateString("ar")}</div>}
                 </article>
               </div>
               <div className="template-preview-meta"><span>{templateDraft.width_mm} × {templateDraft.height_mm} مم</span><span>التوزيع التلقائي: {templateFitColumns} أعمدة × {templateFitRows} صفوف</span><strong>{templateCardsPerPage.toLocaleString("ar")} كرت في صفحة A4</strong></div>
@@ -2838,7 +2840,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                       {printOptions.show_password && selectedLayout.show_password !== false && <div className="voucher-password" style={layoutPosition("password_x", "password_y")}><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>}
                       {printOptions.show_limits && selectedLayout.show_limits !== false && <div className="voucher-limits" style={layoutPosition("limits_x", "limits_y")}><span>{card.data_limit_bytes == null ? "رصيد مفتوح" : (Number(card.data_limit_bytes) / (1024 ** 2)).toFixed(0) + " MB"} · {card.session_time_limit_seconds == null ? "وقت مفتوح" : (Number(card.session_time_limit_seconds) / 3600).toFixed(0) + " ساعة"} · {card.validity_period_seconds == null ? "صلاحية مفتوحة" : (Number(card.validity_period_seconds) / 86400).toFixed(0) + " يوم"}</span></div>}
                       <div className="voucher-foot"><span style={layoutPosition("serial_x", "serial_y")}>{printOptions.show_serial_number && selectedLayout.show_serial_number !== false ? card.serial_number : ""}</span><strong style={layoutPosition("price_x", "price_y")}>{printOptions.show_price && selectedLayout.show_price !== false ? (card.is_free ? "مجاني" : Number(card.price_snapshot).toLocaleString("en-US") + " ريال") : ""}</strong></div>
-                      <div className="voucher-print-date" style={layoutPosition("date_x", "date_y")}>{new Date().toLocaleDateString("ar")}</div>
+                      {selectedLayout.show_print_date !== false && <div className="voucher-print-date" style={layoutPosition("date_x", "date_y")}>{new Date().toLocaleDateString("ar")}</div>}
                     </article>
                   ))}
                       </div>
