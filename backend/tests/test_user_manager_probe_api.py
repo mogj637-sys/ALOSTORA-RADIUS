@@ -398,7 +398,7 @@ def test_preview_run_history_rejects_unknown_router(owner_client):
 def test_user_manager_probe_uses_tls_flag_for_custom_api_ssl_port(owner_client, monkeypatch):
     client, headers, _ = owner_client
     router_id = _create_router(
-        client, headers, api_port=18729, api_use_ssl=True
+        client, headers, api_port=18729
     )
     seen = {}
 
