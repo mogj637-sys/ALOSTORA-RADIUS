@@ -441,3 +441,33 @@ def test_profile_relation_count_guard_stops_before_large_detail_read(monkeypatch
         ("print", {"count-only": ""}, {"profile": "basic"})
     ]
     assert FakePool.last.disconnected is True
+
+
+@pytest.mark.parametrize(
+    ("port", "use_ssl", "expected_warning"),
+    [
+        (18729, True, False),
+        (8729, False, True),
+    ],
+)
+def test_explicit_tls_setting_overrides_default_port_assumption(
+    monkeypatch, port, use_ssl, expected_warning
+):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    api = FakeApi(_fake_resources())
+    monkeypatch.setattr(
+        FakePool, "get_api",
+        lambda self: (setattr(self, "connected", True) or api),
+    )
+
+    result = adapter.inspect_routeros_user_manager(
+        host="192.0.2.10",
+        port=port,
+        username="reader",
+        password="secret",
+        use_ssl=use_ssl,
+    )
+
+    assert FakePool.last.kwargs["use_ssl"] is use_ssl
+    assert any("دون TLS" in warning for warning in result.warnings) is expected_warning
+    assert FakePool.last.disconnected is True
