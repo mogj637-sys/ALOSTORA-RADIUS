@@ -22,7 +22,8 @@ def upgrade() -> None:
             server_default=sa.false(),
         ),
     )
-    # Preserve the old default-port inference for existing installations.
+    # Only the well-known plaintext API port defaults to cleartext. Custom
+    # ports default to TLS so an existing custom api-ssl port is not downgraded.
     op.execute(
         "UPDATE routers SET api_use_ssl = "
         "CASE WHEN api_port = 8728 THEN FALSE ELSE TRUE END"
