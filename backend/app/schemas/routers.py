@@ -43,7 +43,7 @@ class RouterCreate(BaseModel):
         # Preserve the established default ports, but store the transport mode
         # explicitly so a custom api-ssl port is not mistaken for plaintext.
         if self.api_use_ssl is None:
-            self.api_use_ssl = self.api_port == 8729
+            self.api_use_ssl = self.api_port != 8728
         return self
 
 
