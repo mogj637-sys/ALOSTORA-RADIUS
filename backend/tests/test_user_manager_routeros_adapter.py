@@ -495,3 +495,23 @@ def test_exact_user_inspection_uses_explicit_tls_on_custom_port(monkeypatch):
     assert result is None
     assert FakePool.last.kwargs["use_ssl"] is True
     assert FakePool.last.disconnected is True
+
+
+
+def test_nonstandard_api_port_defaults_to_tls_when_not_explicitly_overridden(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    api = FakeApi(_fake_resources())
+    monkeypatch.setattr(
+        FakePool, "get_api",
+        lambda self: (setattr(self, "connected", True) or api),
+    )
+
+    adapter.inspect_routeros_user_manager(
+        host="192.0.2.10",
+        port=18729,
+        username="reader",
+        password="secret",
+    )
+
+    assert FakePool.last.kwargs["use_ssl"] is True
+    assert FakePool.last.disconnected is True
