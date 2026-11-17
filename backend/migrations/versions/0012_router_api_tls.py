@@ -25,7 +25,7 @@ def upgrade() -> None:
     # Preserve the old default-port inference for existing installations.
     op.execute(
         "UPDATE routers SET api_use_ssl = "
-        "CASE WHEN api_port = 8729 THEN TRUE ELSE FALSE END"
+        "CASE WHEN api_port = 8728 THEN FALSE ELSE TRUE END"
     )
 
 def downgrade() -> None:
