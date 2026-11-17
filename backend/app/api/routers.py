@@ -37,11 +37,11 @@ def list_routers(include_inactive: bool = False, db: Session = Depends(get_db)):
     return query.order_by(Router.id.desc()).all()
 
 
-@router.post("/{router_id}/test-connection", dependencies=[Depends(require_permission("routers.view"))])
+@router.post("/{router_id}/test-connection", dependencies=[Depends(require_permission("routers.update"))])
 def test_router_connection(
     router_id: int,
     db: Session = Depends(get_db),
-    user: AdminUser = Depends(require_permission("routers.view")),
+    user: AdminUser = Depends(require_permission("routers.update")),
 ):
     """Read basic RouterOS metadata only; never changes router configuration."""
     item = db.get(Router, router_id)
