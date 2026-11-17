@@ -8,8 +8,8 @@ password_hasher = PasswordHash.recommended()
 JWT_ALGORITHM = "HS256"
 
 
-def _secret_key() -> str:
-    secret = os.getenv("APP_SECRET_KEY", "development-only-change-me")
+def get_jwt_secret_key() -> str:
+    secret = os.getenv("APP_SECRET_KEY")
     if len(secret) < 32:
         raise RuntimeError("APP_SECRET_KEY must contain at least 32 characters")
     if secret in {"development-only-change-me", "replace-with-a-long-random-secret-before-use"}:
@@ -35,4 +35,4 @@ def create_access_token(subject: str, expires_minutes: int | None = None) -> str
         "iat": now,
         "exp": now + timedelta(minutes=minutes),
     }
-    return jwt.encode(payload, _secret_key(), algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, get_jwt_secret_key(), algorithm=JWT_ALGORITHM)
