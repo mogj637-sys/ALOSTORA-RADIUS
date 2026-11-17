@@ -2797,9 +2797,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                     <button type="button" className="secondary-button" onClick={() => setPrintPreviewCards([])}>إغلاق المعاينة</button>
                   </div>
                 </div>
-                <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"} style={{ gridTemplateColumns: `repeat(${fitColumns}, ${cardWidthMm}mm)`, gridAutoRows: `${cardHeightMm}mm`, gap: `${printGapMm}mm`, justifyContent: "start" }}>
-                  {printPreviewCards.map((card, index) => (
-                    <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { position: "relative", background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, width: `${selectedTemplate.width_mm}mm`, height: `${selectedTemplate.height_mm}mm`, minHeight: `${selectedTemplate.height_mm}mm`, boxSizing: "border-box", breakInside: "avoid", fontFamily: String(selectedLayout.font_family ?? "Arial"), fontSize: `${Number(selectedLayout.font_size ?? 12)}px`, padding: `${Number(selectedLayout.card_padding_mm ?? 3)}mm`, border: selectedLayout.show_border === false ? "none" : `${Number(selectedLayout.border_width ?? 1)}px solid ${String(selectedLayout.border_color ?? "#b9d9c8")}`, breakAfter: (index + 1) % cardsPerPage === 0 && index < printPreviewCards.length - 1 ? "page" : undefined } : undefined}>
+                <div className="voucher-print-pages">
+                  {Array.from({ length: printPageCount }, (_, pageIndex) => (
+                    <section className="voucher-print-page" key={pageIndex}>
+                      <div className="voucher-print-page-label">صفحة {pageIndex + 1} من {printPageCount}</div>
+                      <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"} style={{ gridTemplateColumns: `repeat(${fitColumns}, ${cardWidthMm}mm)`, gridAutoRows: `${cardHeightMm}mm`, gap: `${printGapMm}mm`, justifyContent: "start" }}>
+                  {printPreviewCards.slice(pageIndex * cardsPerPage, (pageIndex + 1) * cardsPerPage).map((card, index) => (
+                    <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { position: "relative", background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, width: `${selectedTemplate.width_mm}mm`, height: `${selectedTemplate.height_mm}mm`, minHeight: `${selectedTemplate.height_mm}mm`, boxSizing: "border-box", breakInside: "avoid", fontFamily: String(selectedLayout.font_family ?? "Arial"), fontSize: `${Number(selectedLayout.font_size ?? 12)}px`, padding: `${Number(selectedLayout.card_padding_mm ?? 3)}mm`, border: selectedLayout.show_border === false ? "none" : `${Number(selectedLayout.border_width ?? 1)}px solid ${String(selectedLayout.border_color ?? "#b9d9c8")}`,  } : undefined}>
                       <div className="voucher-head"><strong>{String(selectedLayout.header_text ?? "الأسطورة نت")}</strong><span>{String(selectedLayout.footer_text ?? (card.is_free ? "كرت مجاني" : "بطاقة إنترنت"))}</span></div>
                       {printOptions.show_plan && selectedLayout.show_plan !== false && <div className="voucher-plan" style={layoutPosition("plan_x", "plan_y")}><span>الباقة</span><strong>{card.plan_name}</strong></div>}
                       {printOptions.show_username && selectedLayout.show_username !== false && <div className="voucher-user" style={layoutPosition("username_x", "username_y")}><span>اسم المستخدم</span><strong>{card.username}</strong></div>}
@@ -2807,6 +2811,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                       {printOptions.show_limits && selectedLayout.show_limits !== false && <div className="voucher-limits" style={layoutPosition("limits_x", "limits_y")}><span>{card.data_limit_bytes == null ? "رصيد مفتوح" : (Number(card.data_limit_bytes) / (1024 ** 2)).toFixed(0) + " MB"} · {card.session_time_limit_seconds == null ? "وقت مفتوح" : (Number(card.session_time_limit_seconds) / 3600).toFixed(0) + " ساعة"} · {card.validity_period_seconds == null ? "صلاحية مفتوحة" : (Number(card.validity_period_seconds) / 86400).toFixed(0) + " يوم"}</span></div>}
                       <div className="voucher-foot"><span style={layoutPosition("serial_x", "serial_y")}>{printOptions.show_serial_number && selectedLayout.show_serial_number !== false ? card.serial_number : ""}</span><strong style={layoutPosition("price_x", "price_y")}>{printOptions.show_price && selectedLayout.show_price !== false ? (card.is_free ? "مجاني" : Number(card.price_snapshot).toLocaleString("en-US") + " ريال") : ""}</strong></div>
                     </article>
+                  ))}
+                      </div>
+                    </section>
                   ))}
                 </div>
               </section>
