@@ -30,3 +30,48 @@ def test_placeholder_jwt_secret_is_rejected(monkeypatch):
     monkeypatch.setenv("APP_SECRET_KEY", "replace-with-a-long-random-secret-before-use")
     with pytest.raises(RuntimeError):
         create_access_token("42")
+
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        None,
+        "development-only-change-me",
+        "replace-with-a-long-random-secret-before-use",
+    ],
+)
+def test_authentication_rejects_tokens_when_jwt_secret_is_missing_or_placeholder(
+    monkeypatch, secret
+):
+    from datetime import datetime, timedelta, timezone
+
+    from fastapi import HTTPException
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    from app.api.deps import get_current_user
+
+    if secret is None:
+        monkeypatch.delenv("APP_SECRET_KEY", raising=False)
+        signing_secret = "development-only-change-me"
+    else:
+        monkeypatch.setenv("APP_SECRET_KEY", secret)
+        signing_secret = secret
+
+    forged_token = jwt.encode(
+        {
+            "sub": "1",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+        },
+        signing_secret,
+        algorithm="HS256",
+    )
+    credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer",
+        credentials=forged_token,
+    )
+
+    with pytest.raises(HTTPException) as error:
+        get_current_user(credentials=credentials, db=None)
+
+    assert error.value.status_code == 503
