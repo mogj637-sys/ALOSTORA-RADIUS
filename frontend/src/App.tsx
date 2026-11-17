@@ -2109,6 +2109,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       inactiveLinks: cardTemplates.filter((item) => item.plan_id !== null && !plans.some((plan) => plan.id === item.plan_id && plan.is_active)).length,
     };
     const previewPlan = plans.find((plan) => String(plan.id) === templateDraft.plan_id);
+    // Keep the template studio's automatic fit calculation aligned with print: A4 portrait, 10mm margins.
+    const templateWidthMm = Math.max(1, Number(templateDraft.width_mm) || 90);
+    const templateHeightMm = Math.max(1, Number(templateDraft.height_mm) || 50);
+    const templateGapMm = Math.max(0, Number(templateLayoutDraft.page_gap_mm ?? 4) || 0);
+    const templateFitColumns = Math.max(1, Math.floor((190 + templateGapMm) / (templateWidthMm + templateGapMm)));
+    const templateFitRows = Math.max(1, Math.floor((277 + templateGapMm) / (templateHeightMm + templateGapMm)));
+    const templateCardsPerPage = templateFitColumns * templateFitRows;
+    const templateFitsA4 = templateWidthMm <= 190 && templateHeightMm <= 277;
     const previewPosition = (xKey: string, yKey: string) => ({
       position: "absolute" as const,
       left: String(templateLayoutDraft[xKey] ?? "50") + "%",
@@ -2206,7 +2214,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   <div className="voucher-foot"><span style={previewPosition("serial_x","serial_y")}>{templateLayoutDraft.show_serial_number !== false ? "AL000001" : ""}</span><strong style={previewPosition("price_x","price_y")}>{templateLayoutDraft.show_price !== false ? `${previewPlan ? Number(previewPlan.price).toLocaleString("en-US") : "100"} ريال` : ""}</strong></div>
                 </article>
               </div>
-              <div className="template-preview-meta"><span>{templateDraft.width_mm} × {templateDraft.height_mm} مم</span><span>{templateLayoutDraft.columns} أعمدة × {templateLayoutDraft.rows} صفوف</span></div>
+              <div className="template-preview-meta"><span>{templateDraft.width_mm} × {templateDraft.height_mm} مم</span><span>التوزيع التلقائي: {templateFitColumns} أعمدة × {templateFitRows} صفوف</span><strong>{templateCardsPerPage.toLocaleString("ar")} كرت في صفحة A4</strong></div>
+              {!templateFitsA4 && <p className="field-hint">مقاس الكرت أكبر من مساحة ورقة A4 المتاحة؛ سيُوضع كرت واحد في الصفحة.</p>}
+              <p className="field-hint">يتحدث العدد تلقائياً عند تغيير عرض الكرت أو ارتفاعه أو المسافة بين الكروت. الطباعة الحالية على A4 عمودي بهوامش 10 مم.</p>
               <p className="field-hint">هذه معاينة توضيحية ببيانات تجريبية؛ بيانات الكروت الفعلية تظهر عند الطباعة.</p>
             </div>
           </aside>
