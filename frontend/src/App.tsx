@@ -50,6 +50,7 @@ type RouterRecord = {
   management_host: string;
   radius_client_address: string | null;
   api_port: number;
+  api_use_ssl: boolean;
   api_username: string | null;
   routeros_version: string | null;
   is_active: boolean;
@@ -339,7 +340,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [loadingPreviewRuns, setLoadingPreviewRuns] = useState(false);
   const [savingUserPreview, setSavingUserPreview] = useState(false);
   const [inspectingUser, setInspectingUser] = useState(false);
-  const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
+  const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUseSsl: true, apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
   const [cards, setCards] = useState<Card[]>([]);
   const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([]);
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
@@ -402,6 +403,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           management_host: routerDraft.managementHost,
           radius_client_address: routerDraft.radiusClientAddress || null,
           api_port: Number(routerDraft.apiPort),
+          api_use_ssl: routerDraft.apiUseSsl,
           api_username: routerDraft.apiUsername || null,
           api_secret: routerDraft.apiSecret || null,
           radius_secret: routerDraft.radiusSecret,
@@ -1259,7 +1261,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <label>NAS Identifier<input value={routerDraft.nasIdentifier} onChange={(e) => setRouterDraft({ ...routerDraft, nasIdentifier: e.target.value })} required maxLength={150} placeholder="مثال: router-aden-01" /><small className="field-hint">يجب أن يطابق اسم الهوية في MikroTik: /system identity.</small></label>
           <label>عنوان الإدارة / IP<input value={routerDraft.managementHost} onChange={(e) => setRouterDraft({ ...routerDraft, managementHost: e.target.value })} required maxLength={255} placeholder="مثال: 192.168.88.1" /></label>
           <label>عنوان RADIUS للراوتر أو CIDR<input value={routerDraft.radiusClientAddress} onChange={(e) => setRouterDraft({ ...routerDraft, radiusClientAddress: e.target.value })} maxLength={255} placeholder="مثال: 192.168.88.1 أو 192.168.88.0/24" /><small className="field-hint">عنوان مصدر حزم RADIUS كما يراه الخادم، وقد يختلف عن عنوان إدارة API. إذا تركته فارغاً فلن يُحمّل الراوتر كعميل RADIUS.</small></label>
-          <label>منفذ MikroTik API<input type="number" min="1" max="65535" value={routerDraft.apiPort} onChange={(e) => setRouterDraft({ ...routerDraft, apiPort: e.target.value })} required /><small className="field-hint">الافتراضي 8729 لاتصال API المشفر TLS. استخدم 8728 فقط داخل شبكة إدارة موثوقة ومعزولة.</small></label>
+          <label>منفذ MikroTik API<input type="number" min="1" max="65535" value={routerDraft.apiPort} onChange={(e) => setRouterDraft({ ...routerDraft, apiPort: e.target.value })} required /><small className="field-hint">المنفذ حسب إعداد /ip service في الراوتر؛ يمكن تغيير منفذ API-SSL من إعدادات MikroTik.</small></label>
+          <label className="inline-check"><input type="checkbox" checked={routerDraft.apiUseSsl} onChange={(e) => setRouterDraft({ ...routerDraft, apiUseSsl: e.target.checked })} /> استخدام API-SSL (TLS) والتحقق من شهادة الراوتر</label>
+          <small className="field-hint">اتركه مفعلاً عند استخدام خدمة api-ssl. عند إيقافه تُرسل بيانات الدخول دون تشفير؛ لا تستخدم ذلك إلا عبر شبكة إدارة موثوقة ومعزولة.</small>
           <label>اسم مستخدم API (اختياري)<input value={routerDraft.apiUsername} onChange={(e) => setRouterDraft({ ...routerDraft, apiUsername: e.target.value })} maxLength={120} /></label>
           <label>كلمة مرور API (اختياري)<input type="password" autoComplete="new-password" value={routerDraft.apiSecret} onChange={(e) => setRouterDraft({ ...routerDraft, apiSecret: e.target.value })} minLength={8} maxLength={500} /></label>
           <label>RADIUS Shared Secret<input type="password" autoComplete="new-password" value={routerDraft.radiusSecret} onChange={(e) => setRouterDraft({ ...routerDraft, radiusSecret: e.target.value })} required minLength={8} maxLength={500} /><small className="field-hint">استخدم القيمة نفسها في إعداد /radius على MikroTik؛ لن تظهر مرة أخرى بعد الحفظ.</small></label>
@@ -1273,7 +1277,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <select value={inspectRouterId} onChange={(event) => { const nextId = event.target.value; setInspectRouterId(nextId); setUserManagerUserInspect(null); setUserManagerPreviews(null); setUserManagerPreviewRuns([]); setSelectedPreviewRunId(""); if (nextId) loadUserManagerPreviewRuns(Number(nextId)).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل سجل المعاينات")); }}>
               <option value="">اختر الراوتر المسجل</option>
               {routers.filter((item) => item.is_active && item.api_username).map((item) => (
-                <option key={item.id} value={item.id}>{item.name} — {item.management_host}:{item.api_port}</option>
+                <option key={item.id} value={item.id}>{item.name} — {item.management_host}:{item.api_port} ({item.api_use_ssl ? "TLS" : "غير مشفر"})</option>
               ))}
             </select>
           </label>
@@ -1379,9 +1383,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         )}
         <div className="section-heading compact-heading"><div><h2>الراوترات المسجلة</h2><p>لا تعرض هذه القائمة أي كلمة مرور أو RADIUS secret.</p></div><span className="count-tag">{routers.length} راوتر</span></div>
         <div className="table-wrap">
-          <table><thead><tr><th>الاسم</th><th>NAS Identifier</th><th>عنوان الإدارة</th><th>عنوان RADIUS</th><th>API Port</th><th>الإصدار</th><th>آخر ظهور</th><th>الحالة</th><th>الإجراء</th></tr></thead>
+          <table><thead><tr><th>الاسم</th><th>NAS Identifier</th><th>عنوان الإدارة</th><th>عنوان RADIUS</th><th>API Port / TLS</th><th>الإصدار</th><th>آخر ظهور</th><th>الحالة</th><th>الإجراء</th></tr></thead>
             <tbody>{routers.map((router) => <tr key={router.id}>
-              <td>{router.name}</td><td>{router.nas_identifier}</td><td>{router.management_host}</td><td>{router.radius_client_address || "غير محدد"}</td><td>{router.api_port}</td>
+              <td>{router.name}</td><td>{router.nas_identifier}</td><td>{router.management_host}</td><td>{router.radius_client_address || "غير محدد"}</td><td>{router.api_port} / {router.api_use_ssl ? "TLS" : "غير مشفر"}</td>
               <td>{router.routeros_version || "غير محدد"}</td><td>{router.last_seen_at ? new Date(router.last_seen_at).toLocaleString("ar") : "لم يتصل بعد"}</td>
               <td>{router.is_active ? "مفعل" : "متوقف"}</td>
               <td className="actions-cell">
