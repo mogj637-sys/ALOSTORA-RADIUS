@@ -40,8 +40,8 @@ class RouterCreate(BaseModel):
     def api_credentials_must_be_paired(self) -> Self:
         if bool(self.api_username) != bool(self.api_secret):
             raise ValueError("يجب إدخال اسم مستخدم API وكلمة مروره معاً، أو تركهما فارغين")
-        # Preserve the established default ports, but store the transport mode
-        # explicitly so a custom api-ssl port is not mistaken for plaintext.
+        # The standard plaintext API port is 8728. Prefer TLS on every other
+        # port unless an operator explicitly selects plaintext.
         if self.api_use_ssl is None:
             self.api_use_ssl = self.api_port != 8728
         return self
