@@ -2473,7 +2473,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           const hasSnapshotSettings = Object.prototype.hasOwnProperty.call(snapshot, "settings");
           const parsedSharedUsers = typeof sharedUsers === "number" && Number.isFinite(sharedUsers)
             ? Math.trunc(sharedUsers)
-            : typeof sharedUsers === "string" && /^[+-]?\\d+$/.test(sharedUsers.trim())
+            : typeof sharedUsers === "string" && /^[+-]?\d+$/.test(sharedUsers.trim())
               ? Number.parseInt(sharedUsers.trim(), 10)
               : 1;
           const sharedUsersLimit = !hasSnapshotSettings
