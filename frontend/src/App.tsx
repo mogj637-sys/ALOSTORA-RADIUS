@@ -1058,6 +1058,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   async function testRouterConnection(item: RouterRecord) {
+    if (!can("routers.update")) { setError("فحص اتصال الراوتر يتطلب صلاحية إدارة الراوترات."); return; }
     setTestingRouterConnectionId(item.id);
     setRouterConnectionProbe(null);
     setError("");
@@ -3129,7 +3130,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <td>{router.is_active ? "مفعل" : "متوقف"}</td>
               <td className="actions-cell">
                 {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null} onClick={() => beginEditRouter(router)}>تعديل</button>}
-                <button type="button" className="table-action" disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null || !router.api_username || !router.is_active} onClick={() => testRouterConnection(router)}>{testingRouterConnectionId === router.id ? "جارٍ فحص API..." : "فحص اتصال API"}</button>
+                {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null || !router.api_username || !router.is_active} onClick={() => testRouterConnection(router)}>{testingRouterConnectionId === router.id ? "جارٍ فحص API..." : "فحص اتصال API"}</button>}
                 {user.roles.includes("owner") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null || !router.api_username} onClick={() => testRouterUserManager(router)}>{probingRouterId === router.id ? "جارٍ الفحص..." : "فحص User Manager"}</button>}
                 {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null} onClick={() => toggleRouter(router)}>{router.is_active ? "تعطيل" : "تفعيل"}</button>}
               </td>
