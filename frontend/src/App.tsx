@@ -410,7 +410,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           routeros_version: routerDraft.routerosVersion || null,
         }),
       });
-      setRouterDraft({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
+      setRouterDraft({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUseSsl: true, apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
       await loadRouters();
       setNotice("تم تسجيل الراوتر وحفظ أسراره مشفرة.");
     } catch (err) {
