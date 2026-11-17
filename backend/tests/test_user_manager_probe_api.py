@@ -29,6 +29,7 @@ def _create_router(client, headers, *, api_port=8728, api_use_ssl=None):
     assert response.status_code == 201, response.text
     return response.json()["id"]
 
+
 def test_user_manager_probe_returns_read_only_router_inventory(owner_client, monkeypatch):
     client, headers, _ = owner_client
     router_id = _create_router(client, headers)
