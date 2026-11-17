@@ -81,6 +81,10 @@ class RouterUpdate(BaseModel):
     def reject_empty_update(self) -> Self:
         if not self.model_fields_set:
             raise ValueError("يجب إرسال حقل واحد على الأقل للتعديل")
+        if "api_port" in self.model_fields_set and "api_use_ssl" not in self.model_fields_set:
+            # Changing the port without specifying a transport keeps custom
+            # ports secure by default; plaintext remains an explicit choice.
+            self.api_use_ssl = self.api_port != 8728
         credential_fields = {"api_username", "api_secret"}
         if self.model_fields_set.intersection(credential_fields):
             if not credential_fields.issubset(self.model_fields_set):
