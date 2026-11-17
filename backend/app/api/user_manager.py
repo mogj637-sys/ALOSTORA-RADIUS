@@ -46,6 +46,7 @@ def test_user_manager_connection(router_id: int, db: Session = Depends(get_db)):
         probe = inspect_routeros_user_manager(
             host=item.management_host,
             port=item.api_port,
+            use_ssl=item.api_use_ssl,
             username=item.api_username,
             password=api_password,
         )
