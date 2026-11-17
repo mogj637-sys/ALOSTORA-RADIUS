@@ -2643,7 +2643,16 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     const atDebtLimit = selectedPoint?.debt_limit !== null && selectedPoint?.debt_limit !== undefined &&
       posAccount !== null && posAccount !== undefined &&
       Number(posAccount.balance_due) >= Number(selectedPoint.debt_limit);
-    const cardsPerPage = Math.max(1, Math.min(60, Number(selectedLayout.columns ?? 2) * Number(selectedLayout.rows ?? 5)));
+    const cardWidthMm = Math.max(1, Number(selectedTemplate?.width_mm ?? 90));
+    const cardHeightMm = Math.max(1, Number(selectedTemplate?.height_mm ?? 50));
+    const printGapMm = Math.max(0, Number(selectedLayout.page_gap_mm ?? 4));
+    // A4 portrait with the existing 10mm print margins: 190 × 277mm usable.
+    const printableWidthMm = 190;
+    const printableHeightMm = 277;
+    const fitColumns = Math.max(1, Math.floor((printableWidthMm + printGapMm) / (cardWidthMm + printGapMm)));
+    const fitRows = Math.max(1, Math.floor((printableHeightMm + printGapMm) / (cardHeightMm + printGapMm)));
+    const cardsPerPage = Math.max(1, Math.min(60, fitColumns * fitRows));
+    const printPageCount = Math.ceil(printPreviewCards.length / cardsPerPage);
     return (
       <>
         <div className="section-heading">
@@ -2772,13 +2781,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             {printPreviewCards.length > 0 && (
               <section className="voucher-print-preview">
                 <div className="voucher-toolbar">
-                  <div><strong>معاينة القسائم</strong><span>كلمات المرور تظهر في هذه المعاينة فقط ولا تظهر في سجل الكروت.</span></div>
+                  <div><strong>معاينة القسائم</strong><span>كلمات المرور تظهر في هذه المعاينة فقط ولا تظهر في سجل الكروت.</span><span>مقاس الكرت: {cardWidthMm} × {cardHeightMm} مم · في الصفحة: {cardsPerPage} ({fitColumns} أعمدة × {fitRows} صفوف) · عدد الصفحات: {printPageCount}</span></div>
                   <div>
                     <button type="button" onClick={() => window.print()}>طباعة القسائم</button>
                     <button type="button" className="secondary-button" onClick={() => setPrintPreviewCards([])}>إغلاق المعاينة</button>
                   </div>
                 </div>
-                <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"} style={selectedTemplate ? { gridTemplateColumns: `repeat(${Math.max(1, Math.min(5, Number(selectedLayout.columns ?? 2)))}, minmax(0, 1fr))`, gap: `${Number(selectedLayout.page_gap_mm ?? 4)}mm` } : undefined}>
+                <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"} style={{ gridTemplateColumns: `repeat(${fitColumns}, minmax(0, 1fr))`, gap: `${printGapMm}mm` }}>
                   {printPreviewCards.map((card, index) => (
                     <article className={`voucher-card ${printTemplate}`} key={card.card_id} style={selectedTemplate ? { position: "relative", background: selectedTemplate.background_color, color: selectedTemplate.text_color, aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`, minHeight: `${selectedTemplate.height_mm}mm`, fontFamily: String(selectedLayout.font_family ?? "Arial"), fontSize: `${Number(selectedLayout.font_size ?? 12)}px`, padding: `${Number(selectedLayout.card_padding_mm ?? 3)}mm`, border: selectedLayout.show_border === false ? "none" : `${Number(selectedLayout.border_width ?? 1)}px solid ${String(selectedLayout.border_color ?? "#b9d9c8")}`, breakAfter: (index + 1) % cardsPerPage === 0 && index < printPreviewCards.length - 1 ? "page" : undefined } : undefined}>
                       <div className="voucher-head"><strong>{String(selectedLayout.header_text ?? "الأسطورة نت")}</strong><span>{String(selectedLayout.footer_text ?? (card.is_free ? "كرت مجاني" : "بطاقة إنترنت"))}</span></div>
