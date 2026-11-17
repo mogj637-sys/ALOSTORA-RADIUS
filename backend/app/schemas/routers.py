@@ -11,6 +11,7 @@ class RouterCreate(BaseModel):
     management_host: str = Field(min_length=1, max_length=255)
     radius_client_address: str | None = Field(default=None, max_length=255)
     api_port: int = Field(default=8728, ge=1, le=65535)
+    api_use_ssl: bool | None = None
     api_username: str | None = Field(default=None, max_length=120)
     api_secret: str | None = Field(default=None, min_length=8, max_length=500)
     radius_secret: str = Field(min_length=8, max_length=500)
@@ -39,6 +40,10 @@ class RouterCreate(BaseModel):
     def api_credentials_must_be_paired(self) -> Self:
         if bool(self.api_username) != bool(self.api_secret):
             raise ValueError("يجب إدخال اسم مستخدم API وكلمة مروره معاً، أو تركهما فارغين")
+        # Preserve the established default ports, but store the transport mode
+        # explicitly so a custom api-ssl port is not mistaken for plaintext.
+        if self.api_use_ssl is None:
+            self.api_use_ssl = self.api_port == 8729
         return self
 
 
@@ -47,6 +52,7 @@ class RouterUpdate(BaseModel):
     management_host: str = Field(default=None, min_length=1, max_length=255)
     radius_client_address: str | None = Field(default=None, max_length=255)
     api_port: int = Field(default=None, ge=1, le=65535)
+    api_use_ssl: bool = Field(default=None)
     api_username: str | None = Field(default=None, max_length=120)
     api_secret: str | None = Field(default=None, min_length=8, max_length=500)
     radius_secret: str = Field(default=None, min_length=8, max_length=500)
@@ -93,6 +99,7 @@ class RouterResponse(BaseModel):
     management_host: str
     radius_client_address: str | None
     api_port: int
+    api_use_ssl: bool
     api_username: str | None
     routeros_version: str | None
     is_active: bool
