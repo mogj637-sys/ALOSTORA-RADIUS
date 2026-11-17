@@ -79,17 +79,18 @@ def inspect_routeros_user_manager(
     port: int,
     username: str,
     password: str,
+    use_ssl: bool | None = None,
     timeout_seconds: float = 8.0,
 ) -> RouterProbe:
     """Connect and inspect metadata/counts only. Never changes router state."""
-    use_ssl = port == 8729
+    tls_enabled = port == 8729 if use_ssl is None else use_ssl
     pool = routeros_api.RouterOsApiPool(
         host,
         username=username,
         password=password,
         port=port,
         plaintext_login=True,  # RouterOS v6.43+ login flow
-        use_ssl=use_ssl,
+        use_ssl=tls_enabled,
         ssl_verify=True,
         ssl_verify_hostname=True,
     )
@@ -126,7 +127,7 @@ def inspect_routeros_user_manager(
             warnings.append("حزمة User Manager غير ظاهرة ضمن الحزم المثبتة")
         if not resources["users"]["available"]:
             warnings.append("قائمة مستخدمي User Manager غير متاحة لهذا الحساب أو الإصدار")
-        if not use_ssl:
+        if not tls_enabled:
             warnings.append(
                 "الاتصال يستخدم API العادي دون TLS؛ استخدم شبكة إدارة موثوقة أو فعّل API-SSL"
             )
@@ -191,6 +192,7 @@ def inspect_user_manager_user(
     username: str,
     password: str,
     target_username: str,
+    use_ssl: bool | None = None,
     timeout_seconds: float = 8.0,
 ) -> dict[str, Any] | None:
     """Read one exact user and its directly related profile/limitations.
@@ -201,14 +203,14 @@ def inspect_user_manager_user(
     if not target_username or len(target_username) > 120:
         raise ValueError("Invalid User Manager username")
 
-    use_ssl = port == 8729
+    tls_enabled = port == 8729 if use_ssl is None else use_ssl
     pool = routeros_api.RouterOsApiPool(
         host,
         username=username,
         password=password,
         port=port,
         plaintext_login=True,
-        use_ssl=use_ssl,
+        use_ssl=tls_enabled,
         ssl_verify=True,
         ssl_verify_hostname=True,
     )
