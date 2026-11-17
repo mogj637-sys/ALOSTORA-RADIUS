@@ -27,8 +27,6 @@ def upgrade() -> None:
         "UPDATE routers SET api_use_ssl = "
         "CASE WHEN api_port = 8729 THEN TRUE ELSE FALSE END"
     )
-    op.alter_column("routers", "api_use_ssl", server_default=None)
-
 
 def downgrade() -> None:
     op.drop_column("routers", "api_use_ssl")
