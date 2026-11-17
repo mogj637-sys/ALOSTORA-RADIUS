@@ -198,6 +198,14 @@ def test_router_api_tls_mode_can_be_set_for_custom_port_and_updated(owner_client
     assert created.json()["api_port"] == 18729
     assert created.json()["api_use_ssl"] is True
 
+    changed_port = client.patch(
+        f"/api/v1/routers/{router_id}",
+        headers=headers,
+        json={"api_port": 18730},
+    )
+    assert changed_port.status_code == 200, changed_port.text
+    assert changed_port.json()["api_use_ssl"] is True
+
     updated = client.patch(
         f"/api/v1/routers/{router_id}",
         headers=headers,
