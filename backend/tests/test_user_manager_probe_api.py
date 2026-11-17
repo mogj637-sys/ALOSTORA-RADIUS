@@ -11,17 +11,14 @@ from app.services.user_manager_routeros import RouterProbe
 
 def _create_router(client, headers, *, api_port=8728, api_use_ssl=None):
     payload = {
-        "/api/v1/routers",
-        headers=headers,
-        json={
-            "name": "UM probe " + secrets.token_hex(3),
-            "nas_identifier": "um-probe-" + secrets.token_hex(4),
-            "management_host": "192.0.2.55",
-            "api_port": api_port,
-            "api_username": "um-reader",
-            "api_secret": "api-secret-" + secrets.token_hex(8),
-            "radius_secret": "radius-secret-" + secrets.token_hex(8),
-        }
+        "name": "UM probe " + secrets.token_hex(3),
+        "nas_identifier": "um-probe-" + secrets.token_hex(4),
+        "management_host": "192.0.2.55",
+        "api_port": api_port,
+        "api_username": "um-reader",
+        "api_secret": "api-secret-" + secrets.token_hex(8),
+        "radius_secret": "radius-secret-" + secrets.token_hex(8),
+    }
     if api_use_ssl is not None:
         payload["api_use_ssl"] = api_use_ssl
     response = client.post(
@@ -31,7 +28,6 @@ def _create_router(client, headers, *, api_port=8728, api_use_ssl=None):
     )
     assert response.status_code == 201, response.text
     return response.json()["id"]
-
 
 def test_user_manager_probe_returns_read_only_router_inventory(owner_client, monkeypatch):
     client, headers, _ = owner_client
