@@ -145,6 +145,7 @@ def test_exact_user_inspection_endpoint_is_read_only_and_does_not_import(owner_c
     assert data["user"]["usage"]["missing_fields_are_unknown"] is True
     assert seen["target_username"] == "voucher-100"
     assert seen["host"] == "192.0.2.55"
+    assert seen["use_ssl"] is False
 
 
 def test_exact_user_inspection_endpoint_validates_username(owner_client):
