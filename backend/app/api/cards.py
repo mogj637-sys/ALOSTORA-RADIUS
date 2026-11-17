@@ -612,7 +612,7 @@ def update_card_status(
     return card
 
 
-@router.post("/single", response_model=CardCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.create")), Depends(require_permission("cards.credentials"))])
+@router.post("/single", response_model=CardCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.create"))])
 def create_single_card(payload: CardSingleCreate, response: Response, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.create"))):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
     response.headers["Pragma"] = "no-cache"
@@ -622,6 +622,9 @@ def create_single_card(payload: CardSingleCreate, response: Response, db: Sessio
     if db.query(Card.id).filter(Card.username == payload.username).first():
         raise HTTPException(status_code=409, detail="اسم المستخدم مستخدم من قبل")
 
+    can_view_credentials = has_permission(user, "cards.credentials")
+    if not can_view_credentials and payload.card_type != "username_only":
+        raise HTTPException(status_code=403, detail="يمكنك إنشاء كروت باسم مستخدم فقط؛ أنواع كلمات المرور تتطلب صلاحية بيانات الدخول")
     password = _credential_for(payload.card_type, payload.username, payload.password)
     point = (
         db.query(PointOfSale)
@@ -684,16 +687,19 @@ def create_single_card(payload: CardSingleCreate, response: Response, db: Sessio
         point_of_sale_id=batch.point_of_sale_id,
         serial_number=card.serial_number,
         username=card.username,
-        password=password,
+        password=password if can_view_credentials else None,
         card_type=card.card_type,
         status=card.status,
         is_free=card.is_free,
     )
 
 
-@router.post("/batch", response_model=CardBatchResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.create")), Depends(require_permission("cards.credentials"))])
+@router.post("/batch", response_model=CardBatchResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.create"))])
 def create_card_batch(payload: CardBatchCreate, response: Response, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("cards.create"))):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    can_view_credentials = has_permission(user, "cards.credentials")
+    if not can_view_credentials and payload.card_type != "username_only":
+        raise HTTPException(status_code=403, detail="يمكنك إنشاء كروت باسم مستخدم فقط؛ أنواع كلمات المرور تتطلب صلاحية بيانات الدخول")
     response.headers["Pragma"] = "no-cache"
     plan = db.get(Plan, payload.plan_id)
     if plan is None or not plan.is_active:
@@ -832,7 +838,7 @@ def create_card_batch(payload: CardBatchCreate, response: Response, db: Session 
                 id=card.id,
                 serial_number=card.serial_number,
                 username=card.username,
-                password=password,
+                password=password if can_view_credentials else None,
             )
             for card, password in zip(cards, generated_passwords, strict=True)
         ]
