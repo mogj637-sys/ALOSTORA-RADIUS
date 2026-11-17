@@ -294,6 +294,9 @@ tbody tr:hover { background: #fbfdfc; }
 
 /* Printable voucher preview */
 .voucher-print-preview { margin-top: 22px; padding: 18px; border: 1px solid #dce9e2; border-radius: 13px; background: #f8fcfa; }
+.voucher-print-pages { display: grid; gap: 16px; }
+.voucher-print-page { padding: 14px; border: 1px solid #dce9e2; border-radius: 10px; background: #fff; overflow: auto; }
+.voucher-print-page-label { margin-bottom: 10px; color: #587466; font-size: 11px; font-weight: 700; }
 .voucher-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 16px; }
 .voucher-toolbar > div:first-child { display: flex; flex-direction: column; gap: 5px; }
 .voucher-toolbar strong { color: #245844; font-size: 13px; }
@@ -322,6 +325,10 @@ tbody tr:hover { background: #fbfdfc; }
   .voucher-print-preview, .voucher-print-preview * { visibility: visible !important; }
   .voucher-print-preview { position: absolute; inset: 0; width: 100%; padding: 0; margin: 0; border: 0; background: #fff; }
   .voucher-toolbar { display: none !important; }
+  .voucher-print-pages { display: block !important; }
+  .voucher-print-page { width: 190mm; min-height: 277mm; box-sizing: border-box; padding: 0; margin: 0; border: 0; border-radius: 0; overflow: visible; break-after: page; page-break-after: always; }
+  .voucher-print-page:last-child { break-after: auto; page-break-after: auto; }
+  .voucher-print-page-label { display: none !important; }
   /* Use the exact millimeter-based grid dimensions calculated by the React print preview. */
   .voucher-grid { display: grid !important; align-content: start; }
   .voucher-card { min-height: 0 !important; border-radius: 2mm; box-shadow: none; break-inside: avoid !important; }
