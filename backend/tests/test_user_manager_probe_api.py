@@ -9,19 +9,25 @@ from app.models.user_manager_preview import UserManagerImportPreview
 from app.services.user_manager_routeros import RouterProbe
 
 
-def _create_router(client, headers):
-    response = client.post(
+def _create_router(client, headers, *, api_port=8728, api_use_ssl=None):
+    payload = {
         "/api/v1/routers",
         headers=headers,
         json={
             "name": "UM probe " + secrets.token_hex(3),
             "nas_identifier": "um-probe-" + secrets.token_hex(4),
             "management_host": "192.0.2.55",
-            "api_port": 8728,
+            "api_port": api_port,
             "api_username": "um-reader",
             "api_secret": "api-secret-" + secrets.token_hex(8),
             "radius_secret": "radius-secret-" + secrets.token_hex(8),
-        },
+        }
+    if api_use_ssl is not None:
+        payload["api_use_ssl"] = api_use_ssl
+    response = client.post(
+        "/api/v1/routers",
+        headers=headers,
+        json=payload,
     )
     assert response.status_code == 201, response.text
     return response.json()["id"]
@@ -64,6 +70,7 @@ def test_user_manager_probe_returns_read_only_router_inventory(owner_client, mon
     assert "password" not in data
     assert seen["host"] == "192.0.2.55"
     assert seen["username"] == "um-reader"
+    assert seen["use_ssl"] is False
     assert seen["password"].startswith("api-secret-")
 
 
@@ -387,3 +394,35 @@ def test_preview_run_history_rejects_unknown_router(owner_client):
     )
     assert response.status_code == 404
 
+
+
+
+def test_user_manager_probe_uses_tls_flag_for_custom_api_ssl_port(owner_client, monkeypatch):
+    client, headers, _ = owner_client
+    router_id = _create_router(
+        client, headers, api_port=18729, api_use_ssl=True
+    )
+    seen = {}
+
+    def fake_probe(**kwargs):
+        seen.update(kwargs)
+        return RouterProbe(
+            identity="RB2011-test",
+            version="6.49.23 (stable)",
+            board_name="RB2011UiAS-2HnD",
+            architecture_name="mipsbe",
+            uptime="1d2h",
+            user_manager_available=True,
+            resources={"users": {"available": True, "count": 1}},
+            warnings=[],
+        )
+
+    monkeypatch.setattr(user_manager, "inspect_routeros_user_manager", fake_probe)
+    response = client.post(
+        f"/api/v1/routers/{router_id}/user-manager/test-connection",
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert seen["port"] == 18729
+    assert seen["use_ssl"] is True
