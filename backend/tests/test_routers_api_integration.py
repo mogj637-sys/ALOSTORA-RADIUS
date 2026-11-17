@@ -29,6 +29,7 @@ def test_router_secrets_are_encrypted_and_never_returned_by_api(owner_client):
     result = created.json()
     assert result["nas_identifier"] == nas_id
     assert result["api_username"] == "radius-manager"
+    assert result["api_use_ssl"] is True
     assert "api_secret" not in result
     assert "radius_secret" not in result
     assert "api_secret_encrypted" not in result
@@ -173,3 +174,35 @@ def test_router_rejects_invalid_radius_client_network_and_control_characters(own
         json={**base, "nas_identifier": "nas-control-" + secrets.token_hex(4), "radius_secret": "line1\nline2-secret"},
     )
     assert bad_secret.status_code == 422
+
+
+
+def test_router_api_tls_mode_can_be_set_for_custom_port_and_updated(owner_client):
+    client, headers, _ = owner_client
+    created = client.post(
+        "/api/v1/routers",
+        headers=headers,
+        json={
+            "name": "Custom API-SSL port",
+            "nas_identifier": "nas-custom-tls-" + secrets.token_hex(4),
+            "management_host": "192.0.2.44",
+            "api_port": 18729,
+            "api_use_ssl": True,
+            "api_username": "tls-reader",
+            "api_secret": "tls-secret-" + secrets.token_hex(8),
+            "radius_secret": "radius-secret-" + secrets.token_hex(8),
+        },
+    )
+
+    assert created.status_code == 201, created.text
+    router_id = created.json()["id"]
+    assert created.json()["api_port"] == 18729
+    assert created.json()["api_use_ssl"] is True
+
+    updated = client.patch(
+        f"/api/v1/routers/{router_id}",
+        headers=headers,
+        json={"api_use_ssl": False},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["api_use_ssl"] is False
