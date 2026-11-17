@@ -187,7 +187,6 @@ def test_router_api_tls_mode_can_be_set_for_custom_port_and_updated(owner_client
             "nas_identifier": "nas-custom-tls-" + secrets.token_hex(4),
             "management_host": "192.0.2.44",
             "api_port": 18729,
-            "api_use_ssl": True,
             "api_username": "tls-reader",
             "api_secret": "tls-secret-" + secrets.token_hex(8),
             "radius_secret": "radius-secret-" + secrets.token_hex(8),
