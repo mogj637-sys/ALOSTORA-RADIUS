@@ -41,7 +41,7 @@ class CardCreatedSecret(BaseModel):
     id: UUID
     serial_number: str
     username: str
-    password: str
+    password: str | None = None
 
 
 class CardCreateResponse(BaseModel):
@@ -52,7 +52,7 @@ class CardCreateResponse(BaseModel):
     point_of_sale_id: int | None
     serial_number: str
     username: str
-    password: str
+    password: str | None = None
     card_type: str
     status: str
     is_free: bool
