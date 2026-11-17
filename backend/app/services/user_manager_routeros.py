@@ -83,7 +83,7 @@ def inspect_routeros_user_manager(
     timeout_seconds: float = 8.0,
 ) -> RouterProbe:
     """Connect and inspect metadata/counts only. Never changes router state."""
-    tls_enabled = port == 8729 if use_ssl is None else use_ssl
+    tls_enabled = port != 8728 if use_ssl is None else use_ssl
     pool = routeros_api.RouterOsApiPool(
         host,
         username=username,
@@ -203,7 +203,7 @@ def inspect_user_manager_user(
     if not target_username or len(target_username) > 120:
         raise ValueError("Invalid User Manager username")
 
-    tls_enabled = port == 8729 if use_ssl is None else use_ssl
+    tls_enabled = port != 8728 if use_ssl is None else use_ssl
     pool = routeros_api.RouterOsApiPool(
         host,
         username=username,
