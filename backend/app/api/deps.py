@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.auth import AdminUser
+from app.security import get_jwt_secret_key
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -23,7 +24,14 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    secret = os.getenv("APP_SECRET_KEY", "development-only-change-me")
+    try:
+        secret = get_jwt_secret_key()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="مفتاح الأمان APP_SECRET_KEY غير مضبوط",
+        ) from exc
+
     try:
         payload = jwt.decode(credentials.credentials, secret, algorithms=["HS256"])
         subject = payload.get("sub")
