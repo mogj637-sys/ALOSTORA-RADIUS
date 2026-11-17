@@ -2,7 +2,7 @@ name: FreeRADIUS configuration
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/user-manager-sync]
   pull_request:
 
 jobs:
