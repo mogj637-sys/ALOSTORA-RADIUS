@@ -10,6 +10,9 @@ const DEFAULT_TEMPLATE_LAYOUT = {
   username_x: "50", username_y: "48", password_x: "50", password_y: "65",
   serial_x: "8", serial_y: "90", price_x: "92", price_y: "90",
   plan_x: "50", plan_y: "25", limits_x: "50", limits_y: "82",
+  date_x: "50", date_y: "96", date_width: "88", date_font_size: "9",
+  username_width: "88", password_width: "88", plan_width: "88", limits_width: "88", serial_width: "88", price_width: "88",
+  username_font_size: "12", password_font_size: "12", plan_font_size: "12", limits_font_size: "10", serial_font_size: "9", price_font_size: "12",
 };
 
 type PermissionOverride = { permission_code: string; allowed: boolean };
@@ -2117,14 +2120,18 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     const templateFitRows = Math.max(1, Math.floor((277 + templateGapMm) / (templateHeightMm + templateGapMm)));
     const templateCardsPerPage = templateFitColumns * templateFitRows;
     const templateFitsA4 = templateWidthMm <= 190 && templateHeightMm <= 277;
-    const previewPosition = (xKey: string, yKey: string) => ({
-      position: "absolute" as const,
-      left: String(templateLayoutDraft[xKey] ?? "50") + "%",
-      top: String(templateLayoutDraft[yKey] ?? "50") + "%",
-      transform: "translate(-50%, -50%)",
-      width: "88%",
-      textAlign: "center" as const,
-    });
+    const previewPosition = (xKey: string, yKey: string) => {
+      const key = xKey.replace(/_x$/, "");
+      return {
+        position: "absolute" as const,
+        left: String(templateLayoutDraft[xKey] ?? "50") + "%",
+        top: String(templateLayoutDraft[yKey] ?? "50") + "%",
+        transform: "translate(-50%, -50%)",
+        width: String(templateLayoutDraft[key + "_width"] ?? "88") + "%",
+        fontSize: String(templateLayoutDraft[key + "_font_size"] ?? templateLayoutDraft.font_size ?? "12") + "px",
+        textAlign: "center" as const,
+      };
+    };
     const previewCardStyle = {
       position: "relative" as const,
       width: "100%",
@@ -2194,7 +2201,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             </div></div>
 
             <div className="template-editor-section"><div className="plan-section-title"><span>05</span><div><h3>مواضع العناصر X و Y</h3><p>القيم كنسبة مئوية من أبعاد الكرت</p></div></div><div className="form-grid">
-              {([["اسم المستخدم","username"],["كلمة المرور","password"],["اسم الباقة","plan"],["الرصيد والوقت","limits"],["الرقم التسلسلي","serial"],["السعر","price"]] as [string,string][]).map(([label,key]) => <div className="template-position-fields" key={key}><strong>{label}</strong><label>X<input type="number" min="0" max="100" value={String(templateLayoutDraft[`${key}_x`] ?? (key === "serial" ? "8" : key === "price" ? "92" : "50"))} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, [`${key}_x`]: e.target.value })} /></label><label>Y<input type="number" min="0" max="100" value={String(templateLayoutDraft[`${key}_y`] ?? (key === "plan" ? "25" : key === "limits" ? "82" : key === "username" ? "48" : key === "password" ? "65" : "90"))} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, [`${key}_y`]: e.target.value })} /></label></div>)}
+              {([["اسم المستخدم","username"],["كلمة المرور","password"],["اسم الباقة","plan"],["الرصيد والوقت","limits"],["الرقم التسلسلي","serial"],["السعر","price"],["تاريخ الطباعة","date"]] as [string,string][]).map(([label,key]) => <div className="template-position-fields" key={key}><strong>{label}</strong><label>X<input type="number" min="0" max="100" value={String(templateLayoutDraft[`${key}_x`] ?? (key === "serial" ? "8" : key === "price" ? "92" : "50"))} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, [`${key}_x`]: e.target.value })} /></label><label>Y<input type="number" min="0" max="100" value={String(templateLayoutDraft[`${key}_y`] ?? (key === "plan" ? "25" : key === "limits" ? "82" : key === "username" ? "48" : key === "password" ? "65" : key === "date" ? "96" : "90"))} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, [`${key}_y`]: e.target.value })} /></label><label>العرض %<input type="number" min="5" max="100" value={String(templateLayoutDraft[`${key}_width`] ?? "88")} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, [`${key}_width`]: e.target.value })} /></label><label>حجم الخط<input type="number" min="5" max="40" value={String(templateLayoutDraft[`${key}_font_size`] ?? (key === "limits" || key === "date" || key === "serial" ? "9" : "12"))} onChange={(e) => setTemplateLayoutDraft({ ...templateLayoutDraft, [`${key}_font_size`]: e.target.value })} /></label></div>)}
             </div></div>
 
             <div className="form-actions template-editor-actions"><button type="submit" disabled={busy || !plans.some((plan) => plan.is_active && String(plan.id) === templateDraft.plan_id)}>{busy ? "جارٍ الحفظ..." : editingTemplateId ? "حفظ تعديلات القالب" : "حفظ القالب"}</button><button type="button" className="secondary-button" onClick={resetTemplateDraft}>قالب جديد / إلغاء</button></div>
@@ -2212,6 +2219,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                   {templateLayoutDraft.show_password !== false && <div className="voucher-password" style={previewPosition("password_x","password_y")}><span>كلمة المرور</span><strong>••••••••</strong></div>}
                   {templateLayoutDraft.show_limits !== false && <div className="voucher-limits" style={previewPosition("limits_x","limits_y")}><span>{previewPlan?.data_limit_bytes == null ? "رصيد مفتوح" : `${(previewPlan.data_limit_bytes / (1024 ** 2)).toFixed(0)} MB`} · {previewPlan?.session_time_limit_seconds == null ? "وقت مفتوح" : `${(previewPlan.session_time_limit_seconds / 3600).toFixed(0)} ساعة`} · {previewPlan?.validity_period_seconds == null ? "صلاحية مفتوحة" : `${(previewPlan.validity_period_seconds / 86400).toFixed(0)} يوم`}</span></div>}
                   <div className="voucher-foot"><span style={previewPosition("serial_x","serial_y")}>{templateLayoutDraft.show_serial_number !== false ? "AL000001" : ""}</span><strong style={previewPosition("price_x","price_y")}>{templateLayoutDraft.show_price !== false ? `${previewPlan ? Number(previewPlan.price).toLocaleString("en-US") : "100"} ريال` : ""}</strong></div>
+                  <div className="voucher-print-date" style={previewPosition("date_x","date_y")}>{new Date().toLocaleDateString("ar")}</div>
                 </article>
               </div>
               <div className="template-preview-meta"><span>{templateDraft.width_mm} × {templateDraft.height_mm} مم</span><span>التوزيع التلقائي: {templateFitColumns} أعمدة × {templateFitRows} صفوف</span><strong>{templateCardsPerPage.toLocaleString("ar")} كرت في صفحة A4</strong></div>
@@ -2644,10 +2652,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   function renderPos() {
     const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
     const selectedLayout = selectedTemplate?.layout ?? {};
-    const layoutPosition = (xKey: string, yKey: string) =>
-      selectedLayout[xKey] === undefined || selectedLayout[yKey] === undefined
+    const layoutPosition = (xKey: string, yKey: string) => {
+      const key = xKey.replace(/_x$/, "");
+      return selectedLayout[xKey] === undefined || selectedLayout[yKey] === undefined
         ? undefined
-        : { position: "absolute" as const, left: String(selectedLayout[xKey]) + "%", top: String(selectedLayout[yKey]) + "%", transform: "translate(-50%, -50%)", width: "88%" };
+        : { position: "absolute" as const, left: String(selectedLayout[xKey]) + "%", top: String(selectedLayout[yKey]) + "%", transform: "translate(-50%, -50%)", width: String(selectedLayout[key + "_width"] ?? "88") + "%", fontSize: String(selectedLayout[key + "_font_size"] ?? selectedLayout.font_size ?? "12") + "px" };
+    };
     const printableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
     const selectedPoint = points.find((point) => String(point.id) === selectedPosId);
     const atDebtLimit = selectedPoint?.debt_limit !== null && selectedPoint?.debt_limit !== undefined &&
@@ -2810,6 +2820,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                       {printOptions.show_password && selectedLayout.show_password !== false && <div className="voucher-password" style={layoutPosition("password_x", "password_y")}><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>}
                       {printOptions.show_limits && selectedLayout.show_limits !== false && <div className="voucher-limits" style={layoutPosition("limits_x", "limits_y")}><span>{card.data_limit_bytes == null ? "رصيد مفتوح" : (Number(card.data_limit_bytes) / (1024 ** 2)).toFixed(0) + " MB"} · {card.session_time_limit_seconds == null ? "وقت مفتوح" : (Number(card.session_time_limit_seconds) / 3600).toFixed(0) + " ساعة"} · {card.validity_period_seconds == null ? "صلاحية مفتوحة" : (Number(card.validity_period_seconds) / 86400).toFixed(0) + " يوم"}</span></div>}
                       <div className="voucher-foot"><span style={layoutPosition("serial_x", "serial_y")}>{printOptions.show_serial_number && selectedLayout.show_serial_number !== false ? card.serial_number : ""}</span><strong style={layoutPosition("price_x", "price_y")}>{printOptions.show_price && selectedLayout.show_price !== false ? (card.is_free ? "مجاني" : Number(card.price_snapshot).toLocaleString("en-US") + " ريال") : ""}</strong></div>
+                      <div className="voucher-print-date" style={layoutPosition("date_x", "date_y")}>{new Date().toLocaleDateString("ar")}</div>
                     </article>
                   ))}
                       </div>
