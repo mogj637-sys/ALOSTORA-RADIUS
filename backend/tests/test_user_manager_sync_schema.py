@@ -46,3 +46,11 @@ def test_preview_and_source_models_track_per_card_credential_metadata():
     assert "credential_mode" in preview.c
     assert "credential_state" in preview.c
     assert "credential_mode" in source.c
+
+
+
+def test_router_model_persists_api_tls_mode():
+    from app.models.core import Router
+
+    assert "api_use_ssl" in Router.__table__.c
+    assert Router.__table__.c.api_use_ssl.nullable is False
