@@ -149,7 +149,7 @@ type GeneratedCard = {
   id: string;
   serial_number: string;
   username: string;
-  password: string;
+  password: string | null;
 };
 
 type RouterRecord = {
@@ -1735,13 +1735,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createSingle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!can("cards.create") || !can("cards.credentials")) { setError("تتطلب إضافة الكروت صلاحية الإنشاء وصلاحية عرض بيانات الدخول."); return; }
+    if (!can("cards.create")) { setError("ليست لديك صلاحية إنشاء الكروت."); return; }
     const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
     const linkedPlan = selectedTemplate?.plan_id ? plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
     if (!selectedTemplate || !linkedPlan) { setError("اختر قالباً مرتبطاً بباقة مفعّلة قبل إنشاء الكرت."); return; }
     setBusy(true); setError(""); setNotice(""); setGeneratedCards([]);
     try {
-      const result = await apiRequest<{ id: string; batch_id: string; batch_number: string; serial_number: string; username: string; password: string }> (token, "/api/v1/cards/single", {
+      const result = await apiRequest<{ id: string; batch_id: string; batch_number: string; serial_number: string; username: string; password: string | null }> (token, "/api/v1/cards/single", {
         method: "POST",
         body: JSON.stringify({
           plan_id: linkedPlan.id,
@@ -1757,7 +1757,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setGeneratedBatchNumber(result.batch_number);
       setSelectedPrintCardIds([result.id]);
       if (can("cards.view")) await loadCards();
-      setNotice("تم إنشاء الكرت. احفظ بيانات الدخول الآن؛ لن تظهر كلمة المرور مرة أخرى.");
+      setNotice(can("cards.credentials") ? "تم إنشاء الكرت. احفظ بيانات الدخول الآن؛ لن تظهر كلمة المرور مرة أخرى." : "تم إنشاء الكرت. لم تُعرض كلمة المرور لأن حسابك لا يملك صلاحية بيانات الدخول.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر إنشاء الكرت");
     } finally {
@@ -1767,7 +1767,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   async function createBatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!can("cards.create") || !can("cards.credentials")) { setError("تتطلب إضافة الدفعات صلاحية الإنشاء وصلاحية عرض بيانات الدخول."); return; }
+    if (!can("cards.create")) { setError("ليست لديك صلاحية إنشاء دفعات الكروت."); return; }
     const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
     const linkedPlan = selectedTemplate?.plan_id ? plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
     if (!selectedTemplate || !linkedPlan) { setError("اختر قالباً مرتبطاً بباقة مفعّلة قبل إنشاء الدفعة."); return; }
@@ -1794,7 +1794,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setGeneratedBatchNumber(result.batch_number);
       setSelectedPrintCardIds(result.cards.map((card) => card.id));
       if (can("cards.view")) await Promise.all([loadCards(), loadCardBatches()]);
-      setNotice(`تم إنشاء ${result.created_count} كرت ${batchDraft.batchMode === "existing" ? "وربطها بالدفعة السابقة" : "في دفعة جديدة"}. احفظ بيانات الدخول الآن؛ لن تظهر كلمات المرور مرة أخرى.`);
+      setNotice(can("cards.credentials") ? `تم إنشاء ${result.created_count} كرت ${batchDraft.batchMode === "existing" ? "وربطها بالدفعة السابقة" : "في دفعة جديدة"}. احفظ بيانات الدخول الآن؛ لن تظهر كلمات المرور مرة أخرى.` : `تم إنشاء ${result.created_count} كرت. لم تُعرض كلمات المرور لأن حسابك لا يملك صلاحية بيانات الدخول.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر إنشاء الدفعة");
     } finally {
@@ -2304,7 +2304,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <div className="card-create-section-heading"><span>02</span><div><h3>بيانات الكرت المنفرد</h3><p>أدخل اسم المستخدم وحدد طريقة بيانات الدخول.</p></div></div>
             <div className="form-grid">
               <label>اسم المستخدم<input value={singleDraft.username} onChange={(e) => setSingleDraft({ ...singleDraft, username: e.target.value })} minLength={3} maxLength={32} pattern="[A-Za-z0-9_-]+" required placeholder="أحرف إنجليزية وأرقام فقط" /></label>
-              <label>نوع بيانات الدخول<select value={singleDraft.cardType} onChange={(e) => setSingleDraft({ ...singleDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
+              <label>نوع بيانات الدخول<select value={singleDraft.cardType} onChange={(e) => setSingleDraft({ ...singleDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option>{can("cards.credentials") && <><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></>}</select></label>
               {singleDraft.cardType === "separate_credentials" && <label>كلمة المرور<input type="text" value={singleDraft.password} onChange={(e) => setSingleDraft({ ...singleDraft, password: e.target.value })} minLength={4} maxLength={32} required /></label>}
               <label className="checkbox-label"><input type="checkbox" checked={singleDraft.isFree} onChange={(e) => setSingleDraft({ ...singleDraft, isFree: e.target.checked })} /> كرت مجاني / خاص بمالك الشبكة</label>
             </div>
@@ -2315,7 +2315,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <div className="card-create-section-heading"><span>02</span><div><h3>إعداد دفعة الكروت</h3><p>حدد العدد وطريقة توليد بيانات الدخول.</p></div></div>
             <div className="form-grid">
               <label>عدد الكروت<input type="number" min="1" max="5000" value={batchDraft.quantity} onChange={(e) => setBatchDraft({ ...batchDraft, quantity: e.target.value })} required /></label>
-              <label>نوع بيانات الدخول<select value={batchDraft.cardType} onChange={(e) => setBatchDraft({ ...batchDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></select></label>
+              <label>نوع بيانات الدخول<select value={batchDraft.cardType} onChange={(e) => setBatchDraft({ ...batchDraft, cardType: e.target.value })}><option value="username_only">اسم مستخدم فقط</option>{can("cards.credentials") && <><option value="same_credentials">اسم المستخدم وكلمة المرور متطابقان</option><option value="separate_credentials">اسم مستخدم وكلمة مرور مختلفان</option></>}</select></label>
               <label>طريقة توليد اسم المستخدم<select value={batchDraft.generationMode} onChange={(e) => setBatchDraft({ ...batchDraft, generationMode: e.target.value })}><option value="digits">أرقام فقط</option><option value="letters">حروف فقط</option><option value="alphanumeric">أرقام وحروف</option></select></label>
               <label>طول اسم المستخدم<input type="number" min="3" max="32" value={batchDraft.usernameLength} onChange={(e) => setBatchDraft({ ...batchDraft, usernameLength: e.target.value })} required /></label>
               <label>طول كلمة المرور<input type="number" min="4" max="32" value={batchDraft.passwordLength} onChange={(e) => setBatchDraft({ ...batchDraft, passwordLength: e.target.value })} disabled={batchDraft.cardType !== "separate_credentials"} required={batchDraft.cardType === "separate_credentials"} /></label>
@@ -2342,8 +2342,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         )}
 
         {generatedCards.length > 0 && <section className="generated-panel card-generated-panel">
-          <div className="section-heading compact-heading"><div><span className="eyebrow">تم إنشاء الكروت</span><h2>بيانات الدفعة الجديدة {generatedBatchNumber ? `— ${generatedBatchNumber}` : ""}</h2><p>احفظ بيانات الدخول الآن؛ كلمات المرور لن تظهر مرة أخرى بعد مغادرة هذه الصفحة.</p></div><div className="form-actions"><button type="button" disabled={!selectedPrintCardIds.length || !selectedPosId} onClick={() => setPage("pos")}>متابعة الطباعة لنقطة البيع</button><button type="button" className="secondary-button" onClick={() => window.print()}>طباعة بيانات الدخول</button></div></div>
-          <div className="table-wrap"><table><thead><tr><th>التسلسل</th><th>اسم المستخدم</th><th>كلمة المرور</th></tr></thead><tbody>{generatedCards.map((card) => <tr key={card.serial_number}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.password || "بدون كلمة مرور"}</td></tr>)}</tbody></table></div>
+          <div className="section-heading compact-heading"><div><span className="eyebrow">تم إنشاء الكروت</span><h2>بيانات الدفعة الجديدة {generatedBatchNumber ? `— ${generatedBatchNumber}` : ""}</h2><p>{can("cards.credentials") ? "احفظ بيانات الدخول الآن؛ كلمات المرور لن تظهر مرة أخرى بعد مغادرة هذه الصفحة." : "تم إنشاء الكروت دون إظهار كلمات المرور؛ يتطلب عرضها صلاحية مستقلة."}</p></div><div className="form-actions"><button type="button" disabled={!selectedPrintCardIds.length || !selectedPosId} onClick={() => setPage("pos")}>متابعة الطباعة لنقطة البيع</button>{can("cards.credentials") && <button type="button" className="secondary-button" onClick={() => window.print()}>طباعة بيانات الدخول</button>}</div></div>
+          <div className="table-wrap"><table><thead><tr><th>التسلسل</th><th>اسم المستخدم</th><th>كلمة المرور</th></tr></thead><tbody>{generatedCards.map((card) => <tr key={card.serial_number}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.password === null ? "محجوب بالصلاحيات" : card.password || "بدون كلمة مرور"}</td></tr>)}</tbody></table></div>
         </section>}
       </section>
     );
@@ -3193,12 +3193,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               {(can("reports.view") || can("finance.view")) && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
             </div>}
           </div>}
-          {(can("cards.create") && can("cards.credentials") || can("cards.view") || can("templates.view")) && <div className="nav-group">
+          {(can("cards.create") || can("cards.view") || can("templates.view")) && <div className="nav-group">
             <button type="button" className={openNavGroup === "cards" ? "nav-group-toggle expanded" : "nav-group-toggle"} aria-expanded={openNavGroup === "cards"} onClick={() => setOpenNavGroup((current) => current === "cards" ? null : "cards")}>
               <span>إدارة الكروت</span><span className="nav-chevron" aria-hidden="true">⌄</span>
             </button>
             {openNavGroup === "cards" && <div className="nav-group-items">
-              {can("cards.create") && can("cards.credentials") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
+              {can("cards.create") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
               {can("cards.view") && <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>}
               {can("cards.view") && user.card_visibility !== "search_any" && <button className={page === "batches" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("batches")}>دفعات الكروت</button>}
               {can("templates.view") && <button className={page === "templates" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("templates")}>تصاميم الكروت</button>}
@@ -3225,7 +3225,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("cards.credentials") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") ? renderPos() : page === "pos-management" && can("pos.view") ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") ? renderPos() : page === "pos-management" && can("pos.view") ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
