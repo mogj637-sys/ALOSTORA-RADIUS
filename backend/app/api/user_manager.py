@@ -100,6 +100,7 @@ def inspect_user_manager_user_endpoint(
         user = inspect_user_manager_user(
             host=item.management_host,
             port=item.api_port,
+            use_ssl=item.api_use_ssl,
             username=item.api_username,
             password=api_password,
             target_username=payload.username,
@@ -145,6 +146,7 @@ def preview_user_manager_user_endpoint(
         source_user = inspect_user_manager_user(
             host=item.management_host,
             port=item.api_port,
+            use_ssl=item.api_use_ssl,
             username=item.api_username,
             password=api_password,
             target_username=payload.username,
