@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, PointerEvent as ReactPointerEvent, useEffect, useState } from "react";
 
 const API_BASE = "http://localhost:8000";
 
@@ -2132,6 +2132,24 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         textAlign: "center" as const,
       };
     };
+    const previewDragHandlers = (key: string) => ({
+      onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+      },
+      onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
+        if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+        const card = event.currentTarget.closest(".template-preview-card") as HTMLElement | null;
+        const rect = card?.getBoundingClientRect();
+        if (!rect || !rect.width || !rect.height) return;
+        const x = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
+        const y = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
+        setTemplateLayoutDraft((current) => ({ ...current, [key + "_x"]: x.toFixed(1), [key + "_y"]: y.toFixed(1) }));
+      },
+      onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      },
+    });
     const previewCardStyle = {
       position: "relative" as const,
       width: "100%",
@@ -2214,12 +2232,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <div className="template-preview-stage">
                 <article className="template-preview-card" style={previewCardStyle}>
                   <div className="voucher-head"><strong>{String(templateLayoutDraft.header_text ?? "الأسطورة نت")}</strong><span>{String(templateLayoutDraft.footer_text ?? "بطاقة إنترنت")}</span></div>
-                  {templateLayoutDraft.show_plan !== false && <div className="voucher-plan" style={previewPosition("plan_x","plan_y")}><span>الباقة</span><strong>{previewPlan?.name || "اسم الباقة"}</strong></div>}
-                  {templateLayoutDraft.show_username !== false && <div className="voucher-user" style={previewPosition("username_x","username_y")}><span>اسم المستخدم</span><strong>123456789</strong></div>}
-                  {templateLayoutDraft.show_password !== false && <div className="voucher-password" style={previewPosition("password_x","password_y")}><span>كلمة المرور</span><strong>••••••••</strong></div>}
-                  {templateLayoutDraft.show_limits !== false && <div className="voucher-limits" style={previewPosition("limits_x","limits_y")}><span>{previewPlan?.data_limit_bytes == null ? "رصيد مفتوح" : `${(previewPlan.data_limit_bytes / (1024 ** 2)).toFixed(0)} MB`} · {previewPlan?.session_time_limit_seconds == null ? "وقت مفتوح" : `${(previewPlan.session_time_limit_seconds / 3600).toFixed(0)} ساعة`} · {previewPlan?.validity_period_seconds == null ? "صلاحية مفتوحة" : `${(previewPlan.validity_period_seconds / 86400).toFixed(0)} يوم`}</span></div>}
-                  <div className="voucher-foot"><span style={previewPosition("serial_x","serial_y")}>{templateLayoutDraft.show_serial_number !== false ? "AL000001" : ""}</span><strong style={previewPosition("price_x","price_y")}>{templateLayoutDraft.show_price !== false ? `${previewPlan ? Number(previewPlan.price).toLocaleString("en-US") : "100"} ريال` : ""}</strong></div>
-                  <div className="voucher-print-date" style={previewPosition("date_x","date_y")}>{new Date().toLocaleDateString("ar")}</div>
+                  {templateLayoutDraft.show_plan !== false && <div className="voucher-plan" style={previewPosition("plan_x","plan_y")} {...previewDragHandlers("plan")}><span>الباقة</span><strong>{previewPlan?.name || "اسم الباقة"}</strong></div>}
+                  {templateLayoutDraft.show_username !== false && <div className="voucher-user" style={previewPosition("username_x","username_y")} {...previewDragHandlers("username")}><span>اسم المستخدم</span><strong>123456789</strong></div>}
+                  {templateLayoutDraft.show_password !== false && <div className="voucher-password" style={previewPosition("password_x","password_y")} {...previewDragHandlers("password")}><span>كلمة المرور</span><strong>••••••••</strong></div>}
+                  {templateLayoutDraft.show_limits !== false && <div className="voucher-limits" style={previewPosition("limits_x","limits_y")} {...previewDragHandlers("limits")}><span>{previewPlan?.data_limit_bytes == null ? "رصيد مفتوح" : `${(previewPlan.data_limit_bytes / (1024 ** 2)).toFixed(0)} MB`} · {previewPlan?.session_time_limit_seconds == null ? "وقت مفتوح" : `${(previewPlan.session_time_limit_seconds / 3600).toFixed(0)} ساعة`} · {previewPlan?.validity_period_seconds == null ? "صلاحية مفتوحة" : `${(previewPlan.validity_period_seconds / 86400).toFixed(0)} يوم`}</span></div>}
+                  <div className="voucher-foot"><span style={previewPosition("serial_x","serial_y")} {...previewDragHandlers("serial")}>{templateLayoutDraft.show_serial_number !== false ? "AL000001" : ""}</span><strong style={previewPosition("price_x","price_y")} {...previewDragHandlers("price")}>{templateLayoutDraft.show_price !== false ? `${previewPlan ? Number(previewPlan.price).toLocaleString("en-US") : "100"} ريال` : ""}</strong></div>
+                  <div className="voucher-print-date" style={previewPosition("date_x","date_y")} {...previewDragHandlers("date")}>{new Date().toLocaleDateString("ar")}</div>
                 </article>
               </div>
               <div className="template-preview-meta"><span>{templateDraft.width_mm} × {templateDraft.height_mm} مم</span><span>التوزيع التلقائي: {templateFitColumns} أعمدة × {templateFitRows} صفوف</span><strong>{templateCardsPerPage.toLocaleString("ar")} كرت في صفحة A4</strong></div>
