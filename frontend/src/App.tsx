@@ -2435,7 +2435,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         {can("sessions.view") && <button type="button" role="tab" aria-selected={cardManagementTab === "sessions"} className={cardManagementTab === "sessions" ? "active" : ""} onClick={() => { setCardManagementTab("sessions"); setSelectedCardIds([]); loadRadiusSessions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جلسات المستخدمين")); }}>جلسات المستخدمين ({radiusSessions.active_count.toLocaleString("ar")})</button>}
       </div>}
       {user.card_visibility !== "search_any" && cardManagementTab === "batches" ? renderBatches() : user.card_visibility !== "search_any" && cardManagementTab === "sessions" ? renderRadiusSessions() : <>
-      <p className="card-source-note">هذه القائمة تعرض الكروت المسجلة في قاعدة بيانات RADIUS. جلب كروت MikroTik مباشرة سيُضاف عند تنفيذ ربط مزامنة الراوتر.</p>
+      <p className="card-source-note">هذه القائمة تعرض الكروت المسجلة في قاعدة بيانات RADIUS. جلب كروت MikroTik مباشرة سيُضاف عند تنفيذ ربط مزامنة الراوتر. تُحدَّث أرصدة الوقت والرفع والتنزيل عند وصول رسائل محاسبة RADIUS (Start / Interim / Stop)، لذلك قد تتأخر عن الاستهلاك اللحظي بين الرسائل.</p>
       {(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <div className="card-selection-toolbar">
         <label><input type="checkbox" disabled={selectableCards.length === 0} checked={selectableCards.length > 0 && selectableCards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? selectableCards.map((card) => card.id) : [])} /> تحديد الكروت المؤهلة في الصفحة الحالية</label>
         <span>تم تحديد {selectedCardIds.length} كرت من الصفحة الحالية</span>
@@ -2458,7 +2458,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         {(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <div><strong>{selectedCardIds.length.toLocaleString("ar")}</strong><span>كرت محدد للطباعة</span></div>}
         {busy && <span className="card-results-loading">جارٍ تحديث النتائج…</span>}
       </div>
-      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>أول استخدام</th><th>تاريخ الانتهاء</th><th>وقت الجلسات المستخدم / المتبقي</th><th>الوقت المتبقي للصلاحية</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>البيانات المستهلكة / المتبقية</th><th>حد المستخدمين المتزامنين (إعداد الباقة)</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.update") && <th>الإجراءات</th>}</tr></thead><tbody>
+      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>أول استخدام</th><th>تاريخ الانتهاء</th><th>وقت الجلسات المستخدم / المتبقي</th><th>الوقت المتبقي للصلاحية</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>البيانات المستهلكة / المتبقية</th><th>حد التزامن المسموح</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.update") && <th>الإجراءات</th>}</tr></thead><tbody>
         {cards.map((card) => {
           const snapshot = card.plan_snapshot ?? {};
           const timeLimit = typeof snapshot.session_time_limit_seconds === "number" ? snapshot.session_time_limit_seconds : null;
@@ -2469,7 +2469,19 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           const expiryTimestamp = card.expires_at ? Date.parse(card.expires_at) : Number.NaN;
           const planSettings = snapshot.settings && typeof snapshot.settings === "object" ? snapshot.settings as Record<string, unknown> : {};
           const sharedUsers = planSettings.shared_users;
-          const sharedUsersLabel = sharedUsers === undefined || sharedUsers === null || sharedUsers === "" ? "غير محدود" : String(sharedUsers);
+          // Match the RADIUS authorization rule for snapshots created before shared-user settings existed.
+          const hasSnapshotSettings = Object.prototype.hasOwnProperty.call(snapshot, "settings");
+          const parsedSharedUsers = typeof sharedUsers === "number" && Number.isFinite(sharedUsers)
+            ? Math.trunc(sharedUsers)
+            : typeof sharedUsers === "string" && /^[+-]?\\d+$/.test(sharedUsers.trim())
+              ? Number.parseInt(sharedUsers.trim(), 10)
+              : 1;
+          const sharedUsersLimit = !hasSnapshotSettings
+            ? 1
+            : sharedUsers === undefined || sharedUsers === null || sharedUsers === ""
+              ? null
+              : Math.max(1, parsedSharedUsers);
+          const sharedUsersLabel = sharedUsersLimit === null ? "غير محدود" : String(sharedUsersLimit);
           const rx = planSettings.rate_limit_rx;
           const tx = planSettings.rate_limit_tx;
           const rateUnit = typeof planSettings.rate_limit_unit === "string" ? planSettings.rate_limit_unit : "Kbps";
