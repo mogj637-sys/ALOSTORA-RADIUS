@@ -2651,7 +2651,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     const printableHeightMm = 277;
     const fitColumns = Math.max(1, Math.floor((printableWidthMm + printGapMm) / (cardWidthMm + printGapMm)));
     const fitRows = Math.max(1, Math.floor((printableHeightMm + printGapMm) / (cardHeightMm + printGapMm)));
-    const cardsPerPage = Math.max(1, Math.min(60, fitColumns * fitRows));
+    const cardsPerPage = fitColumns * fitRows;
     const printPageCount = Math.ceil(printPreviewCards.length / cardsPerPage);
     return (
       <>
