@@ -122,3 +122,31 @@ def test_preview_fingerprint_tracks_credential_availability_without_storing_secr
     assert unavailable["source_fingerprint"] != available["source_fingerprint"]
     assert "password" not in repr(unavailable["safe_snapshot"]).lower()
     assert "password" not in repr(available["safe_snapshot"]).lower()
+
+def test_preview_ignores_null_password_alias_when_another_alias_is_available():
+    result = build_user_manager_preview([{
+        "external_id": "*11",
+        "username": "alias-card",
+        "password": None,
+        "pass": "available-secret",
+    }])[0]
+
+    assert result["credential_mode"] == "separate_credentials"
+    assert result["credential_state"] == "plaintext_available"
+    assert "available-secret" not in repr(result)
+    assert "password" not in result["safe_snapshot"]
+
+
+def test_preview_marks_conflicting_password_aliases_ambiguous():
+    result = build_user_manager_preview([{
+        "external_id": "*12",
+        "username": "conflicting-card",
+        "password": "first-secret",
+        "passwd": "second-secret",
+    }])[0]
+
+    assert result["credential_mode"] is None
+    assert result["credential_state"] == "ambiguous"
+    assert any("متعارضة" in issue for issue in result["issues"])
+    assert "first-secret" not in repr(result)
+    assert "second-secret" not in repr(result)

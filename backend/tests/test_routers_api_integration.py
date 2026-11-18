@@ -222,6 +222,7 @@ def test_router_api_tls_mode_can_be_set_for_custom_port_and_updated(owner_client
     assert updated.status_code == 200, updated.text
     assert updated.json()["api_use_ssl"] is False
 
+
 def test_router_creation_defaults_to_api_ssl(owner_client):
     client, headers, _ = owner_client
     created = client.post(

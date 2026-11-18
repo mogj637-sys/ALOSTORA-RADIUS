@@ -470,7 +470,7 @@ def test_explicit_tls_setting_overrides_default_port_assumption(
 
     assert FakePool.last.kwargs["use_ssl"] is use_ssl
     assert FakePool.last.kwargs["plaintext_login"] is use_ssl
-    assert any("دون TLS" in warning for warning in result.warnings) is expected_warning is expected_warning
+    assert any("دون TLS" in warning for warning in result.warnings) is expected_warning
     assert FakePool.last.disconnected is True
 
 

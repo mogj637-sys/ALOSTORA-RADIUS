@@ -19,8 +19,15 @@ SENSITIVE_KEYS = {
     "verifier", "hash",
 }
 VERIFIER_KEYS = {"passwordhash", "hashpassword", "verifier", "hash"}
-PASSWORD_KEYS = {"password", "passwd", "pass", "userpassword", "cleartextpassword",
-                 "passwordplaintext", "plaintextpassword"}
+PASSWORD_KEYS = (
+    "password",
+    "passwd",
+    "pass",
+    "userpassword",
+    "cleartextpassword",
+    "passwordplaintext",
+    "plaintextpassword",
+)
 
 
 def _safe_value(value: Any) -> Any:
@@ -44,11 +51,20 @@ def _credential_metadata(record: dict[str, Any], username: str) -> dict[str, str
     if any(key in normalized and normalized[key] not in (None, "") for key in VERIFIER_KEYS):
         return {"credential_mode": None, "credential_state": "verifier_unverified"}
 
-    password_key = next((key for key in PASSWORD_KEYS if key in normalized), None)
-    if password_key is None or normalized[password_key] is None:
+    password_values = [
+        str(normalized[key])
+        for key in PASSWORD_KEYS
+        if key in normalized and normalized[key] is not None
+    ]
+    if not password_values:
         return {"credential_mode": None, "credential_state": "unavailable"}
 
-    password = str(normalized[password_key])
+    # Router/API adapters can expose the same credential under multiple aliases.
+    # Conflicting values are ambiguous; never choose one by unordered set order.
+    if len(set(password_values)) != 1:
+        return {"credential_mode": None, "credential_state": "ambiguous"}
+
+    password = password_values[0]
     if password == "":
         return {"credential_mode": "username_only", "credential_state": "plaintext_available"}
     if password == username:
@@ -92,6 +108,8 @@ def build_user_manager_preview(
 
         if credential["credential_state"] == "unavailable":
             issues.append("بيانات الاعتماد غير متاحة في سجل المصدر")
+        elif credential["credential_state"] == "ambiguous":
+            issues.append("حقول كلمة المرور في سجل المصدر متعارضة؛ يلزم التحقق اليدوي")
         elif credential["credential_state"] == "verifier_unverified":
             issues.append("صيغة hash/verifier غير مثبتة التوافق مع مصادقة RADIUS")
 
