@@ -170,6 +170,7 @@ def update_admin(
             selectinload(AdminUser.permission_overrides).selectinload(AdminUserPermissionOverride.permission),
         )
         .filter(AdminUser.id == user_id)
+        .with_for_update()
         .first()
     )
     if user is None:
@@ -189,15 +190,18 @@ def update_admin(
         raise HTTPException(status_code=400, detail="لا يمكن تعطيل حسابك الحالي أو سحب صلاحية مدير النظام منه")
 
     if user.is_active and any(role.code == "owner" for role in user.roles) and (not next_active or not keeps_owner):
-        active_owner_rows = (
+        # Serialize all owner reductions on the owner-role row. This prevents two
+        # concurrent owners from demoting each other based on the same stale count.
+        owner_role = db.query(Role).filter(Role.code == "owner").with_for_update().first()
+        if owner_role is None:
+            raise HTTPException(status_code=409, detail="تعذر التحقق من دور مدير النظام")
+        active_owner_count = (
             db.query(AdminUser.id)
             .join(AdminUser.roles)
-            .filter(AdminUser.is_active.is_(True), Role.code == "owner")
-            .order_by(AdminUser.id)
-            .with_for_update()
-            .all()
+            .filter(AdminUser.is_active.is_(True), Role.id == owner_role.id)
+            .count()
         )
-        if len(active_owner_rows) <= 1:
+        if active_owner_count <= 1:
             raise HTTPException(status_code=400, detail="لا يمكن تعطيل أو تخفيض صلاحية آخر مدير نظام")
 
     before = {
