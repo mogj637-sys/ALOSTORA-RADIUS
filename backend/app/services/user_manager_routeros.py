@@ -89,7 +89,10 @@ def inspect_routeros_user_manager(
         username=username,
         password=password,
         port=port,
-        plaintext_login=True,  # RouterOS v6.43+ login flow
+        # RouterOS 6.43+ sends the password in an API word. Use that
+        # login only inside TLS; cleartext transport falls back to the legacy
+        # challenge-response flow instead of exposing the password.
+        plaintext_login=tls_enabled,
         use_ssl=tls_enabled,
         ssl_verify=True,
         ssl_verify_hostname=True,
@@ -148,7 +151,7 @@ def inspect_routeros_user_manager(
         # Do not return library exception strings: some implementations include
         # request details. Keep the original exception only for server logs.
         raise UserManagerConnectionError(
-            "تعذر الاتصال بالراوتر أو فشل التحقق من بيانات API. تحقق من العنوان والمنفذ والصلاحيات والجدار الناري."
+            "تعذر الاتصال بالراوتر أو فشل التحقق من بيانات API. تحقق من العنوان والمنفذ والصلاحيات والجدار الناري، وفعّل API-SSL لأجهزة RouterOS 6.43 وما بعدها."
         ) from exc
     finally:
         # Close the socket even when TLS/login fails before connected becomes True.
@@ -209,7 +212,9 @@ def inspect_user_manager_user(
         username=username,
         password=password,
         port=port,
-        plaintext_login=True,
+        # The post-6.43 login carries the password in the API payload;
+        # never use it unless TLS protects the transport.
+        plaintext_login=tls_enabled,
         use_ssl=tls_enabled,
         ssl_verify=True,
         ssl_verify_hostname=True,
@@ -331,7 +336,7 @@ def inspect_user_manager_user(
         raise
     except Exception as exc:
         raise UserManagerConnectionError(
-            "تعذر قراءة سجل المستخدم أو علاقات البروفايل من User Manager. تحقق من صلاحيات القراءة وحقول الإصدار."
+            "تعذر قراءة سجل المستخدم أو علاقات البروفايل من User Manager. تحقق من صلاحيات القراءة وحقول الإصدار، وفعّل API-SSL لأجهزة RouterOS 6.43 وما بعدها."
         ) from exc
     finally:
         # Close the socket even when TLS/login fails before connected becomes True.

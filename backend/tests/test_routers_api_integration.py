@@ -206,6 +206,14 @@ def test_router_api_tls_mode_can_be_set_for_custom_port_and_updated(owner_client
     assert changed_port.status_code == 200, changed_port.text
     assert changed_port.json()["api_use_ssl"] is True
 
+    standard_port = client.patch(
+        f"/api/v1/routers/{router_id}",
+        headers=headers,
+        json={"api_port": 8728},
+    )
+    assert standard_port.status_code == 200, standard_port.text
+    assert standard_port.json()["api_use_ssl"] is True
+
     updated = client.patch(
         f"/api/v1/routers/{router_id}",
         headers=headers,
@@ -213,3 +221,20 @@ def test_router_api_tls_mode_can_be_set_for_custom_port_and_updated(owner_client
     )
     assert updated.status_code == 200, updated.text
     assert updated.json()["api_use_ssl"] is False
+
+def test_router_creation_defaults_to_api_ssl(owner_client):
+    client, headers, _ = owner_client
+    created = client.post(
+        "/api/v1/routers",
+        headers=headers,
+        json={
+            "name": "Secure default router",
+            "nas_identifier": "nas-secure-default-" + secrets.token_hex(4),
+            "management_host": "192.0.2.45",
+            "radius_secret": "radius-secret-" + secrets.token_hex(8),
+        },
+    )
+
+    assert created.status_code == 201, created.text
+    assert created.json()["api_port"] == 8729
+    assert created.json()["api_use_ssl"] is True

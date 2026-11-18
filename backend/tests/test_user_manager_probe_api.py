@@ -9,7 +9,7 @@ from app.models.user_manager_preview import UserManagerImportPreview
 from app.services.user_manager_routeros import RouterProbe
 
 
-def _create_router(client, headers, *, api_port=8728, api_use_ssl=None):
+def _create_router(client, headers, *, api_port=8729, api_use_ssl=None):
     payload = {
         "name": "UM probe " + secrets.token_hex(3),
         "nas_identifier": "um-probe-" + secrets.token_hex(4),
@@ -67,7 +67,7 @@ def test_user_manager_probe_returns_read_only_router_inventory(owner_client, mon
     assert "password" not in data
     assert seen["host"] == "192.0.2.55"
     assert seen["username"] == "um-reader"
-    assert seen["use_ssl"] is False
+    assert seen["use_ssl"] is True
     assert seen["password"].startswith("api-secret-")
 
 
@@ -145,7 +145,7 @@ def test_exact_user_inspection_endpoint_is_read_only_and_does_not_import(owner_c
     assert data["user"]["usage"]["missing_fields_are_unknown"] is True
     assert seen["target_username"] == "voucher-100"
     assert seen["host"] == "192.0.2.55"
-    assert seen["use_ssl"] is False
+    assert seen["use_ssl"] is True
 
 
 def test_exact_user_inspection_endpoint_validates_username(owner_client):

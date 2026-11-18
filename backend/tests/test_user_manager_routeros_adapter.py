@@ -469,7 +469,8 @@ def test_explicit_tls_setting_overrides_default_port_assumption(
     )
 
     assert FakePool.last.kwargs["use_ssl"] is use_ssl
-    assert any("دون TLS" in warning for warning in result.warnings) is expected_warning
+    assert FakePool.last.kwargs["plaintext_login"] is use_ssl
+    assert any("دون TLS" in warning for warning in result.warnings) is expected_warning is expected_warning
     assert FakePool.last.disconnected is True
 
 
@@ -496,6 +497,31 @@ def test_exact_user_inspection_uses_explicit_tls_on_custom_port(monkeypatch):
     assert FakePool.last.kwargs["use_ssl"] is True
     assert FakePool.last.disconnected is True
 
+
+
+def test_exact_user_inspection_uses_legacy_login_when_transport_is_not_tls(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    resources = _fake_resources()
+    resources["/tool/user-manager/user"] = FakeResource(rows=[], count=0)
+    api = FakeApi(resources)
+    monkeypatch.setattr(
+        FakePool, "get_api",
+        lambda self: (setattr(self, "connected", True) or api),
+    )
+
+    result = adapter.inspect_user_manager_user(
+        host="192.0.2.10",
+        port=8728,
+        username="reader",
+        password="secret",
+        target_username="missing-card",
+        use_ssl=False,
+    )
+
+    assert result is None
+    assert FakePool.last.kwargs["use_ssl"] is False
+    assert FakePool.last.kwargs["plaintext_login"] is False
+    assert FakePool.last.disconnected is True
 
 
 def test_nonstandard_api_port_defaults_to_tls_when_not_explicitly_overridden(monkeypatch):

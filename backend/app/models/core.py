@@ -16,7 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
-    false,
+    true,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -90,9 +90,9 @@ class Router(TimestampMixin, Base):
     nas_identifier: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
     management_host: Mapped[str] = mapped_column(String(255), nullable=False)
     radius_client_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    api_port: Mapped[int] = mapped_column(Integer, nullable=False, default=8728)
+    api_port: Mapped[int] = mapped_column(Integer, nullable=False, default=8729, server_default="8729")
     api_use_ssl: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=false()
+        Boolean, nullable=False, default=True, server_default=true()
     )
     api_username: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # Router API and RADIUS shared secrets are stored only as ciphertext.

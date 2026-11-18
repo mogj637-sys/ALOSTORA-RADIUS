@@ -10,7 +10,7 @@ class RouterCreate(BaseModel):
     nas_identifier: str = Field(min_length=1, max_length=150, pattern=r"^[A-Za-z0-9_.:-]+$")
     management_host: str = Field(min_length=1, max_length=255)
     radius_client_address: str | None = Field(default=None, max_length=255)
-    api_port: int = Field(default=8728, ge=1, le=65535)
+    api_port: int = Field(default=8729, ge=1, le=65535)
     api_use_ssl: bool | None = None
     api_username: str | None = Field(default=None, max_length=120)
     api_secret: str | None = Field(default=None, min_length=8, max_length=500)
@@ -40,10 +40,10 @@ class RouterCreate(BaseModel):
     def api_credentials_must_be_paired(self) -> Self:
         if bool(self.api_username) != bool(self.api_secret):
             raise ValueError("يجب إدخال اسم مستخدم API وكلمة مروره معاً، أو تركهما فارغين")
-        # The standard plaintext API port is 8728. Prefer TLS on every other
-        # port unless an operator explicitly selects plaintext.
+        # New router records default to API-SSL. Plaintext transport requires
+        # an explicit api_use_ssl=false selection.
         if self.api_use_ssl is None:
-            self.api_use_ssl = self.api_port != 8728
+            self.api_use_ssl = True
         return self
 
 
@@ -82,9 +82,9 @@ class RouterUpdate(BaseModel):
         if not self.model_fields_set:
             raise ValueError("يجب إرسال حقل واحد على الأقل للتعديل")
         if "api_port" in self.model_fields_set and "api_use_ssl" not in self.model_fields_set:
-            # Changing the port without specifying a transport keeps custom
-            # ports secure by default; plaintext remains an explicit choice.
-            self.api_use_ssl = self.api_port != 8728
+            # A port change never silently downgrades the API transport.
+            # Plaintext remains an explicit api_use_ssl=false choice.
+            self.api_use_ssl = True
         credential_fields = {"api_username", "api_secret"}
         if self.model_fields_set.intersection(credential_fields):
             if not credential_fields.issubset(self.model_fields_set):
