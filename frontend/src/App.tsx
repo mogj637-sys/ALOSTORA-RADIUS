@@ -1715,6 +1715,22 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
   }
 
+  async function deletePlan(plan: Plan) {
+    if (!can("plans.delete")) { setError("ليست لديك صلاحية حذف الباقات."); return; }
+    if (plan.is_active) { setError("أوقف الباقة أولاً قبل حذفها."); return; }
+    if (!window.confirm(`حذف الباقة ${plan.name}؟ لا يمكن حذف باقة مرتبطة بكروت أو دفعات أو قوالب محفوظة.`)) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<void>(token, `/api/v1/plans/${plan.id}`, { method: "DELETE" });
+      await loadPlans();
+      setNotice("تم حذف الباقة.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر حذف الباقة");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function changeCardStatus(card: Card, action: "suspend" | "reactivate" | "cancel") {
     if (!can("cards.update")) { setError("ليست لديك صلاحية تعديل الكروت."); return; }
     const labels = { suspend: "إيقاف", reactivate: "إعادة تفعيل", cancel: "إلغاء" };
@@ -2075,7 +2091,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <section className="plans-directory">
           <div className="section-heading compact-heading"><div><span className="eyebrow">دليل الاشتراكات</span><h2>الباقات المسجلة</h2><p>جميع الباقات الحالية وحالتها وحدودها، دون حذف السجلات عند الإيقاف.</p></div><span className="count-tag">{plans.length.toLocaleString("ar")} باقة</span></div>
           <div className="table-wrap plans-table-wrap"><table><thead><tr><th>الرمز</th><th>اسم الباقة</th><th>السعر</th><th>عمولة نقطة البيع</th><th>الحجم</th><th>الوقت</th><th>الصلاحية</th><th>المستخدمون</th><th>المجموعة</th><th>السرعة</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
-            <tbody>{plans.map((plan) => <tr key={plan.id}><td><span className="plan-code">{plan.code}</span></td><td><strong>{plan.name}</strong></td><td>{Number(plan.price).toLocaleString("en-US")} ريال</td><td>{plan.commission_type === "none" ? "بدون" : plan.commission_type === "percentage" ? `${Number(plan.commission_value)}%` : `${Number(plan.commission_value).toFixed(2)} ريال`}</td><td>{plan.data_limit_bytes === null ? "مفتوح" : `${plan.data_limit_bytes % (1024 ** 3) === 0 ? (plan.data_limit_bytes / 1024 ** 3).toFixed(2) + " GB" : (plan.data_limit_bytes / 1024 ** 2).toFixed(0) + " MB"}`}</td><td>{plan.session_time_limit_seconds === null ? "مفتوح" : `${(plan.session_time_limit_seconds / 3600).toFixed(2)} ساعة`}</td><td>{plan.validity_period_seconds === null ? "مفتوح" : `${(plan.validity_period_seconds / 86400).toFixed(2)} يوم`}</td><td>{plan.settings?.shared_users == null ? "غير محدود" : String(plan.settings.shared_users)}</td><td>{String(plan.settings?.group ?? "—")}</td><td>{plan.speed_profile || "—"}</td><td><span className={plan.is_active ? "plan-status active" : "plan-status inactive"}>{plan.is_active ? "مفعّلة" : "متوقفة"}</span></td><td>{can("plans.update") && <><button type="button" className="table-action" disabled={busy} onClick={() => editPlan(plan)}>تعديل</button><button type="button" className={plan.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePlan(plan)}>{plan.is_active ? "إيقاف" : "تفعيل"}</button></>}</td></tr>)}</tbody>
+            <tbody>{plans.map((plan) => <tr key={plan.id}><td><span className="plan-code">{plan.code}</span></td><td><strong>{plan.name}</strong></td><td>{Number(plan.price).toLocaleString("en-US")} ريال</td><td>{plan.commission_type === "none" ? "بدون" : plan.commission_type === "percentage" ? `${Number(plan.commission_value)}%` : `${Number(plan.commission_value).toFixed(2)} ريال`}</td><td>{plan.data_limit_bytes === null ? "مفتوح" : `${plan.data_limit_bytes % (1024 ** 3) === 0 ? (plan.data_limit_bytes / 1024 ** 3).toFixed(2) + " GB" : (plan.data_limit_bytes / 1024 ** 2).toFixed(0) + " MB"}`}</td><td>{plan.session_time_limit_seconds === null ? "مفتوح" : `${(plan.session_time_limit_seconds / 3600).toFixed(2)} ساعة`}</td><td>{plan.validity_period_seconds === null ? "مفتوح" : `${(plan.validity_period_seconds / 86400).toFixed(2)} يوم`}</td><td>{plan.settings?.shared_users == null ? "غير محدود" : String(plan.settings.shared_users)}</td><td>{String(plan.settings?.group ?? "—")}</td><td>{plan.speed_profile || "—"}</td><td><span className={plan.is_active ? "plan-status active" : "plan-status inactive"}>{plan.is_active ? "مفعّلة" : "متوقفة"}</span></td><td>{can("plans.update") && <><button type="button" className="table-action" disabled={busy} onClick={() => editPlan(plan)}>تعديل</button><button type="button" className={plan.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePlan(plan)}>{plan.is_active ? "إيقاف" : "تفعيل"}</button></>}{can("plans.delete") && !plan.is_active && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => deletePlan(plan)}>حذف</button>}</td></tr>)}</tbody>
           </table>{plans.length === 0 && <div className="empty-state">لا توجد باقات مسجلة بعد. اضغط «إضافة باقة جديدة» لإنشاء أول باقة.</div>}</div>
         </section>
         </>}
