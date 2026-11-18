@@ -124,7 +124,7 @@ def _existing_job(
     return _response(job, db, include_credentials)
 
 
-@router.get("", response_model=list[PrintJobHistoryResponse], dependencies=[Depends(require_permission("pos.view"))])
+@router.get("", response_model=list[PrintJobHistoryResponse], dependencies=[Depends(require_permission("printing.view"))])
 def list_print_jobs(
     point_of_sale_id: int = Query(gt=0),
     limit: int = Query(default=30, ge=1, le=100),
