@@ -100,9 +100,8 @@ def inspect_routeros_user_manager(
         username=username,
         password=password,
         port=port,
-        # RouterOS 6.43+ sends the password in an API word. Use that
-        # login only inside TLS; cleartext transport falls back to the legacy
-        # challenge-response flow instead of exposing the password.
+        # RouterOS 6.43+ sends the password in an API word. The transport
+        # guard above guarantees that this modern login is protected by TLS.
         plaintext_login=tls_enabled,
         use_ssl=tls_enabled,
         ssl_verify=True,
