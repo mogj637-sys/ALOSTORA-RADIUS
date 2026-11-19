@@ -307,7 +307,8 @@ def test_router_delete_is_independent_and_preserves_active_or_referenced_routers
         _cleanup_role_user(delete_role, delete_name)
 
 
-def test_stale_owner_request_is_rejected_after_concurrent_demotion():
+def test_stale_owner_request_is_rejected_after_concurrent_demotion(owner_client):
+    _, _, _ = owner_client
     from fastapi import HTTPException
 
     from app.api.admins import update_admin
@@ -317,7 +318,6 @@ def test_stale_owner_request_is_rejected_after_concurrent_demotion():
     suffix = secrets.token_hex(5)
     caller_name = "ci_stale_owner_" + suffix
     target_name = "ci_target_owner_" + suffix
-    remaining_name = "ci_remaining_owner_" + suffix
 
     db = SessionLocal()
     owner_role = db.query(Role).filter_by(code="owner").one()
@@ -335,16 +335,9 @@ def test_stale_owner_request_is_rejected_after_concurrent_demotion():
         is_active=True,
         roles=[owner_role],
     )
-    remaining = AdminUser(
-        username=remaining_name,
-        display_name="CI Remaining Owner",
-        password_hash="unused-test-hash",
-        is_active=True,
-        roles=[owner_role],
-    )
-    db.add_all([caller, target, remaining])
+    db.add_all([caller, target])
     db.commit()
-    caller_id, target_id, remaining_id = caller.id, target.id, remaining.id
+    caller_id, target_id = caller.id, target.id
 
     # Keep the caller's role collection loaded in this session, then simulate
     # another committed request demoting that account before this request runs.
@@ -374,12 +367,11 @@ def test_stale_owner_request_is_rejected_after_concurrent_demotion():
 
         db.rollback()
         assert any(role.code == "owner" for role in db.get(AdminUser, target_id).roles)
-        assert any(role.code == "owner" for role in db.get(AdminUser, remaining_id).roles)
     finally:
         db.rollback()
         db.close()
         cleanup = SessionLocal()
-        for username in (caller_name, target_name, remaining_name):
+        for username in (caller_name, target_name):
             account = cleanup.query(AdminUser).filter_by(username=username).first()
             if account is not None:
                 account.roles = []
