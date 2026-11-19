@@ -1227,6 +1227,31 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } finally { setBusy(false); }
   }
 
+  async function deleteRouter(item: RouterRecord) {
+    if (!can("routers.delete")) { setError("ليست لديك صلاحية حذف الراوترات."); return; }
+    if (item.is_active) { setError("أوقف الراوتر أولاً قبل حذفه."); return; }
+    if (!window.confirm(`حذف الراوتر ${item.name}؟ لا يمكن حذف راوتر مرتبط بجلسات أو سجلات محفوظة.`)) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<void>(token, `/api/v1/routers/${item.id}`, { method: "DELETE" });
+      if (editingRouterId === item.id) resetRouterDraft();
+      if (inspectRouterId === String(item.id)) {
+        setInspectRouterId("");
+        setInspectUsername("");
+        setUserManagerUserInspect(null);
+        setUserManagerPreviews(null);
+        setUserManagerPreviewRuns([]);
+        setSelectedPreviewRunId("");
+      }
+      setRouterConnectionProbe(null);
+      setUserManagerProbe(null);
+      await loadRouters();
+      setNotice("تم حذف الراوتر بعد التحقق من عدم ارتباطه بسجلات محفوظة.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر حذف الراوتر");
+    } finally { setBusy(false); }
+  }
+
   async function loadCardTemplates() {
     const result = await apiRequest<CardTemplate[]>(token, "/api/v1/card-templates");
     setCardTemplates(result);
@@ -3145,6 +3170,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null || !router.api_username || !router.is_active} onClick={() => testRouterConnection(router)}>{testingRouterConnectionId === router.id ? "جارٍ فحص API..." : "فحص اتصال API"}</button>}
                 {user.roles.includes("owner") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null || !router.api_username} onClick={() => testRouterUserManager(router)}>{probingRouterId === router.id ? "جارٍ الفحص..." : "فحص User Manager"}</button>}
                 {can("routers.update") && <button type="button" className="table-action" disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null} onClick={() => toggleRouter(router)}>{router.is_active ? "تعطيل" : "تفعيل"}</button>}
+                {can("routers.delete") && <button type="button" className="table-action" title={router.is_active ? "أوقف الراوتر أولاً" : "حذف الراوتر"} disabled={busy || probingRouterId !== null || testingRouterConnectionId !== null || router.is_active} onClick={() => deleteRouter(router)}>حذف</button>}
               </td>
             </tr>)}</tbody>
           </table>
