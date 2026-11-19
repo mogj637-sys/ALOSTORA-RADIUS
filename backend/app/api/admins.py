@@ -162,6 +162,25 @@ def update_admin(
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_owner),
 ) -> AdminUserResponse:
+    # Serialize all administrator changes on the owner role, then re-check the
+    # caller against the database. The dependency's ORM object may have been
+    # loaded just before another request demoted this caller.
+    owner_role = db.query(Role).filter(Role.code == "owner").with_for_update().first()
+    if owner_role is None:
+        raise HTTPException(status_code=403, detail="تعذر التحقق من صلاحية مدير النظام")
+    caller_still_owner = (
+        db.query(AdminUser.id)
+        .join(AdminUser.roles)
+        .filter(
+            AdminUser.id == current_user.id,
+            AdminUser.is_active.is_(True),
+            Role.id == owner_role.id,
+        )
+        .first()
+    )
+    if caller_still_owner is None:
+        raise HTTPException(status_code=403, detail="لم تعد تملك صلاحية مدير النظام لتنفيذ هذه العملية")
+
     user = (
         db.query(AdminUser)
         .options(
@@ -190,11 +209,8 @@ def update_admin(
         raise HTTPException(status_code=400, detail="لا يمكن تعطيل حسابك الحالي أو سحب صلاحية مدير النظام منه")
 
     if user.is_active and any(role.code == "owner" for role in user.roles) and (not next_active or not keeps_owner):
-        # Serialize all owner reductions on the owner-role row. This prevents two
-        # concurrent owners from demoting each other based on the same stale count.
-        owner_role = db.query(Role).filter(Role.code == "owner").with_for_update().first()
-        if owner_role is None:
-            raise HTTPException(status_code=409, detail="تعذر التحقق من دور مدير النظام")
+        # The owner-role row is already locked for this transaction. This
+        # serializes owner reductions and keeps the final active owner protected.
         active_owner_count = (
             db.query(AdminUser.id)
             .join(AdminUser.roles)
