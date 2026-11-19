@@ -567,3 +567,65 @@ def test_card_list_reflects_elapsed_validity_even_before_next_radius_packet(owne
     generated = client.get("/api/v1/cards?status=generated", headers=headers)
     assert generated.status_code == 200
     assert all(item["id"] != created.json()["id"] for item in generated.json())
+
+def test_card_list_returns_server_calculated_usage_and_policy_limits(owner_client):
+    from datetime import datetime, timedelta, timezone
+
+    client, headers, _ = owner_client
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "code": "USAGE-" + secrets.token_hex(4).upper(),
+            "name": "Usage display plan",
+            "price": "8.00",
+            "data_limit_bytes": 1_000,
+            "session_time_limit_seconds": 3_600,
+            "validity_period_seconds": 86_400,
+            "speed_profile": "usage-test-profile",
+            "settings": {
+                "shared_users": 3,
+                "rate_limit_rx": 1_024,
+                "rate_limit_tx": 2_048,
+                "rate_limit_unit": "Kbps",
+            },
+        },
+    )
+    assert plan.status_code == 201, plan.text
+
+    username = "USAGE" + secrets.token_hex(4).upper()
+    created = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": username,
+            "card_type": "username_only",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    now = datetime.now(timezone.utc)
+    db = SessionLocal()
+    card = db.get(Card, UUID(created.json()["id"]))
+    card.first_used_at = now - timedelta(hours=1)
+    card.expires_at = now + timedelta(seconds=120)
+    card.used_seconds = 300
+    card.upload_bytes = 100
+    card.download_bytes = 200
+    db.commit()
+    db.close()
+
+    response = client.get(
+        f"/api/v1/cards?search={username}",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    match = next(item for item in response.json() if item["id"] == created.json()["id"])
+
+    # The validity deadline caps the remaining session-time allowance.
+    assert match["remaining_time_seconds"] <= 120
+    assert match["remaining_time_seconds"] > 0
+    assert match["remaining_data_bytes"] == 700
+    assert match["shared_users_limit"] == 3
+    assert match["speed_limit"] == "usage-test-profile"
