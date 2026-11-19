@@ -193,7 +193,7 @@ def test_v7_is_not_misreported_as_legacy_v6(monkeypatch):
 
     with pytest.raises(adapter.UserManagerConnectionError, match="RouterOS v6"):
         adapter.inspect_routeros_user_manager(
-            host="192.0.2.10", port=8728, username="reader", password="secret"
+            host="192.0.2.10", port=8729, username="reader", password="secret"
         )
 
 
@@ -203,12 +203,12 @@ def test_missing_user_manager_package_is_warning_not_empty_inventory(monkeypatch
     monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
 
     result = adapter.inspect_routeros_user_manager(
-        host="192.0.2.10", port=8728, username="reader", password="secret"
+        host="192.0.2.10", port=8729, username="reader", password="secret"
     )
 
     assert result.user_manager_available is False
     assert any("حزمة User Manager" in warning for warning in result.warnings)
-    assert any("دون TLS" in warning for warning in result.warnings)
+    assert not any("دون TLS" in warning for warning in result.warnings)
 
 
 def test_api_error_is_sanitized(monkeypatch):
@@ -221,7 +221,7 @@ def test_api_error_is_sanitized(monkeypatch):
     monkeypatch.setattr(FakePool, "get_api", fail)
     with pytest.raises(adapter.UserManagerConnectionError) as error:
         adapter.inspect_routeros_user_manager(
-            host="192.0.2.10", port=8728, username="reader", password="secret"
+            host="192.0.2.10", port=8729, username="reader", password="secret"
         )
     assert "sensitive router command details" not in str(error.value)
 
@@ -313,7 +313,7 @@ def test_exact_user_inspection_returns_none_when_not_found(monkeypatch):
 
     result = adapter.inspect_user_manager_user(
         host="192.0.2.10",
-        port=8728,
+        port=8729,
         username="reader",
         password="secret",
         target_username="missing-card",
@@ -335,7 +335,7 @@ def test_exact_user_inspection_rejects_unfiltered_or_ambiguous_result(monkeypatc
     with pytest.raises(adapter.UserManagerConnectionError, match="أكثر من سجل"):
         adapter.inspect_user_manager_user(
             host="192.0.2.10",
-            port=8728,
+            port=8729,
             username="reader",
             password="secret",
             target_username="voucher-100",
@@ -354,7 +354,7 @@ def test_exact_user_inspection_rejects_wrong_username_returned_by_query(monkeypa
     with pytest.raises(adapter.UserManagerConnectionError, match="لم تتطابق"):
         adapter.inspect_user_manager_user(
             host="192.0.2.10",
-            port=8728,
+            port=8729,
             username="reader",
             password="secret",
             target_username="voucher-100",
@@ -397,7 +397,7 @@ def test_exact_user_count_zero_skips_detail_print(monkeypatch):
 
     result = adapter.inspect_user_manager_user(
         host="192.0.2.10",
-        port=8728,
+        port=8729,
         username="reader",
         password="secret",
         target_username="missing-card",
@@ -443,35 +443,22 @@ def test_profile_relation_count_guard_stops_before_large_detail_read(monkeypatch
     assert FakePool.last.disconnected is True
 
 
-@pytest.mark.parametrize(
-    ("port", "use_ssl", "expected_warning"),
-    [
-        (18729, True, False),
-        (8729, False, True),
-    ],
-)
-def test_explicit_tls_setting_overrides_default_port_assumption(
-    monkeypatch, port, use_ssl, expected_warning
-):
+def test_router_probe_rejects_unencrypted_api_before_opening_socket(monkeypatch):
     monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
-    api = FakeApi(_fake_resources())
-    monkeypatch.setattr(
-        FakePool, "get_api",
-        lambda self: (setattr(self, "connected", True) or api),
-    )
+    FakePool.last = None
 
-    result = adapter.inspect_routeros_user_manager(
-        host="192.0.2.10",
-        port=port,
-        username="reader",
-        password="secret",
-        use_ssl=use_ssl,
-    )
+    with pytest.raises(adapter.UserManagerConnectionError, match="غير المشفر غير مدعوم"):
+        adapter.inspect_routeros_user_manager(
+            host="192.0.2.10",
+            port=8728,
+            username="reader",
+            password="secret",
+            use_ssl=False,
+        )
 
-    assert FakePool.last.kwargs["use_ssl"] is use_ssl
-    assert FakePool.last.kwargs["plaintext_login"] is use_ssl
-    assert any("دون TLS" in warning for warning in result.warnings) is expected_warning
-    assert FakePool.last.disconnected is True
+    assert FakePool.last is None
+
+
 
 
 def test_exact_user_inspection_uses_explicit_tls_on_custom_port(monkeypatch):
@@ -499,29 +486,21 @@ def test_exact_user_inspection_uses_explicit_tls_on_custom_port(monkeypatch):
 
 
 
-def test_exact_user_inspection_uses_legacy_login_when_transport_is_not_tls(monkeypatch):
+def test_exact_user_inspection_rejects_unencrypted_api_before_opening_socket(monkeypatch):
     monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
-    resources = _fake_resources()
-    resources["/tool/user-manager/user"] = FakeResource(rows=[], count=0)
-    api = FakeApi(resources)
-    monkeypatch.setattr(
-        FakePool, "get_api",
-        lambda self: (setattr(self, "connected", True) or api),
-    )
+    FakePool.last = None
 
-    result = adapter.inspect_user_manager_user(
-        host="192.0.2.10",
-        port=8728,
-        username="reader",
-        password="secret",
-        target_username="missing-card",
-        use_ssl=False,
-    )
+    with pytest.raises(adapter.UserManagerConnectionError, match="غير المشفر غير مدعوم"):
+        adapter.inspect_user_manager_user(
+            host="192.0.2.10",
+            port=8728,
+            username="reader",
+            password="secret",
+            target_username="missing-card",
+            use_ssl=False,
+        )
 
-    assert result is None
-    assert FakePool.last.kwargs["use_ssl"] is False
-    assert FakePool.last.kwargs["plaintext_login"] is False
-    assert FakePool.last.disconnected is True
+    assert FakePool.last is None
 
 
 def test_nonstandard_api_port_defaults_to_tls_when_not_explicitly_overridden(monkeypatch):
