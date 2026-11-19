@@ -150,3 +150,38 @@ def test_preview_marks_conflicting_password_aliases_ambiguous():
     assert any("متعارضة" in issue for issue in result["issues"])
     assert "first-secret" not in repr(result)
     assert "second-secret" not in repr(result)
+
+
+
+def test_preview_removes_router_api_and_shared_secret_aliases_recursively():
+    result = build_user_manager_preview([{
+        "external_id": "*13",
+        "username": "safe-card",
+        "api-password": "api-secret-value",
+        "router-password": "router-secret-value",
+        "radius-secret": "radius-secret-value",
+        "shared-secret": "shared-secret-value",
+        "credentials": {
+            "access-token": "access-token-value",
+            "auth-token": "auth-token-value",
+            "passphrase": "passphrase-value",
+        },
+        "normal-field": "keep",
+    }])[0]
+
+    assert result["safe_snapshot"] == {
+        "external_id": "*13",
+        "username": "safe-card",
+        "normal-field": "keep",
+        "credentials": {},
+    }
+    for secret in (
+        "api-secret-value",
+        "router-secret-value",
+        "radius-secret-value",
+        "shared-secret-value",
+        "access-token-value",
+        "auth-token-value",
+        "passphrase-value",
+    ):
+        assert secret not in repr(result)
