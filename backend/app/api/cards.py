@@ -30,6 +30,7 @@ from app.services.card_generator import generate_password, generate_username
 from app.services.credentials import CredentialEncryptionNotConfigured, encrypt_credential
 from app.services.pos_credit import ensure_pos_card_creation_allowed
 from app.services.permissions import card_visibility, has_permission, is_owner
+from app.services.radius_service import _remaining_limits, _snapshot_rate_limit, _snapshot_shared_users
 
 router = APIRouter(prefix="/api/v1/cards", tags=["cards"])
 
@@ -372,6 +373,9 @@ def list_cards(
         ):
             card.status = "expired"
         card.active_sessions_count = int(session_counts.get(card.id, 0))
+        card.remaining_time_seconds, card.remaining_data_bytes = _remaining_limits(card, now)
+        card.shared_users_limit = _snapshot_shared_users(card)
+        card.speed_limit = _snapshot_rate_limit(card)
     return cards
 
 
