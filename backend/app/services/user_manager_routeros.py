@@ -41,6 +41,17 @@ def _first(items: list[dict[str, Any]], key: str) -> str | None:
     return str(value) if value is not None else None
 
 
+def _require_api_tls(port: int, use_ssl: bool | None) -> bool:
+    # RouterOS 6.43+ uses the plain-text login method. The pinned client
+    # requires plaintext_login=True for these releases. Never permit that
+    # credential exchange over the unencrypted API transport.
+    if use_ssl is False or (use_ssl is None and port == 8728):
+        raise UserManagerConnectionError(
+            "الاتصال غير المشفر غير مدعوم. فعّل API-SSL بشهادة موثوقة، واستخدم منفذ الخدمة المشفرة."
+        )
+    return True
+
+
 def _count_only(
     api: Any,
     path: str,
@@ -83,7 +94,7 @@ def inspect_routeros_user_manager(
     timeout_seconds: float = 8.0,
 ) -> RouterProbe:
     """Connect and inspect metadata/counts only. Never changes router state."""
-    tls_enabled = port != 8728 if use_ssl is None else use_ssl
+    tls_enabled = _require_api_tls(port, use_ssl)
     pool = routeros_api.RouterOsApiPool(
         host,
         username=username,
@@ -130,11 +141,6 @@ def inspect_routeros_user_manager(
             warnings.append("حزمة User Manager غير ظاهرة ضمن الحزم المثبتة")
         if not resources["users"]["available"]:
             warnings.append("قائمة مستخدمي User Manager غير متاحة لهذا الحساب أو الإصدار")
-        if not tls_enabled:
-            warnings.append(
-                "الاتصال يستخدم API العادي دون TLS؛ استخدم شبكة إدارة موثوقة أو فعّل API-SSL"
-            )
-
         return RouterProbe(
             identity=_first(identity, "name"),
             version=version,
@@ -206,7 +212,7 @@ def inspect_user_manager_user(
     if not target_username or len(target_username) > 120:
         raise ValueError("Invalid User Manager username")
 
-    tls_enabled = port != 8728 if use_ssl is None else use_ssl
+    tls_enabled = _require_api_tls(port, use_ssl)
     pool = routeros_api.RouterOsApiPool(
         host,
         username=username,
