@@ -15,8 +15,10 @@ def _normalized_key(value: Any) -> str:
 SENSITIVE_KEYS = {
     "password", "passwd", "pass", "userpassword", "cleartextpassword",
     "passwordplaintext", "plaintextpassword", "secret", "apisecret",
-    "credential", "credentialciphertext", "passwordhash", "hashpassword",
-    "verifier", "hash",
+    "apipassword", "routerpassword", "routerospassword", "radiussecret",
+    "sharedsecret", "clientsecret", "passphrase", "token", "accesstoken",
+    "authtoken", "credential", "credentialciphertext", "passwordhash",
+    "hashpassword", "verifier", "hash",
 }
 VERIFIER_KEYS = {"passwordhash", "hashpassword", "verifier", "hash"}
 PASSWORD_KEYS = (
