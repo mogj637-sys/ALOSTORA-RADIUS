@@ -213,3 +213,8 @@
 - [ ] إضافة worker/queue للإيقاف والاستئناف وتشغيل الدفعات خارج طلب HTTP.
 
 **قيد مهم:** هذه الطبقة تقبل فقط موصلاً يضمن الحد من جهة المصدر ويعيد continuation cursor ثابتاً. لا يجوز تمرير نتيجة `/tool/user-manager/user/print` غير المحدودة إليها ثم تقطيعها محلياً؛ فذلك لا يحمي ذاكرة الخادم أو الراوتر. حد الزمن تعاوني بين الطلبات ولا يستطيع قطع استدعاء شبكة عالقاً؛ لذلك يجب أن يفرض الموصل مهلة اتصال/قراءة قصيرة. توجد الآن خدمة DB فعلية للحفظ الذري، ومنسق داخلي يربطها بمحرك الدفعات ويستأنف من checkpoint المحفوظ باستخدام Session جديد لكل صفحة. المنسق لا يتصل بـ RouterOS بذاته؛ ما زال يحتاج قارئ صفحات مثبتاً وendpoint/worker لبدء التشغيل. يجب أن تكون معالجة الصفحة idempotent لأن إعادة المحاولة قد تحدث بعد فشل الاتصال أو قبل تأكيد النتيجة للمنفذ.
+
+
+## Mandatory API transport
+
+The application only connects to RouterOS through API-SSL. RouterOS v6.43+ uses the plain-text login method; the application refuses the unencrypted API service. Configure API-SSL with a trusted certificate whose hostname matches the configured management host.
