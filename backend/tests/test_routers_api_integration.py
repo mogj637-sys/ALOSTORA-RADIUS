@@ -214,13 +214,12 @@ def test_router_api_tls_mode_can_be_set_for_custom_port_and_updated(owner_client
     assert standard_port.status_code == 200, standard_port.text
     assert standard_port.json()["api_use_ssl"] is True
 
-    updated = client.patch(
+    insecure_update = client.patch(
         f"/api/v1/routers/{router_id}",
         headers=headers,
         json={"api_use_ssl": False},
     )
-    assert updated.status_code == 200, updated.text
-    assert updated.json()["api_use_ssl"] is False
+    assert insecure_update.status_code == 422
 
     restored_tls = client.patch(
         f"/api/v1/routers/{router_id}",
@@ -262,3 +261,20 @@ def test_router_creation_defaults_to_api_ssl(owner_client):
     assert explicit_standard_port.status_code == 201, explicit_standard_port.text
     assert explicit_standard_port.json()["api_port"] == 8728
     assert explicit_standard_port.json()["api_use_ssl"] is True
+
+
+def test_router_creation_rejects_unencrypted_api_transport(owner_client):
+    client, headers, _ = owner_client
+    response = client.post(
+        "/api/v1/routers",
+        headers=headers,
+        json={
+            "name": "Insecure API router",
+            "nas_identifier": "nas-insecure-" + secrets.token_hex(4),
+            "management_host": "192.0.2.47",
+            "api_port": 8728,
+            "api_use_ssl": False,
+            "radius_secret": "radius-secret-" + secrets.token_hex(8),
+        },
+    )
+    assert response.status_code == 422
