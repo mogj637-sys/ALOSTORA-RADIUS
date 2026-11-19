@@ -64,6 +64,10 @@ type Card = {
   download_bytes: number;
   plan_snapshot: Record<string, unknown>;
   active_sessions_count: number;
+  remaining_time_seconds: number | null;
+  remaining_data_bytes: number | null;
+  shared_users_limit: number | null;
+  speed_limit: string | null;
 };
 
 type CardBatchRecord = {
@@ -2477,32 +2481,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>أول استخدام</th><th>تاريخ الانتهاء</th><th>وقت الجلسات المستخدم / المتبقي</th><th>الوقت المتبقي للصلاحية</th><th>الجلسات النشطة</th><th>الاستهلاك (رفع / تنزيل)</th><th>البيانات المستهلكة / المتبقية</th><th>حد التزامن المسموح</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.update") && <th>الإجراءات</th>}</tr></thead><tbody>
         {cards.map((card) => {
           const snapshot = card.plan_snapshot ?? {};
-          const timeLimit = typeof snapshot.session_time_limit_seconds === "number" ? snapshot.session_time_limit_seconds : null;
-          const remaining = timeLimit === null ? null : Math.max(0, timeLimit - card.used_seconds);
-          const dataLimit = typeof snapshot.data_limit_bytes === "number" ? snapshot.data_limit_bytes : null;
+          const remaining = typeof card.remaining_time_seconds === "number" ? card.remaining_time_seconds : null;
           const totalConsumedBytes = Math.max(0, Number(card.upload_bytes || 0)) + Math.max(0, Number(card.download_bytes || 0));
-          const remainingDataBytes = dataLimit === null ? null : Math.max(0, dataLimit - totalConsumedBytes);
+          const remainingDataBytes = typeof card.remaining_data_bytes === "number" ? card.remaining_data_bytes : null;
           const expiryTimestamp = card.expires_at ? Date.parse(card.expires_at) : Number.NaN;
-          const planSettings = snapshot.settings && typeof snapshot.settings === "object" ? snapshot.settings as Record<string, unknown> : {};
-          const sharedUsers = planSettings.shared_users;
-          // Match the RADIUS authorization rule for snapshots created before shared-user settings existed.
-          const hasSnapshotSettings = Object.prototype.hasOwnProperty.call(snapshot, "settings");
-          const parsedSharedUsers = typeof sharedUsers === "number" && Number.isFinite(sharedUsers)
-            ? Math.trunc(sharedUsers)
-            : typeof sharedUsers === "string" && /^[+-]?\d+$/.test(sharedUsers.trim())
-              ? Number.parseInt(sharedUsers.trim(), 10)
-              : 1;
-          const sharedUsersLimit = !hasSnapshotSettings
-            ? 1
-            : sharedUsers === undefined || sharedUsers === null || sharedUsers === ""
-              ? null
-              : Math.max(1, parsedSharedUsers);
-          const sharedUsersLabel = sharedUsersLimit === null ? "غير محدود" : String(sharedUsersLimit);
-          const rx = planSettings.rate_limit_rx;
-          const tx = planSettings.rate_limit_tx;
-          const rateUnit = typeof planSettings.rate_limit_unit === "string" ? planSettings.rate_limit_unit : "Kbps";
-          const rateSpeed = rx !== undefined && rx !== null && tx !== undefined && tx !== null ? `${String(rx)}${rateUnit}/${String(tx)}${rateUnit}` : "";
-          const speed = typeof snapshot.speed_profile === "string" && snapshot.speed_profile ? snapshot.speed_profile : rateSpeed || "غير محددة";
+          const sharedUsersLabel = typeof card.shared_users_limit === "number" ? String(card.shared_users_limit) : "غير محدود";
+          const speed = card.speed_limit || "غير محددة";
           const formatDateTime = (value: string | null) => value
             ? new Date(value).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" })
             : "—";
