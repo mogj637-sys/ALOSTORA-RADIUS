@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
-from app.models.core import Router
+from app.models.core import RadiusSession, Router
+from app.models.user_manager import UserManagerCardSource, UserManagerSyncRun
 from app.services.audit import record_audit
 from app.schemas.routers import RouterCreate, RouterResponse, RouterUpdate
 from app.services.router_secrets import (
@@ -98,6 +99,51 @@ def create_router(payload: RouterCreate, db: Session = Depends(get_db), user: Ad
         raise HTTPException(status_code=409, detail="معرّف NAS مستخدم في راوتر آخر")
     db.refresh(item)
     return item
+
+ 
+ 
+@router.delete("/{router_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("routers.delete"))])
+def delete_router(
+    router_id: int,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("routers.delete")),
+):
+    item = db.query(Router).filter(Router.id == router_id).with_for_update().first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="الراوتر غير موجود")
+    if item.is_active:
+        raise HTTPException(status_code=409, detail="أوقف الراوتر أولاً قبل حذفه")
+
+    references = []
+    if db.query(RadiusSession.id).filter(RadiusSession.router_id == item.id).first() is not None:
+        references.append("جلسات RADIUS")
+    if db.query(UserManagerSyncRun.id).filter(UserManagerSyncRun.router_id == item.id).first() is not None:
+        references.append("سجل عمليات User Manager")
+    if db.query(UserManagerCardSource.id).filter(UserManagerCardSource.router_id == item.id).first() is not None:
+        references.append("روابط سجلات User Manager")
+
+    if references:
+        raise HTTPException(
+            status_code=409,
+            detail="لا يمكن حذف الراوتر لارتباطه بسجلات محفوظة: " + "، ".join(references),
+        )
+
+    record_audit(
+        db,
+        user,
+        "router.deleted",
+        "router",
+        f"حذف الراوتر {item.name}",
+        entity_id=item.id,
+        details={"nas_identifier": item.nas_identifier, "management_host": item.management_host},
+    )
+    db.delete(item)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="لا يمكن حذف الراوتر لارتباطه بسجلات أخرى")
+    return None
 
 
 @router.patch("/{router_id}", response_model=RouterResponse, dependencies=[Depends(require_permission("routers.update"))])
