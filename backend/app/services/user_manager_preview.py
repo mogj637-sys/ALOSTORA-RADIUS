@@ -32,6 +32,13 @@ PASSWORD_KEYS = (
 )
 
 
+def _is_sensitive_key(value: Any) -> bool:
+    key = _normalized_key(value)
+    return key in SENSITIVE_KEYS or key.endswith(
+        ("password", "passwd", "secret", "token", "credential", "passphrase", "apikey")
+    )
+
+
 def _safe_value(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
@@ -39,7 +46,7 @@ def _safe_value(value: Any) -> Any:
         return {
             str(key): _safe_value(item)
             for key, item in value.items()
-            if _normalized_key(key) not in SENSITIVE_KEYS
+            if not _is_sensitive_key(key)
         }
     if isinstance(value, (list, tuple)):
         return [_safe_value(item) for item in value]
