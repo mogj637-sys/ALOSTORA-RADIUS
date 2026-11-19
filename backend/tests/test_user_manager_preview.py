@@ -161,6 +161,8 @@ def test_preview_removes_router_api_and_shared_secret_aliases_recursively():
         "router-password": "router-secret-value",
         "radius-secret": "radius-secret-value",
         "shared-secret": "shared-secret-value",
+        "radius-shared-secret": "radius-shared-secret-value",
+        "mikrotik-api-token": "mikrotik-api-token-value",
         "credentials": {
             "access-token": "access-token-value",
             "auth-token": "auth-token-value",
@@ -180,6 +182,8 @@ def test_preview_removes_router_api_and_shared_secret_aliases_recursively():
         "router-secret-value",
         "radius-secret-value",
         "shared-secret-value",
+        "radius-shared-secret-value",
+        "mikrotik-api-token-value",
         "access-token-value",
         "auth-token-value",
         "passphrase-value",
