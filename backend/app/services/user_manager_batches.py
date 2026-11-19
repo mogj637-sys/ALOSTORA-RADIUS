@@ -109,6 +109,11 @@ def run_bounded_batches(
 
         if not isinstance(page, SourcePage):
             raise BatchSafetyError("source adapter returned an invalid page object")
+        # A slow source request must not push a page beyond the run's time
+        # budget. Do not persist it; the unchanged checkpoint safely retries
+        # the same cursor on the next bounded run.
+        if clock() - started >= limits.max_seconds:
+            break
         if len(page.records) > requested:
             raise BatchSafetyError("source adapter exceeded the requested page limit")
         if not page.records and not page.exhausted:
