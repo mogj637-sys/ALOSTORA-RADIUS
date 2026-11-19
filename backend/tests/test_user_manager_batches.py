@@ -157,3 +157,26 @@ def test_bounded_batches_reject_cursor_cycle_across_resume():
         assert "already processed" in str(exc)
     else:
         raise AssertionError("Expected repeated checkpoint cursor failure")
+
+
+
+def test_bounded_batches_do_not_persist_page_returned_after_time_budget():
+    now = [0.0]
+    persisted = []
+
+    def fetch_page(_cursor, _limit):
+        now[0] = 2.0
+        return SourcePage([{"id": "late-page"}], "next", False)
+
+    result = run_bounded_batches(
+        fetch_page=fetch_page,
+        persist_page=lambda rows, checkpoint: persisted.append((list(rows), dict(checkpoint))),
+        policy=BatchPolicy(page_size=1, max_records=1, max_pages=1, max_seconds=1),
+        clock=lambda: now[0],
+    )
+
+    assert result.status == "paused"
+    assert result.processed_records == 0
+    assert result.processed_pages == 0
+    assert result.checkpoint == {}
+    assert persisted == []
