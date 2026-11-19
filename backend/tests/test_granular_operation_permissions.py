@@ -1,8 +1,10 @@
 import secrets
+from uuid import uuid4
 
 from app.db.session import SessionLocal
 from app.models.auth import AdminUser, Role
-from app.models.core import CardTemplate, Plan
+from app.models.core import CardTemplate, Plan, Router
+from app.models.user_manager import UserManagerSyncRun
 
 
 def _create_role_user(client, owner_headers, permissions, *, point_ids=None):
@@ -220,3 +222,81 @@ def test_owner_cannot_disable_or_demote_self_and_admin_responses_hide_password_h
     assert identity.status_code == 200
     assert "password_hash" not in identity.json()
     assert "password" not in identity.json()
+
+
+def test_router_delete_is_independent_and_preserves_active_or_referenced_routers(owner_client):
+    client, owner_headers, _ = owner_client
+    nas_identifier = "CI-ROUTER-DELETE-" + secrets.token_hex(4)
+    created = client.post(
+        "/api/v1/routers",
+        headers=owner_headers,
+        json={
+            "name": "CI Router Delete",
+            "nas_identifier": nas_identifier,
+            "management_host": "192.0.2.77",
+            "radius_secret": "ci-router-radius-secret-" + secrets.token_hex(6),
+        },
+    )
+    assert created.status_code == 201, created.text
+    router_id = created.json()["id"]
+
+    viewer_role, viewer_name, _, viewer_headers = _create_role_user(
+        client, owner_headers, ["routers.view"]
+    )
+    delete_role, delete_name, _, delete_headers = _create_role_user(
+        client, owner_headers, ["routers.delete"]
+    )
+    sync_run_id = uuid4()
+    try:
+        assert client.get("/api/v1/routers", headers=viewer_headers).status_code == 200
+        assert client.delete(f"/api/v1/routers/{router_id}", headers=viewer_headers).status_code == 403
+        assert client.get("/api/v1/routers", headers=delete_headers).status_code == 403
+
+        active_delete = client.delete(f"/api/v1/routers/{router_id}", headers=delete_headers)
+        assert active_delete.status_code == 409, active_delete.text
+
+        deactivated = client.patch(
+            f"/api/v1/routers/{router_id}",
+            headers=owner_headers,
+            json={"is_active": False},
+        )
+        assert deactivated.status_code == 200, deactivated.text
+
+        db = SessionLocal()
+        db.add(
+            UserManagerSyncRun(
+                id=sync_run_id,
+                router_id=router_id,
+                run_type="preview",
+                status="completed",
+            )
+        )
+        db.commit()
+        db.close()
+
+        referenced_delete = client.delete(f"/api/v1/routers/{router_id}", headers=delete_headers)
+        assert referenced_delete.status_code == 409, referenced_delete.text
+
+        db = SessionLocal()
+        assert db.get(UserManagerSyncRun, sync_run_id) is not None
+        assert db.get(Router, router_id) is not None
+        db.query(UserManagerSyncRun).filter(UserManagerSyncRun.id == sync_run_id).delete()
+        db.commit()
+        db.close()
+
+        deleted = client.delete(f"/api/v1/routers/{router_id}", headers=delete_headers)
+        assert deleted.status_code == 204, deleted.text
+
+        db = SessionLocal()
+        assert db.get(Router, router_id) is None
+        db.close()
+    finally:
+        db = SessionLocal()
+        db.query(UserManagerSyncRun).filter(UserManagerSyncRun.id == sync_run_id).delete()
+        db.commit()
+        db.close()
+        remaining = client.get("/api/v1/routers?include_inactive=true", headers=owner_headers)
+        if any(item["id"] == router_id for item in remaining.json()):
+            client.delete(f"/api/v1/routers/{router_id}", headers=owner_headers)
+        _cleanup_role_user(viewer_role, viewer_name)
+        _cleanup_role_user(delete_role, delete_name)
