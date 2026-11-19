@@ -297,6 +297,11 @@ def test_router_delete_is_independent_and_preserves_active_or_referenced_routers
         db.close()
         remaining = client.get("/api/v1/routers?include_inactive=true", headers=owner_headers)
         if any(item["id"] == router_id for item in remaining.json()):
+            client.patch(
+                f"/api/v1/routers/{router_id}",
+                headers=owner_headers,
+                json={"is_active": False},
+            )
             client.delete(f"/api/v1/routers/{router_id}", headers=owner_headers)
         _cleanup_role_user(viewer_role, viewer_name)
         _cleanup_role_user(delete_role, delete_name)
