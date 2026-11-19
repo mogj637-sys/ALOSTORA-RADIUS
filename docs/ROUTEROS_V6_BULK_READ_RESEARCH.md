@@ -79,7 +79,7 @@ If query partitioning cannot guarantee a bounded response for every possible sup
 ## Safety gates
 
 - Read-only API account with least privileges.
-- API-SSL preferred; do not send v6.43+ plaintext-login credentials over an untrusted network.
+- API-SSL is mandatory; the application refuses the unencrypted API service because RouterOS v6.43+ uses the plain-text login method.
 - Short connection/read timeouts and bounded retry policy.
 - Per-run record, page, elapsed-time, and memory budgets.
 - Atomic persistence of each accepted page and its checkpoint.
