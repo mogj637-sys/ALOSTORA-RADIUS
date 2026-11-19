@@ -40,8 +40,10 @@ class RouterCreate(BaseModel):
     def api_credentials_must_be_paired(self) -> Self:
         if bool(self.api_username) != bool(self.api_secret):
             raise ValueError("يجب إدخال اسم مستخدم API وكلمة مروره معاً، أو تركهما فارغين")
-        # New router records default to API-SSL. Plaintext transport requires
-        # an explicit api_use_ssl=false selection.
+        # RouterOS 6.43+ requires the plain-text login method. Refuse to
+        # exchange those credentials over the unencrypted API transport.
+        if self.api_use_ssl is False:
+            raise ValueError("يجب تفعيل API-SSL لحماية بيانات دخول RouterOS")
         if self.api_use_ssl is None:
             self.api_use_ssl = True
         return self
@@ -82,9 +84,9 @@ class RouterUpdate(BaseModel):
         if not self.model_fields_set:
             raise ValueError("يجب إرسال حقل واحد على الأقل للتعديل")
         if "api_port" in self.model_fields_set and "api_use_ssl" not in self.model_fields_set:
-            # A port change never silently downgrades the API transport.
-            # Plaintext remains an explicit api_use_ssl=false choice.
             self.api_use_ssl = True
+        if "api_use_ssl" in self.model_fields_set and self.api_use_ssl is False:
+            raise ValueError("يجب تفعيل API-SSL لحماية بيانات دخول RouterOS")
         credential_fields = {"api_username", "api_secret"}
         if self.model_fields_set.intersection(credential_fields):
             if not credential_fields.issubset(self.model_fields_set):
