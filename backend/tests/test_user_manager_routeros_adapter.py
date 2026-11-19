@@ -520,3 +520,19 @@ def test_nonstandard_api_port_defaults_to_tls_when_not_explicitly_overridden(mon
 
     assert FakePool.last.kwargs["use_ssl"] is True
     assert FakePool.last.disconnected is True
+
+
+
+def test_router_probe_rejects_plain_api_port_when_tls_is_unspecified(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    FakePool.last = None
+
+    with pytest.raises(adapter.UserManagerConnectionError, match="غير المشفر غير مدعوم"):
+        adapter.inspect_routeros_user_manager(
+            host="192.0.2.10",
+            port=8728,
+            username="reader",
+            password="secret",
+        )
+
+    assert FakePool.last is None
