@@ -100,6 +100,8 @@ def delete_point_of_sale(
     point = db.query(PointOfSale).filter(PointOfSale.id == point_id).with_for_update().first()
     if point is None:
         raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
+    if not is_owner(user) and point.id not in {assigned.id for assigned in user.point_of_sales}:
+        raise HTTPException(status_code=403, detail="لا تملك صلاحية حذف نقطة البيع هذه")
     if point.is_active:
         raise HTTPException(status_code=409, detail="أوقف نقطة البيع أولاً قبل حذفها")
 
@@ -113,7 +115,10 @@ def delete_point_of_sale(
         (
             "تخصيصات حسابات الإدارة",
             db.query(AdminUser.id)
-            .filter(AdminUser.point_of_sales.any(PointOfSale.id == point.id))
+            .filter(
+                AdminUser.id != user.id,
+                AdminUser.point_of_sales.any(PointOfSale.id == point.id),
+            )
             .first(),
         ),
     ]
