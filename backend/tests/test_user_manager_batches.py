@@ -180,3 +180,36 @@ def test_bounded_batches_do_not_persist_page_returned_after_time_budget():
     assert result.processed_pages == 0
     assert result.checkpoint == {}
     assert persisted == []
+
+def test_bounded_batches_resume_with_same_per_run_budgets():
+    policy = BatchPolicy(page_size=1, max_records=1, max_pages=1, max_seconds=5)
+    persisted = []
+
+    first = run_bounded_batches(
+        fetch_page=lambda _cursor, _limit: SourcePage([{"id": "a"}], "cursor-2", False),
+        persist_page=lambda rows, checkpoint: persisted.append((list(rows), dict(checkpoint))),
+        policy=policy,
+    )
+    assert first.status == "paused"
+    assert first.checkpoint["processed_records"] == 1
+    assert first.checkpoint["processed_pages"] == 1
+
+    requested = []
+    second = run_bounded_batches(
+        fetch_page=lambda cursor, limit: (
+            requested.append((cursor, limit))
+            or SourcePage([{"id": "b"}], None, True)
+        ),
+        persist_page=lambda rows, checkpoint: persisted.append((list(rows), dict(checkpoint))),
+        checkpoint=first.checkpoint,
+        policy=policy,
+    )
+
+    assert requested == [("cursor-2", 1)]
+    assert second.status == "completed"
+    assert second.processed_records == 1
+    assert second.processed_pages == 1
+    assert second.checkpoint["processed_records"] == 2
+    assert second.checkpoint["processed_pages"] == 2
+    assert [row["id"] for page, _ in persisted for row in page] == ["a", "b"]
+
