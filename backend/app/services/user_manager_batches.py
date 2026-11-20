@@ -81,9 +81,10 @@ def run_bounded_batches(
         raise BatchSafetyError("checkpoint counters must be non-negative integers")
     if state.get("source_complete") is True:
         return BatchResult("completed", 0, 0, state)
-    if prior_records >= limits.max_records or prior_pages >= limits.max_pages:
-        return BatchResult("paused", 0, 0, state)
 
+    # max_records and max_pages are per-invocation safety budgets. The
+    # checkpoint counters are cumulative progress metrics and must not prevent
+    # a later invocation from resuming with the same policy.
     processed_records = 0
     processed_pages = 0
     started = clock()
