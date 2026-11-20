@@ -5049,3 +5049,80 @@ button:disabled { cursor: not-allowed; }
   .pos-account-point { max-width: 100%; white-space: normal; }
   .account-entry-form { padding: 13px; }
 }
+
+
+.session-usage-comparison {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+  margin-top: 15px;
+}
+.session-usage-comparison article {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 17px 19px;
+  border: 1px solid #e5ece8;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #fff, #f8fcfa);
+}
+.session-usage-comparison h4 {
+  margin: 0 0 2px;
+  color: #285b47;
+  font-size: 13px;
+}
+.session-usage-comparison article > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  color: #657568;
+  font-size: 11px;
+}
+.session-usage-comparison article > div strong {
+  color: #34483d;
+  font-size: 11px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.session-usage-comparison .usage-comparison-state {
+  font-size: 16px;
+  line-height: 1.4;
+}
+.session-usage-comparison .usage-match {
+  border-color: #cfe8dc;
+  background: linear-gradient(145deg, #fff, #f4fbf7);
+}
+.session-usage-comparison .usage-match .usage-comparison-state {
+  color: #16815e;
+}
+.session-usage-comparison .usage-mismatch {
+  border-color: #f0d7b6;
+  background: linear-gradient(145deg, #fff, #fffaf3);
+}
+.session-usage-comparison .usage-mismatch .usage-comparison-state {
+  color: #a16b18;
+}
+.session-usage-note {
+  margin: 10px 2px 15px;
+  color: #89948e;
+  font-size: 10px;
+  line-height: 1.8;
+}
+@media (max-width: 900px) {
+  .session-usage-comparison {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .session-usage-comparison article:last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 620px) {
+  .session-usage-comparison {
+    grid-template-columns: 1fr;
+  }
+  .session-usage-comparison article:last-child {
+    grid-column: auto;
+  }
+}
