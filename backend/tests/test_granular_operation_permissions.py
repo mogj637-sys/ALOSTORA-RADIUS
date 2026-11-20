@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from app.db.session import SessionLocal
 from app.models.auth import AdminUser, Role
-from app.models.core import CardTemplate, Plan, Router
+from app.models.core import CardTemplate, Plan, PointOfSale, Router
 from app.models.user_manager import UserManagerSyncRun
 
 
@@ -378,3 +378,75 @@ def test_stale_owner_request_is_rejected_after_concurrent_demotion(owner_client)
                 cleanup.delete(account)
         cleanup.commit()
         cleanup.close()
+
+
+
+def test_point_of_sale_delete_is_independent_and_preserves_assigned_admins(owner_client):
+    client, owner_headers, owner_username = owner_client
+    created = client.post(
+        "/api/v1/points-of-sale",
+        headers=owner_headers,
+        json={"code": "CI-DELETE-POS-" + secrets.token_hex(4), "name": "CI نقطة حذف"},
+    )
+    assert created.status_code == 201, created.text
+    point_id = created.json()["id"]
+
+    viewer_role, viewer_name, _, viewer_headers = _create_role_user(
+        client, owner_headers, ["pos.view"]
+    )
+    delete_role, delete_name, _, delete_headers = _create_role_user(
+        client, owner_headers, ["pos.delete"]
+    )
+    try:
+        assert client.get("/api/v1/points-of-sale?include_inactive=true", headers=viewer_headers).status_code == 200
+        assert client.delete(f"/api/v1/points-of-sale/{point_id}", headers=viewer_headers).status_code == 403
+        assert client.get("/api/v1/points-of-sale?include_inactive=true", headers=delete_headers).status_code == 403
+
+        active_delete = client.delete(f"/api/v1/points-of-sale/{point_id}", headers=delete_headers)
+        assert active_delete.status_code == 409, active_delete.text
+
+        stopped = client.patch(
+            f"/api/v1/points-of-sale/{point_id}",
+            headers=owner_headers,
+            json={"is_active": False},
+        )
+        assert stopped.status_code == 200, stopped.text
+
+        db = SessionLocal()
+        owner = db.query(AdminUser).filter_by(username=owner_username).one()
+        point = db.get(PointOfSale, point_id)
+        owner.point_of_sales.append(point)
+        db.commit()
+        db.close()
+
+        assigned_delete = client.delete(f"/api/v1/points-of-sale/{point_id}", headers=delete_headers)
+        assert assigned_delete.status_code == 409, assigned_delete.text
+        assert "تخصيصات حسابات الإدارة" in assigned_delete.json()["detail"]
+
+        db = SessionLocal()
+        owner = db.query(AdminUser).filter_by(username=owner_username).one()
+        owner.point_of_sales = [item for item in owner.point_of_sales if item.id != point_id]
+        db.commit()
+        db.close()
+
+        deleted = client.delete(f"/api/v1/points-of-sale/{point_id}", headers=delete_headers)
+        assert deleted.status_code == 204, deleted.text
+        remaining = client.get("/api/v1/points-of-sale?include_inactive=true", headers=owner_headers)
+        assert all(item["id"] != point_id for item in remaining.json())
+    finally:
+        cleanup = SessionLocal()
+        owner = cleanup.query(AdminUser).filter_by(username=owner_username).first()
+        if owner is not None:
+            owner.point_of_sales = [item for item in owner.point_of_sales if item.id != point_id]
+        cleanup.commit()
+        point = cleanup.get(PointOfSale, point_id)
+        cleanup.close()
+        if point is not None:
+            client.patch(
+                f"/api/v1/points-of-sale/{point_id}",
+                headers=owner_headers,
+                json={"is_active": False},
+            )
+            client.delete(f"/api/v1/points-of-sale/{point_id}", headers=owner_headers)
+        _cleanup_role_user(viewer_role, viewer_name)
+        _cleanup_role_user(delete_role, delete_name)
