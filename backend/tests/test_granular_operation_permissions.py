@@ -381,26 +381,34 @@ def test_stale_owner_request_is_rejected_after_concurrent_demotion(owner_client)
 
 
 
-def test_point_of_sale_delete_is_independent_and_preserves_assigned_admins(owner_client):
-    client, owner_headers, owner_username = owner_client
+def test_point_of_sale_delete_is_scoped_and_preserves_other_admin_assignments(owner_client):
+    client, owner_headers, _ = owner_client
     created = client.post(
         "/api/v1/points-of-sale",
         headers=owner_headers,
         json={"code": "CI-DELETE-POS-" + secrets.token_hex(4), "name": "CI نقطة حذف"},
     )
+    outside = client.post(
+        "/api/v1/points-of-sale",
+        headers=owner_headers,
+        json={"code": "CI-DELETE-OUT-" + secrets.token_hex(4), "name": "CI نقطة خارج النطاق"},
+    )
     assert created.status_code == 201, created.text
+    assert outside.status_code == 201, outside.text
     point_id = created.json()["id"]
+    outside_id = outside.json()["id"]
 
     viewer_role, viewer_name, _, viewer_headers = _create_role_user(
-        client, owner_headers, ["pos.view"]
+        client, owner_headers, ["pos.view"], point_ids=[point_id]
     )
     delete_role, delete_name, _, delete_headers = _create_role_user(
-        client, owner_headers, ["pos.delete"]
+        client, owner_headers, ["pos.delete"], point_ids=[point_id]
     )
     try:
         assert client.get("/api/v1/points-of-sale?include_inactive=true", headers=viewer_headers).status_code == 200
         assert client.delete(f"/api/v1/points-of-sale/{point_id}", headers=viewer_headers).status_code == 403
         assert client.get("/api/v1/points-of-sale?include_inactive=true", headers=delete_headers).status_code == 403
+        assert client.delete(f"/api/v1/points-of-sale/{outside_id}", headers=delete_headers).status_code == 403
 
         active_delete = client.delete(f"/api/v1/points-of-sale/{point_id}", headers=delete_headers)
         assert active_delete.status_code == 409, active_delete.text
@@ -412,41 +420,34 @@ def test_point_of_sale_delete_is_independent_and_preserves_assigned_admins(owner
         )
         assert stopped.status_code == 200, stopped.text
 
-        db = SessionLocal()
-        owner = db.query(AdminUser).filter_by(username=owner_username).one()
-        point = db.get(PointOfSale, point_id)
-        owner.point_of_sales.append(point)
-        db.commit()
-        db.close()
-
+        # Another employee assignment must keep the point from being deleted.
         assigned_delete = client.delete(f"/api/v1/points-of-sale/{point_id}", headers=delete_headers)
         assert assigned_delete.status_code == 409, assigned_delete.text
         assert "تخصيصات حسابات الإدارة" in assigned_delete.json()["detail"]
 
         db = SessionLocal()
-        owner = db.query(AdminUser).filter_by(username=owner_username).one()
-        owner.point_of_sales = [item for item in owner.point_of_sales if item.id != point_id]
+        viewer = db.query(AdminUser).filter_by(username=viewer_name).one()
+        viewer.point_of_sales = [item for item in viewer.point_of_sales if item.id != point_id]
         db.commit()
         db.close()
 
+        # The caller's own assignment is part of the deleted point, not a foreign reference.
         deleted = client.delete(f"/api/v1/points-of-sale/{point_id}", headers=delete_headers)
         assert deleted.status_code == 204, deleted.text
         remaining = client.get("/api/v1/points-of-sale?include_inactive=true", headers=owner_headers)
         assert all(item["id"] != point_id for item in remaining.json())
     finally:
-        cleanup = SessionLocal()
-        owner = cleanup.query(AdminUser).filter_by(username=owner_username).first()
-        if owner is not None:
-            owner.point_of_sales = [item for item in owner.point_of_sales if item.id != point_id]
-        cleanup.commit()
-        point = cleanup.get(PointOfSale, point_id)
-        cleanup.close()
-        if point is not None:
-            client.patch(
-                f"/api/v1/points-of-sale/{point_id}",
-                headers=owner_headers,
-                json={"is_active": False},
-            )
-            client.delete(f"/api/v1/points-of-sale/{point_id}", headers=owner_headers)
         _cleanup_role_user(viewer_role, viewer_name)
         _cleanup_role_user(delete_role, delete_name)
+        for cleanup_point_id in (point_id, outside_id):
+            db = SessionLocal()
+            point = db.get(PointOfSale, cleanup_point_id)
+            db.close()
+            if point is not None:
+                if point.is_active:
+                    client.patch(
+                        f"/api/v1/points-of-sale/{cleanup_point_id}",
+                        headers=owner_headers,
+                        json={"is_active": False},
+                    )
+                client.delete(f"/api/v1/points-of-sale/{cleanup_point_id}", headers=owner_headers)
