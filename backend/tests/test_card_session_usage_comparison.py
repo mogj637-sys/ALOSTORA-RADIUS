@@ -1,0 +1,57 @@
+from types import SimpleNamespace
+
+from app.api.cards import _card_session_usage_comparison
+
+
+def _session(upload: int, download: int, seconds: int):
+    return SimpleNamespace(
+        input_octets=upload,
+        output_octets=download,
+        session_time_seconds=seconds,
+    )
+
+
+def test_card_usage_matches_sum_of_radius_sessions():
+    card = SimpleNamespace(upload_bytes=350, download_bytes=900, used_seconds=420)
+    sessions = [
+        _session(upload=100, download=300, seconds=120),
+        _session(upload=250, download=600, seconds=300),
+    ]
+
+    result = _card_session_usage_comparison(card, sessions)
+
+    assert result == {
+        "card": {"upload_bytes": 350, "download_bytes": 900, "used_seconds": 420},
+        "sessions": {"upload_bytes": 350, "download_bytes": 900, "used_seconds": 420},
+        "difference": {"upload_bytes": 0, "download_bytes": 0, "used_seconds": 0},
+        "is_consistent": True,
+    }
+
+
+def test_card_usage_reports_signed_differences_from_session_history():
+    card = SimpleNamespace(upload_bytes=500, download_bytes=700, used_seconds=600)
+    sessions = [
+        _session(upload=450, download=750, seconds=540),
+    ]
+
+    result = _card_session_usage_comparison(card, sessions)
+
+    assert result["difference"] == {
+        "upload_bytes": 50,
+        "download_bytes": -50,
+        "used_seconds": 60,
+    }
+    assert result["is_consistent"] is False
+
+
+def test_card_usage_with_no_sessions_compares_against_zero_totals():
+    card = SimpleNamespace(upload_bytes=0, download_bytes=0, used_seconds=0)
+
+    result = _card_session_usage_comparison(card, [])
+
+    assert result["sessions"] == {
+        "upload_bytes": 0,
+        "download_bytes": 0,
+        "used_seconds": 0,
+    }
+    assert result["is_consistent"] is True
