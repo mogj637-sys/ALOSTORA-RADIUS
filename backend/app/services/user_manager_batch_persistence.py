@@ -123,6 +123,13 @@ def persist_user_manager_preview_page(
                 )
             }
 
+        if exact_replay:
+            unexpected_ids = external_ids.difference(existing_previews)
+            if unexpected_ids:
+                raise BatchPersistenceError(
+                    "replayed checkpoint contains source IDs not present in the original page"
+                )
+
         card_rows = []
         if usernames:
             card_rows = db.execute(
