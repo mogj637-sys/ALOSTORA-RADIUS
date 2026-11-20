@@ -436,6 +436,7 @@ async function apiRequest<T>(token: string, path: string, init: RequestInit = {}
     }
     throw new Error(message);
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -1519,6 +1520,33 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         : (!point.allow_printing ? "تم السماح بالطباعة لهذه النقطة." : "تم إيقاف الطباعة لهذه النقطة."));
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تحديث صلاحية نقطة البيع");
+    } finally { setBusy(false); }
+  }
+
+  async function deletePointOfSale(point: PointOfSale) {
+    if (!can("pos.delete")) { setError("ليست لديك صلاحية حذف نقاط البيع."); return; }
+    if (point.is_active) { setError("أوقف نقطة البيع أولاً قبل حذفها."); return; }
+    if (!window.confirm(`حذف نقطة البيع ${point.name}؟ لا يمكن حذف نقطة مرتبطة بكروت أو دفعات أو طباعة أو حركات مخزون أو قيود مالية أو حسابات موظفين.`)) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await apiRequest<void>(token, `/api/v1/points-of-sale/${point.id}`, { method: "DELETE" });
+      if (editingPosId === point.id) {
+        setEditingPosId(null);
+        setPosDraft({ code: "", name: "", contactName: "", phone: "", debtLimit: "", allowCardCreation: true, allowPrinting: true });
+      }
+      if (selectedPosId === String(point.id)) {
+        setSelectedPosId("");
+        setPosInventory(null);
+        setPosAccount(null);
+        setPosEntries([]);
+        setPrintHistory([]);
+        setPosStatement(null);
+        setStatementPointId("");
+      }
+      await loadPointsOfSale();
+      setNotice("تم حذف نقطة البيع بعد التحقق من عدم ارتباطها بسجلات محفوظة.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر حذف نقطة البيع");
     } finally { setBusy(false); }
   }
 
@@ -2682,14 +2710,16 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                     <td><span className={point.allow_printing ? "pos-status active" : "pos-status inactive"}>{point.allow_printing ? "مسموح" : "موقوف"}</span></td>
                     <td><span className={point.is_active ? "pos-status active" : "pos-status inactive"}>{point.is_active ? "مفعّلة" : "متوقفة"}</span></td>
                     <td className="actions-cell">
-                      {can("pos.update") ? <>
+                      {can("pos.update") && <>
                         <button type="button" className="table-action" disabled={busy} onClick={() => { setEditingPosId(point.id); setPosDraft({ code: point.code, name: point.name, contactName: point.contact_name || "", phone: point.phone || "", debtLimit: point.debt_limit === null ? "" : String(point.debt_limit), allowCardCreation: point.allow_card_creation, allowPrinting: point.allow_printing }); }}>تعديل</button>
                         {user.roles.includes("owner") && <>
                           <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOperation(point, "allow_card_creation")}>{point.allow_card_creation ? "إيقاف الإنشاء" : "السماح بالإنشاء"}</button>
                           <button type="button" className="table-action" disabled={busy} onClick={() => togglePointOperation(point, "allow_printing")}>{point.allow_printing ? "إيقاف الطباعة" : "السماح بالطباعة"}</button>
                           <button type="button" className={point.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePointOfSale(point)}>{point.is_active ? "إيقاف الحساب" : "تفعيل الحساب"}</button>
                         </>}
-                      </> : <span className="field-hint">عرض فقط</span>}
+                      </>}
+                      {can("pos.delete") && <button type="button" className="table-action danger-action" disabled={busy || point.is_active} onClick={() => deletePointOfSale(point)}>{point.is_active ? "أوقفها قبل الحذف" : "حذف"}</button>}
+                      {!can("pos.update") && !can("pos.delete") && <span className="field-hint">عرض فقط</span>}
                     </td>
                   </tr>
                 ))}</tbody>
