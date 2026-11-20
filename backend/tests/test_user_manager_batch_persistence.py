@@ -280,3 +280,41 @@ def assert_page_request(cursor, limit, expected_cursor, expected_limit):
     assert cursor == expected_cursor
     assert limit == expected_limit
     return False
+
+def test_exact_checkpoint_replay_rejects_new_source_ids(owner_client):
+    client, headers, _ = owner_client
+    run_id = _create_preview_run(client, headers)
+    checkpoint = _checkpoint(cursor="cursor-2", records=1, pages=1)
+
+    db = SessionLocal()
+    try:
+        persist_user_manager_preview_page(
+            db,
+            sync_run_id=run_id,
+            records=[{"external_id": "*ORIGINAL", "username": "original-card"}],
+            checkpoint=checkpoint,
+        )
+    finally:
+        db.close()
+
+    db = SessionLocal()
+    try:
+        with pytest.raises(BatchPersistenceError, match="not present in the original page"):
+            persist_user_manager_preview_page(
+                db,
+                sync_run_id=run_id,
+                records=[{"external_id": "*INJECTED", "username": "injected-card"}],
+                checkpoint=checkpoint,
+            )
+    finally:
+        db.close()
+
+    verify = SessionLocal()
+    try:
+        run = verify.get(UserManagerSyncRun, run_id)
+        previews = verify.query(UserManagerImportPreview).filter_by(sync_run_id=run_id).all()
+        assert run.checkpoint == checkpoint
+        assert [row.external_user_id for row in previews] == ["*ORIGINAL"]
+    finally:
+        verify.close()
+
