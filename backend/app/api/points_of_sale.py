@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
-from app.models.core import Card, PointOfSale, PrintJob, PrintJobItem
+from app.models.core import Card, CardBatch, PointOfSale, PosAccountEntry, PosInventoryMovement, PrintJob, PrintJobItem
 from app.services.audit import record_audit
 from app.services.permissions import is_owner
 from app.schemas.points_of_sale import (
@@ -89,6 +89,57 @@ def update_point_of_sale(
     db.commit()
     db.refresh(point)
     return point
+
+
+@router.delete("/{point_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("pos.delete"))])
+def delete_point_of_sale(
+    point_id: int,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("pos.delete")),
+):
+    point = db.query(PointOfSale).filter(PointOfSale.id == point_id).with_for_update().first()
+    if point is None:
+        raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
+    if point.is_active:
+        raise HTTPException(status_code=409, detail="أوقف نقطة البيع أولاً قبل حذفها")
+
+    references = []
+    checks = [
+        ("كروت", db.query(Card.id).filter(Card.assigned_pos_id == point.id).first()),
+        ("دفعات", db.query(CardBatch.id).filter(CardBatch.point_of_sale_id == point.id).first()),
+        ("عمليات طباعة", db.query(PrintJob.id).filter(PrintJob.point_of_sale_id == point.id).first()),
+        ("حركات المخزون", db.query(PosInventoryMovement.id).filter(PosInventoryMovement.point_of_sale_id == point.id).first()),
+        ("قيود مالية", db.query(PosAccountEntry.id).filter(PosAccountEntry.point_of_sale_id == point.id).first()),
+        (
+            "تخصيصات حسابات الإدارة",
+            db.query(AdminUser.id)
+            .filter(AdminUser.point_of_sales.any(PointOfSale.id == point.id))
+            .first(),
+        ),
+    ]
+    references.extend(label for label, result in checks if result is not None)
+    if references:
+        raise HTTPException(
+            status_code=409,
+            detail="لا يمكن حذف نقطة البيع لارتباطها بسجلات محفوظة: " + "، ".join(references),
+        )
+
+    record_audit(
+        db,
+        user,
+        "pos.deleted",
+        "point_of_sale",
+        f"حذف نقطة البيع {point.name}",
+        entity_id=point.id,
+        details={"code": point.code, "name": point.name},
+    )
+    db.delete(point)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="لا يمكن حذف نقطة البيع لارتباطها بسجلات أخرى")
+    return None
 
 
 @router.get("/{point_id}/inventory", response_model=PointOfSaleInventoryResponse)
