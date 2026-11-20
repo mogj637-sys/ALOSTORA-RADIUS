@@ -456,6 +456,30 @@ def resolve_print_selection(
     )
 
 
+def _card_session_usage_comparison(card: Card, sessions: list[RadiusSession]) -> dict:
+    """Compare persisted card counters with the sum of its RADIUS accounting sessions."""
+    card_totals = {
+        "upload_bytes": int(card.upload_bytes or 0),
+        "download_bytes": int(card.download_bytes or 0),
+        "used_seconds": int(card.used_seconds or 0),
+    }
+    session_totals = {
+        "upload_bytes": sum(int(session.input_octets or 0) for session in sessions),
+        "download_bytes": sum(int(session.output_octets or 0) for session in sessions),
+        "used_seconds": sum(int(session.session_time_seconds or 0) for session in sessions),
+    }
+    difference = {
+        key: card_totals[key] - session_totals[key]
+        for key in card_totals
+    }
+    return {
+        "card": card_totals,
+        "sessions": session_totals,
+        "difference": difference,
+        "is_consistent": all(value == 0 for value in difference.values()),
+    }
+
+
 @router.get("/{card_id}/sessions", dependencies=[Depends(require_permission("sessions.view"))])
 def list_card_session_history(
     card_id: str,
@@ -505,6 +529,10 @@ def list_card_session_history(
         "serial_number": card.serial_number,
         "total_sessions": len(rows),
         "active_sessions": active_count,
+        "usage_comparison": _card_session_usage_comparison(
+            card,
+            [session for session, _ in rows],
+        ),
         "items": [
             {
                 "id": session.id,
