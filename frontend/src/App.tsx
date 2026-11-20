@@ -127,12 +127,24 @@ type RadiusSessionsResponse = {
   items: RadiusSessionRecord[];
 };
 
+type CardUsageCounters = {
+  upload_bytes: number;
+  download_bytes: number;
+  used_seconds: number;
+};
+
 type CardSessionHistory = {
   card_id: string;
   username: string;
   serial_number: string;
   total_sessions: number;
   active_sessions: number;
+  usage_comparison: {
+    card: CardUsageCounters;
+    sessions: CardUsageCounters;
+    difference: CardUsageCounters;
+    is_consistent: boolean;
+  };
   items: Array<{
     id: number;
     router_name: string;
@@ -2562,6 +2574,28 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <article><span>إجمالي الجلسات</span><strong>{cardSessionHistory.total_sessions.toLocaleString("ar")}</strong></article>
           <article><span>الجلسات النشطة</span><strong>{cardSessionHistory.active_sessions.toLocaleString("ar")}</strong></article>
         </div>
+        <div className="session-usage-comparison">
+          <article>
+            <h4>عدادات الكرت</h4>
+            <div><span>الرفع</span><strong>{formatBytes(cardSessionHistory.usage_comparison.card.upload_bytes)}</strong></div>
+            <div><span>التنزيل</span><strong>{formatBytes(cardSessionHistory.usage_comparison.card.download_bytes)}</strong></div>
+            <div><span>وقت الاستخدام</span><strong>{formatDuration(cardSessionHistory.usage_comparison.card.used_seconds)}</strong></div>
+          </article>
+          <article>
+            <h4>مجموع سجلات الجلسات</h4>
+            <div><span>الرفع</span><strong>{formatBytes(cardSessionHistory.usage_comparison.sessions.upload_bytes)}</strong></div>
+            <div><span>التنزيل</span><strong>{formatBytes(cardSessionHistory.usage_comparison.sessions.download_bytes)}</strong></div>
+            <div><span>وقت الاستخدام</span><strong>{formatDuration(cardSessionHistory.usage_comparison.sessions.used_seconds)}</strong></div>
+          </article>
+          <article className={cardSessionHistory.usage_comparison.is_consistent ? "usage-match" : "usage-mismatch"}>
+            <h4>فرق المحاسبة</h4>
+            <strong className="usage-comparison-state">{cardSessionHistory.usage_comparison.is_consistent ? "متطابق" : "يوجد فرق"}</strong>
+            <div><span>فرق الرفع</span><strong>{cardSessionHistory.usage_comparison.difference.upload_bytes > 0 ? "+" : cardSessionHistory.usage_comparison.difference.upload_bytes < 0 ? "−" : ""}{formatBytes(Math.abs(cardSessionHistory.usage_comparison.difference.upload_bytes))}</strong></div>
+            <div><span>فرق التنزيل</span><strong>{cardSessionHistory.usage_comparison.difference.download_bytes > 0 ? "+" : cardSessionHistory.usage_comparison.difference.download_bytes < 0 ? "−" : ""}{formatBytes(Math.abs(cardSessionHistory.usage_comparison.difference.download_bytes))}</strong></div>
+            <div><span>فرق الوقت</span><strong>{cardSessionHistory.usage_comparison.difference.used_seconds > 0 ? "+" : cardSessionHistory.usage_comparison.difference.used_seconds < 0 ? "−" : ""}{formatDuration(Math.abs(cardSessionHistory.usage_comparison.difference.used_seconds))}</strong></div>
+          </article>
+        </div>
+        <p className="session-usage-note">الفرق = عداد الكرت ناقص مجموع سجلات الجلسات. قد يظهر فرق مؤقت قبل وصول آخر رسالة محاسبة Interim أو Stop؛ لا يتم تعديل الأرصدة تلقائياً من هذه الشاشة.</p>
         <div className="table-wrap"><table><thead><tr><th>الراوتر</th><th>معرّف الجلسة</th><th>IP</th><th>MAC</th><th>بداية الاتصال</th><th>آخر تحديث</th><th>نهاية الاتصال</th><th>المدة</th><th>رفع</th><th>تنزيل</th></tr></thead><tbody>
           {cardSessionHistory.items.map((session) => <tr key={session.id}>
             <td>{session.router_name}</td><td>{session.acct_session_id}</td><td>{session.framed_ip_address ?? "—"}</td><td>{session.calling_station_id ?? "—"}</td>
