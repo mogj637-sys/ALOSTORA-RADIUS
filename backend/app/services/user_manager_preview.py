@@ -34,9 +34,14 @@ PASSWORD_KEYS = (
 
 def _is_sensitive_key(value: Any) -> bool:
     key = _normalized_key(value)
-    return key in SENSITIVE_KEYS or key.endswith(
-        ("password", "passwd", "secret", "token", "credential", "passphrase", "apikey")
+    # Field names frequently add prefixes/suffixes (for example
+    # client_secret_value or access_token_hash). Match sensitive markers
+    # anywhere in the normalized key so aliases cannot bypass redaction.
+    sensitive_markers = (
+        "password", "passwd", "secret", "token", "credential",
+        "passphrase", "apikey", "privatekey",
     )
+    return key in SENSITIVE_KEYS or any(marker in key for marker in sensitive_markers)
 
 
 def _safe_value(value: Any) -> Any:
