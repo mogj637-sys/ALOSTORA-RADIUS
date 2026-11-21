@@ -312,6 +312,7 @@ def test_stale_owner_request_is_rejected_after_concurrent_demotion(owner_client)
     from fastapi import HTTPException
 
     from app.api.admins import create_admin, create_role, update_admin, update_role_permissions
+    from app.api.deps import get_current_owner
     from app.models.auth import user_roles
     from app.schemas.admins import AdminRoleCreate, AdminUserCreate, AdminUserUpdate
 
@@ -354,6 +355,12 @@ def test_stale_owner_request_is_rejected_after_concurrent_demotion(owner_client)
     concurrent.close()
 
     try:
+        try:
+            get_current_owner(caller, db)
+            raise AssertionError("A demoted owner must be rejected by the owner dependency")
+        except HTTPException as exc:
+            assert exc.status_code == 403
+
         try:
             update_admin(
                 target_id,
