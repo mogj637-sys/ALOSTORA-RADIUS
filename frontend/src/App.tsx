@@ -139,6 +139,11 @@ type CardSessionHistory = {
   serial_number: string;
   total_sessions: number;
   active_sessions: number;
+  filtered_sessions: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+  routers: Array<{ id: number; name: string; nas_identifier: string }>;
   usage_comparison: {
     card: CardUsageCounters;
     sessions: CardUsageCounters;
@@ -618,6 +623,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [cardBatches, setCardBatches] = useState<CardBatchRecord[]>([]);
   const [radiusSessions, setRadiusSessions] = useState<RadiusSessionsResponse>({ active_count: 0, active_users_count: 0, total_count: 0, items: [] });
   const [cardSessionHistory, setCardSessionHistory] = useState<CardSessionHistory | null>(null);
+  const [cardSessionFilters, setCardSessionFilters] = useState({ status: "all", routerId: "", search: "", dateFrom: "", dateTo: "" });
+  const [cardSessionOffset, setCardSessionOffset] = useState(0);
+  const [cardSessionLoading, setCardSessionLoading] = useState(false);
   const [radiusOverview, setRadiusOverview] = useState<RadiusOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [cardBatchFilter, setCardBatchFilter] = useState("");
@@ -1002,16 +1010,57 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setRadiusSessions(result);
   }
 
-  async function loadCardSessionHistory(card: Card) {
+  async function loadCardSessionHistory(
+    card: Pick<Card, "id" | "username">,
+    offset = 0,
+    filters = cardSessionFilters,
+  ) {
+    setCardSessionLoading(true);
+    setError("");
     try {
+      const params = new URLSearchParams({
+        search: card.username,
+        offset: String(offset),
+        limit: "25",
+        status: filters.status,
+      });
+      if (filters.routerId) params.set("router_id", filters.routerId);
+      if (filters.search.trim()) params.set("session_search", filters.search.trim());
+      if (filters.dateFrom) {
+        const start = new Date(`${filters.dateFrom}T00:00:00`);
+        if (Number.isNaN(start.getTime())) throw new Error("تاريخ بداية الفترة غير صالح");
+        params.set("date_from", start.toISOString());
+      }
+      if (filters.dateTo) {
+        const end = new Date(`${filters.dateTo}T00:00:00`);
+        if (Number.isNaN(end.getTime())) throw new Error("تاريخ نهاية الفترة غير صالح");
+        end.setDate(end.getDate() + 1);
+        params.set("date_to", end.toISOString());
+      }
       const result = await apiRequest<CardSessionHistory>(
         token,
-        `/api/v1/cards/${card.id}/sessions?search=${encodeURIComponent(card.username)}`,
+        `/api/v1/cards/${card.id}/sessions?${params.toString()}`,
       );
+      setCardSessionOffset(offset);
       setCardSessionHistory(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تحميل جلسات الكرت");
+    } finally {
+      setCardSessionLoading(false);
     }
+  }
+
+  function applyCardSessionFilters() {
+    if (!cardSessionHistory) return;
+    if (cardSessionFilters.dateFrom && cardSessionFilters.dateTo && cardSessionFilters.dateTo < cardSessionFilters.dateFrom) {
+      setError("تاريخ نهاية الفترة يجب ألا يسبق تاريخ بدايتها.");
+      return;
+    }
+    loadCardSessionHistory(
+      { id: cardSessionHistory.card_id, username: cardSessionHistory.username },
+      0,
+      cardSessionFilters,
+    );
   }
 
   async function loadRouters() {
@@ -2588,7 +2637,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <td>{formatBytes(totalConsumedBytes)} / {remainingDataBytes === null ? "غير محدود" : formatBytes(remainingDataBytes)}</td>
             <td>{sharedUsersLabel}</td>
             <td>{speed}</td><td>{card.is_free ? "نعم" : "لا"}</td>
-            {can("sessions.view") && <td><button type="button" className="table-action" onClick={() => loadCardSessionHistory(card)}>عرض الجلسات</button></td>}
+            {can("sessions.view") && <td><button type="button" className="table-action" disabled={cardSessionLoading} onClick={() => { const filters = { status: "all", routerId: "", search: "", dateFrom: "", dateTo: "" }; setCardSessionFilters(filters); setCardSessionHistory(null); setCardSessionOffset(0); loadCardSessionHistory(card, 0, filters); }}>عرض الجلسات</button></td>}
             {can("cards.update") && user.card_visibility !== "search_any" && <td className="actions-cell">{card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null}{["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button>}</td>}
           </tr>;
         })}
@@ -2624,6 +2673,23 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           </article>
         </div>
         <p className="session-usage-note">الفرق = عداد الكرت ناقص مجموع سجلات الجلسات. قد يظهر فرق مؤقت قبل وصول آخر رسالة محاسبة Interim أو Stop؛ لا يتم تعديل الأرصدة تلقائياً من هذه الشاشة.</p>
+        <div className="card-session-history-filters">
+          <label>حالة الجلسة<select value={cardSessionFilters.status} onChange={(e) => setCardSessionFilters((current) => ({ ...current, status: e.target.value }))}><option value="all">كل الجلسات</option><option value="active">النشطة</option><option value="ended">المنتهية</option></select></label>
+          <label>الراوتر<select value={cardSessionFilters.routerId} onChange={(e) => setCardSessionFilters((current) => ({ ...current, routerId: e.target.value }))}><option value="">كل الراوترات</option>{cardSessionHistory.routers.map((router) => <option key={router.id} value={router.id}>{router.name} — {router.nas_identifier}</option>)}</select></label>
+          <label className="card-session-search-field">بحث في الجلسات<input value={cardSessionFilters.search} onChange={(e) => setCardSessionFilters((current) => ({ ...current, search: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") applyCardSessionFilters(); }} placeholder="IP أو MAC أو معرّف الجلسة أو الراوتر" /></label>
+          <label>من تاريخ البداية<input type="date" value={cardSessionFilters.dateFrom} onChange={(e) => setCardSessionFilters((current) => ({ ...current, dateFrom: e.target.value }))} /></label>
+          <label>إلى تاريخ البداية<input type="date" value={cardSessionFilters.dateTo} onChange={(e) => setCardSessionFilters((current) => ({ ...current, dateTo: e.target.value }))} /></label>
+          <div className="card-session-filter-actions">
+            <button type="button" className="table-action" disabled={cardSessionLoading} onClick={applyCardSessionFilters}>{cardSessionLoading ? "جارٍ التحديث..." : "تطبيق الفلاتر"}</button>
+            <button type="button" className="secondary-button" disabled={cardSessionLoading} onClick={() => { const filters = { status: "all", routerId: "", search: "", dateFrom: "", dateTo: "" }; setCardSessionFilters(filters); loadCardSessionHistory({ id: cardSessionHistory.card_id, username: cardSessionHistory.username }, 0, filters); }}>مسح الفلاتر</button>
+          </div>
+        </div>
+        <div className="card-session-results-strip">
+          <span>إجمالي جلسات الكرت: <strong>{cardSessionHistory.total_sessions.toLocaleString("ar")}</strong></span>
+          <span>نتائج الفلاتر: <strong>{cardSessionHistory.filtered_sessions.toLocaleString("ar")}</strong></span>
+          <span>المعروض: <strong>{(cardSessionHistory.offset + cardSessionHistory.items.length).toLocaleString("ar")}</strong> من <strong>{cardSessionHistory.filtered_sessions.toLocaleString("ar")}</strong></span>
+          {cardSessionLoading && <span>جارٍ تحميل الجلسات…</span>}
+        </div>
         <div className="table-wrap"><table><thead><tr><th>الراوتر</th><th>معرّف الجلسة</th><th>IP</th><th>MAC</th><th>بداية الاتصال</th><th>آخر تحديث</th><th>نهاية الاتصال</th><th>المدة</th><th>رفع</th><th>تنزيل</th></tr></thead><tbody>
           {cardSessionHistory.items.map((session) => <tr key={session.id}>
             <td>{session.router_name}</td><td>{session.acct_session_id}</td><td>{session.framed_ip_address ?? "—"}</td><td>{session.calling_station_id ?? "—"}</td>
@@ -2631,7 +2697,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <td>{session.stopped_at ? new Date(session.stopped_at).toLocaleString("ar") : "نشطة"}</td>
             <td>{formatDuration(session.session_time_seconds)}</td><td>{formatBytes(session.upload_bytes)}</td><td>{formatBytes(session.download_bytes)}</td>
           </tr>)}
-        </tbody></table>{cardSessionHistory.items.length === 0 && <div className="empty-state">لا توجد جلسات مسجلة لهذا الكرت.</div>}</div>
+        </tbody></table>{cardSessionHistory.items.length === 0 && <div className="empty-state">لا توجد جلسات تطابق الفلاتر الحالية لهذا الكرت.</div>}</div>
+        <div className="pagination-controls card-session-pagination">
+          <button type="button" className="table-action" disabled={cardSessionOffset === 0 || cardSessionLoading} onClick={() => loadCardSessionHistory({ id: cardSessionHistory.card_id, username: cardSessionHistory.username }, Math.max(0, cardSessionOffset - cardSessionHistory.limit))}>السابق</button>
+          <span>الصفحة {Math.floor(cardSessionHistory.offset / cardSessionHistory.limit + 1).toLocaleString("ar")} من {Math.max(1, Math.ceil(cardSessionHistory.filtered_sessions / cardSessionHistory.limit)).toLocaleString("ar")}</span>
+          <button type="button" className="table-action" disabled={!cardSessionHistory.has_more || cardSessionLoading} onClick={() => loadCardSessionHistory({ id: cardSessionHistory.card_id, username: cardSessionHistory.username }, cardSessionOffset + cardSessionHistory.limit)}>التالي</button>
+        </div>
       </section>}
       {user.card_visibility !== "search_any" && <div className="pagination-controls"><button type="button" className="table-action" disabled={cardOffset === 0 || busy} onClick={() => changeCardPage(cardOffset - 200)}>السابق</button><span>الصفحة {Math.floor(cardOffset / 200) + 1}</span><button type="button" className="table-action" disabled={!hasMoreCards || busy} onClick={() => changeCardPage(cardOffset + 200)}>التالي</button></div>}
       </>}
