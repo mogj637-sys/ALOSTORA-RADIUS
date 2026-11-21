@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from app.api.cards import _card_session_usage_comparison
+from app.api.cards import _card_session_usage_comparison, _card_session_usage_comparison_totals
 
 
 def _session(upload: int, download: int, seconds: int):
@@ -48,6 +48,41 @@ def test_card_usage_with_no_sessions_compares_against_zero_totals():
     card = SimpleNamespace(upload_bytes=0, download_bytes=0, used_seconds=0)
 
     result = _card_session_usage_comparison(card, [])
+
+    assert result["sessions"] == {
+        "upload_bytes": 0,
+        "download_bytes": 0,
+        "used_seconds": 0,
+    }
+    assert result["is_consistent"] is True
+
+
+def test_card_usage_comparison_accepts_database_aggregate_totals():
+    card = SimpleNamespace(upload_bytes=900, download_bytes=1400, used_seconds=720)
+    result = _card_session_usage_comparison_totals(
+        card,
+        {"upload_bytes": 850, "download_bytes": 1400, "used_seconds": 600},
+    )
+
+    assert result["sessions"] == {
+        "upload_bytes": 850,
+        "download_bytes": 1400,
+        "used_seconds": 600,
+    }
+    assert result["difference"] == {
+        "upload_bytes": 50,
+        "download_bytes": 0,
+        "used_seconds": 120,
+    }
+    assert result["is_consistent"] is False
+
+
+def test_card_usage_comparison_normalizes_empty_database_aggregates():
+    card = SimpleNamespace(upload_bytes=0, download_bytes=0, used_seconds=0)
+    result = _card_session_usage_comparison_totals(
+        card,
+        {"upload_bytes": None, "download_bytes": None, "used_seconds": None},
+    )
 
     assert result["sessions"] == {
         "upload_bytes": 0,
