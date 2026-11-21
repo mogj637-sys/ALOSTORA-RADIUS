@@ -182,9 +182,10 @@ def test_preview_removes_router_api_and_shared_secret_aliases_recursively():
         "external_id": "*13",
         "username": "safe-card",
         "normal-field": "keep",
-        "credentials": {},
         "metadata": {"display_label": "keep-this-label"},
     }
+    assert "credentials" not in result["safe_snapshot"]
+
     for secret in (
         "api-secret-value",
         "router-secret-value",
