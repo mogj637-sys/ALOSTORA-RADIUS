@@ -71,11 +71,43 @@ def _resolve_points_of_sale(db: Session, point_ids: list[int]) -> list[PointOfSa
     return points
 
 
+def _require_current_owner(
+    db: Session,
+    current_user: AdminUser,
+    *,
+    lock: bool = False,
+) -> Role:
+    # Mutating owner-only requests lock the shared owner role row. A fresh
+    # membership query then rejects requests whose caller was demoted after
+    # the authentication dependency loaded its ORM object.
+    owner_query = db.query(Role).filter(Role.code == "owner")
+    if lock:
+        owner_query = owner_query.with_for_update()
+    owner_role = owner_query.first()
+    if owner_role is None:
+        raise HTTPException(status_code=403, detail="تعذر التحقق من صلاحية مدير النظام")
+
+    caller_still_owner = (
+        db.query(AdminUser.id)
+        .join(AdminUser.roles)
+        .filter(
+            AdminUser.id == current_user.id,
+            AdminUser.is_active.is_(True),
+            Role.id == owner_role.id,
+        )
+        .first()
+    )
+    if caller_still_owner is None:
+        raise HTTPException(status_code=403, detail="لم تعد تملك صلاحية مدير النظام لتنفيذ هذه العملية")
+    return owner_role
+
+
 @router.get("/roles", response_model=list[AdminRoleResponse])
 def list_roles(
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(get_current_owner),
+    current_user: AdminUser = Depends(get_current_owner),
 ) -> list[AdminRoleResponse]:
+    _require_current_owner(db, current_user)
     return [
         AdminRoleResponse(code=role.code, name=role.name, description=role.description)
         for role in db.query(Role).order_by(Role.id).all()
@@ -88,6 +120,7 @@ def create_role(
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_owner),
 ) -> AdminRoleResponse:
+    _require_current_owner(db, current_user, lock=True)
     if payload.code == "owner":
         raise HTTPException(status_code=422, detail="رمز owner محجوز لمدير النظام")
     if db.query(Role).filter(Role.code == payload.code).first():
@@ -108,8 +141,9 @@ def create_role(
 @router.get("", response_model=list[AdminUserResponse])
 def list_admins(
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(get_current_owner),
+    current_user: AdminUser = Depends(get_current_owner),
 ) -> list[AdminUserResponse]:
+    _require_current_owner(db, current_user)
     users = (
         db.query(AdminUser)
         .options(
@@ -129,6 +163,7 @@ def create_admin(
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_owner),
 ) -> AdminUserResponse:
+    _require_current_owner(db, current_user, lock=True)
     if db.query(AdminUser).filter(AdminUser.username == payload.username).first():
         raise HTTPException(status_code=409, detail="اسم المستخدم مستخدم بالفعل")
     roles = _resolve_roles(db, payload.role_codes)
@@ -162,24 +197,7 @@ def update_admin(
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_owner),
 ) -> AdminUserResponse:
-    # Serialize all administrator changes on the owner role, then re-check the
-    # caller against the database. The dependency's ORM object may have been
-    # loaded just before another request demoted this caller.
-    owner_role = db.query(Role).filter(Role.code == "owner").with_for_update().first()
-    if owner_role is None:
-        raise HTTPException(status_code=403, detail="تعذر التحقق من صلاحية مدير النظام")
-    caller_still_owner = (
-        db.query(AdminUser.id)
-        .join(AdminUser.roles)
-        .filter(
-            AdminUser.id == current_user.id,
-            AdminUser.is_active.is_(True),
-            Role.id == owner_role.id,
-        )
-        .first()
-    )
-    if caller_still_owner is None:
-        raise HTTPException(status_code=403, detail="لم تعد تملك صلاحية مدير النظام لتنفيذ هذه العملية")
+    owner_role = _require_current_owner(db, current_user, lock=True)
 
     user = (
         db.query(AdminUser)
@@ -257,8 +275,9 @@ def update_admin(
 @router.get("/permissions")
 def list_permissions(
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(get_current_owner),
+    current_user: AdminUser = Depends(get_current_owner),
 ):
+    _require_current_owner(db, current_user)
     return [
         {"code": item.code, "name": item.name, "module": item.module, "description": item.description}
         for item in db.query(Permission).order_by(Permission.module, Permission.id).all()
@@ -269,8 +288,9 @@ def list_permissions(
 def get_role_permissions(
     role_code: str,
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(get_current_owner),
+    current_user: AdminUser = Depends(get_current_owner),
 ):
+    _require_current_owner(db, current_user)
     role = db.query(Role).filter(Role.code == role_code).first()
     if role is None:
         raise HTTPException(status_code=404, detail="الدور الإداري غير موجود")
@@ -282,9 +302,10 @@ def update_role_permissions(
     role_code: str,
     permission_codes: list[str] = Body(..., embed=True),
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(get_current_owner),
+    current_user: AdminUser = Depends(get_current_owner),
 ):
-    role = db.query(Role).filter(Role.code == role_code).first()
+    _require_current_owner(db, current_user, lock=True)
+    role = db.query(Role).filter(Role.code == role_code).with_for_update().first()
     if role is None:
         raise HTTPException(status_code=404, detail="الدور الإداري غير موجود")
     if role.code == "owner":
@@ -297,6 +318,6 @@ def update_role_permissions(
         raise HTTPException(status_code=422, detail=f"صلاحيات غير معروفة: {', '.join(missing)}")
     previous_codes = sorted(item.code for item in role.permissions)
     role.permissions = permissions
-    record_audit(db, _, "role.permissions_updated", "role", f"تعديل صلاحيات الدور: {role.name}", entity_id=role.id, details={"before": previous_codes, "after": sorted(item.code for item in permissions)})
+    record_audit(db, current_user, "role.permissions_updated", "role", f"تعديل صلاحيات الدور: {role.name}", entity_id=role.id, details={"before": previous_codes, "after": sorted(item.code for item in permissions)})
     db.commit()
     return {"role_code": role.code, "permission_codes": sorted(item.code for item in permissions)}
