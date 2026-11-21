@@ -456,38 +456,56 @@ def resolve_print_selection(
     )
 
 
-def _card_session_usage_comparison(card: Card, sessions: list[RadiusSession]) -> dict:
-    """Compare persisted card counters with the sum of its RADIUS accounting sessions."""
+def _card_session_usage_comparison_totals(card: Card, session_totals: dict) -> dict:
+    """Compare card counters with pre-aggregated RADIUS accounting totals."""
     card_totals = {
         "upload_bytes": int(card.upload_bytes or 0),
         "download_bytes": int(card.download_bytes or 0),
         "used_seconds": int(card.used_seconds or 0),
     }
-    session_totals = {
-        "upload_bytes": sum(int(session.input_octets or 0) for session in sessions),
-        "download_bytes": sum(int(session.output_octets or 0) for session in sessions),
-        "used_seconds": sum(int(session.session_time_seconds or 0) for session in sessions),
+    normalized_session_totals = {
+        key: int(session_totals.get(key) or 0)
+        for key in card_totals
     }
     difference = {
-        key: card_totals[key] - session_totals[key]
+        key: card_totals[key] - normalized_session_totals[key]
         for key in card_totals
     }
     return {
         "card": card_totals,
-        "sessions": session_totals,
+        "sessions": normalized_session_totals,
         "difference": difference,
         "is_consistent": all(value == 0 for value in difference.values()),
     }
+
+
+def _card_session_usage_comparison(card: Card, sessions: list[RadiusSession]) -> dict:
+    """Keep the list-based helper for focused unit tests and callers."""
+    return _card_session_usage_comparison_totals(
+        card,
+        {
+            "upload_bytes": sum(int(session.input_octets or 0) for session in sessions),
+            "download_bytes": sum(int(session.output_octets or 0) for session in sessions),
+            "used_seconds": sum(int(session.session_time_seconds or 0) for session in sessions),
+        },
+    )
 
 
 @router.get("/{card_id}/sessions", dependencies=[Depends(require_permission("sessions.view"))])
 def list_card_session_history(
     card_id: str,
     search: str = Query(..., min_length=1, max_length=120),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, ge=1, le=100),
+    status_filter: str = Query(default="all", alias="status"),
+    router_id: int | None = Query(default=None, gt=0),
+    session_search: str | None = Query(default=None, min_length=1, max_length=120),
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
     db: Session = Depends(get_db),
     user: AdminUser = Depends(require_permission("sessions.view")),
 ):
-    """Return the complete RADIUS session history for one explicitly searched card."""
+    """Return a paginated, filterable RADIUS session history for one searched card."""
     try:
         card_uuid = UUID(card_id)
     except ValueError:
@@ -515,24 +533,104 @@ def list_card_session_history(
         if not in_scope:
             raise HTTPException(status_code=403, detail="الكرت خارج نطاق نقاط البيع المسموح بها")
 
-    rows = (
+    if status_filter not in {"all", "active", "ended"}:
+        raise HTTPException(status_code=422, detail="فلتر حالة الجلسة غير صالح")
+    if session_search is not None:
+        session_search = session_search.strip()
+        if not session_search:
+            raise HTTPException(status_code=422, detail="أدخل نص البحث عن الجلسة")
+
+    if date_from is not None:
+        date_from = date_from.replace(tzinfo=timezone.utc) if date_from.tzinfo is None else date_from.astimezone(timezone.utc)
+    if date_to is not None:
+        date_to = date_to.replace(tzinfo=timezone.utc) if date_to.tzinfo is None else date_to.astimezone(timezone.utc)
+    if date_from is not None and date_to is not None and date_to <= date_from:
+        raise HTTPException(status_code=422, detail="نهاية الفترة يجب أن تكون بعد بدايتها")
+
+    all_sessions_query = db.query(RadiusSession).filter(RadiusSession.card_id == card.id)
+    total_sessions = all_sessions_query.with_entities(func.count(RadiusSession.id)).scalar() or 0
+    active_sessions = (
+        all_sessions_query.with_entities(func.count(RadiusSession.id))
+        .filter(RadiusSession.stopped_at.is_(None))
+        .scalar() or 0
+    )
+    upload_total, download_total, used_total = (
+        db.query(
+            func.coalesce(func.sum(RadiusSession.input_octets), 0),
+            func.coalesce(func.sum(RadiusSession.output_octets), 0),
+            func.coalesce(func.sum(RadiusSession.session_time_seconds), 0),
+        )
+        .filter(RadiusSession.card_id == card.id)
+        .one()
+    )
+    usage_comparison = _card_session_usage_comparison_totals(
+        card,
+        {
+            "upload_bytes": upload_total,
+            "download_bytes": download_total,
+            "used_seconds": used_total,
+        },
+    )
+
+    router_options = (
+        db.query(Router.id, Router.name, Router.nas_identifier)
+        .join(RadiusSession, RadiusSession.router_id == Router.id)
+        .filter(RadiusSession.card_id == card.id)
+        .distinct()
+        .order_by(Router.name.asc())
+        .all()
+    )
+
+    filtered_query = (
         db.query(RadiusSession, Router)
         .join(Router, Router.id == RadiusSession.router_id)
         .filter(RadiusSession.card_id == card.id)
+    )
+    if status_filter == "active":
+        filtered_query = filtered_query.filter(RadiusSession.stopped_at.is_(None))
+    elif status_filter == "ended":
+        filtered_query = filtered_query.filter(RadiusSession.stopped_at.is_not(None))
+    if router_id is not None:
+        filtered_query = filtered_query.filter(RadiusSession.router_id == router_id)
+    if date_from is not None:
+        filtered_query = filtered_query.filter(RadiusSession.started_at >= date_from)
+    if date_to is not None:
+        filtered_query = filtered_query.filter(RadiusSession.started_at < date_to)
+    if session_search:
+        term = f"%{session_search}%"
+        filtered_query = filtered_query.filter(
+            or_(
+                RadiusSession.acct_session_id.ilike(term),
+                RadiusSession.framed_ip_address.ilike(term),
+                RadiusSession.calling_station_id.ilike(term),
+                Router.name.ilike(term),
+                Router.nas_identifier.ilike(term),
+            )
+        )
+
+    filtered_sessions = filtered_query.with_entities(func.count(RadiusSession.id)).scalar() or 0
+    rows = (
+        filtered_query
         .order_by(RadiusSession.started_at.desc(), RadiusSession.id.desc())
+        .offset(offset)
+        .limit(limit)
         .all()
     )
-    active_count = sum(1 for session, _ in rows if session.stopped_at is None)
     return {
         "card_id": str(card.id),
         "username": card.username,
         "serial_number": card.serial_number,
-        "total_sessions": len(rows),
-        "active_sessions": active_count,
-        "usage_comparison": _card_session_usage_comparison(
-            card,
-            [session for session, _ in rows],
-        ),
+        "total_sessions": int(total_sessions),
+        "active_sessions": int(active_sessions),
+        "filtered_sessions": int(filtered_sessions),
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + len(rows) < filtered_sessions,
+        "routers": [
+            {"id": item.id, "name": item.name, "nas_identifier": item.nas_identifier}
+            for item in router_options
+        ],
+        "usage_comparison": usage_comparison,
         "items": [
             {
                 "id": session.id,
