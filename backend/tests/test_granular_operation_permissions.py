@@ -311,9 +311,9 @@ def test_stale_owner_request_is_rejected_after_concurrent_demotion(owner_client)
     _, _, _ = owner_client
     from fastapi import HTTPException
 
-    from app.api.admins import update_admin
+    from app.api.admins import create_admin, create_role, update_admin, update_role_permissions
     from app.models.auth import user_roles
-    from app.schemas.admins import AdminUserUpdate
+    from app.schemas.admins import AdminRoleCreate, AdminUserCreate, AdminUserUpdate
 
     suffix = secrets.token_hex(5)
     caller_name = "ci_stale_owner_" + suffix
@@ -364,6 +364,28 @@ def test_stale_owner_request_is_rejected_after_concurrent_demotion(owner_client)
             raise AssertionError("A stale owner request must be rejected")
         except HTTPException as exc:
             assert exc.status_code == 403
+
+        # The same stale owner object must not authorize other privileged writes.
+        stale_admin = AdminUserCreate(
+            username="ci_stale_created_" + suffix,
+            display_name="CI Stale Created",
+            password="ci-stale-created-password-123",
+            role_codes=["manager"],
+        )
+        stale_role = AdminRoleCreate(
+            code="ci_stale_role_" + suffix,
+            name="CI Stale Role",
+        )
+        for operation in (
+            lambda: create_admin(stale_admin, db, caller),
+            lambda: create_role(stale_role, db, caller),
+            lambda: update_role_permissions("manager", ["cards.view"], db, caller),
+        ):
+            try:
+                operation()
+                raise AssertionError("A stale owner request must not mutate administrator access")
+            except HTTPException as exc:
+                assert exc.status_code == 403
 
         db.rollback()
         assert any(role.code == "owner" for role in db.get(AdminUser, target_id).roles)
