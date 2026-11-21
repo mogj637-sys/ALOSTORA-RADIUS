@@ -169,6 +169,13 @@ def test_preview_removes_router_api_and_shared_secret_aliases_recursively():
             "passphrase": "passphrase-value",
         },
         "normal-field": "keep",
+        "metadata": {
+            "client_secret_value": "nested-secret-value",
+            "access_token_hash": "nested-token-value",
+            "password_value": "nested-password-value",
+            "credential_payload": "nested-credential-value",
+            "display_label": "keep-this-label",
+        },
     }])[0]
 
     assert result["safe_snapshot"] == {
@@ -176,6 +183,7 @@ def test_preview_removes_router_api_and_shared_secret_aliases_recursively():
         "username": "safe-card",
         "normal-field": "keep",
         "credentials": {},
+        "metadata": {"display_label": "keep-this-label"},
     }
     for secret in (
         "api-secret-value",
@@ -187,5 +195,9 @@ def test_preview_removes_router_api_and_shared_secret_aliases_recursively():
         "access-token-value",
         "auth-token-value",
         "passphrase-value",
+        "nested-secret-value",
+        "nested-token-value",
+        "nested-password-value",
+        "nested-credential-value",
     ):
         assert secret not in repr(result)
