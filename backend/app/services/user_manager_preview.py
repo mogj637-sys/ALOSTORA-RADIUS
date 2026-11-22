@@ -33,13 +33,26 @@ PASSWORD_KEYS = (
 
 
 def _is_sensitive_key(value: Any) -> bool:
+    raw_key = str(value).strip()
+    # Preserve word boundaries for snake_case, kebab-case, and camelCase
+    # aliases such as pass_value, pwd, and userPass. These are credential
+    # markers too, but matching the substring "pass" globally would also
+    # redact ordinary fields such as "compass".
+    tokenized_key = re.sub(r"([a-z0-9])([A-Z])", r"\\1_\\2", raw_key)
+    tokens = {
+        token.lower()
+        for token in re.findall(r"[A-Za-z0-9]+", tokenized_key)
+    }
+    if tokens.intersection({"pass", "pwd"}):
+        return True
+
     key = _normalized_key(value)
     # Field names frequently add prefixes/suffixes (for example
     # client_secret_value or access_token_hash). Match sensitive markers
     # anywhere in the normalized key so aliases cannot bypass redaction.
     sensitive_markers = (
         "password", "passwd", "secret", "token", "credential",
-        "passphrase", "apikey", "privatekey",
+        "passphrase", "passcode", "apikey", "privatekey",
     )
     return key in SENSITIVE_KEYS or any(marker in key for marker in sensitive_markers)
 
