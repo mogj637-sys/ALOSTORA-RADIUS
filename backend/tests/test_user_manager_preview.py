@@ -174,7 +174,12 @@ def test_preview_removes_router_api_and_shared_secret_aliases_recursively():
             "access_token_hash": "nested-token-value",
             "password_value": "nested-password-value",
             "credential_payload": "nested-credential-value",
+            "pass_value": "nested-pass-value",
+            "pwd": "nested-pwd-value",
+            "userPass": "camel-pass-value",
+            "passcode": "passcode-value",
             "display_label": "keep-this-label",
+            "compass": "north",
         },
     }])[0]
 
@@ -182,7 +187,10 @@ def test_preview_removes_router_api_and_shared_secret_aliases_recursively():
         "external_id": "*13",
         "username": "safe-card",
         "normal-field": "keep",
-        "metadata": {"display_label": "keep-this-label"},
+        "metadata": {
+            "display_label": "keep-this-label",
+            "compass": "north",
+        },
     }
     assert "credentials" not in result["safe_snapshot"]
 
@@ -200,5 +208,9 @@ def test_preview_removes_router_api_and_shared_secret_aliases_recursively():
         "nested-token-value",
         "nested-password-value",
         "nested-credential-value",
+        "nested-pass-value",
+        "nested-pwd-value",
+        "camel-pass-value",
+        "passcode-value",
     ):
         assert secret not in repr(result)
