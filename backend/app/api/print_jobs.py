@@ -126,26 +126,44 @@ def _existing_job(
 
 @router.get("", response_model=list[PrintJobHistoryResponse], dependencies=[Depends(require_permission("printing.view"))])
 def list_print_jobs(
-    point_of_sale_id: int = Query(gt=0),
+    point_of_sale_id: int | None = Query(default=None, gt=0),
     limit: int = Query(default=30, ge=1, le=100),
     db: Session = Depends(get_db),
     user: AdminUser = Depends(require_permission("printing.view")),
 ):
-    if not any(role.code == "owner" for role in user.roles) and point_of_sale_id not in {point.id for point in user.point_of_sales}:
-        raise HTTPException(status_code=403, detail="لا تملك صلاحية الاطلاع على عمليات نقطة البيع هذه")
-    point = db.get(PointOfSale, point_of_sale_id)
-    if point is None:
-        raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
+    is_system_owner = any(role.code == "owner" for role in user.roles)
+    assigned_point_ids = {point.id for point in user.point_of_sales}
+
+    query = db.query(PrintJob)
+    if point_of_sale_id is not None:
+        if not is_system_owner and point_of_sale_id not in assigned_point_ids:
+            raise HTTPException(status_code=403, detail="لا تملك صلاحية الاطلاع على عمليات نقطة البيع هذه")
+        point = db.get(PointOfSale, point_of_sale_id)
+        if point is None:
+            raise HTTPException(status_code=404, detail="نقطة البيع غير موجودة")
+        query = query.filter(PrintJob.point_of_sale_id == point_of_sale_id)
+    elif not is_system_owner:
+        if not assigned_point_ids:
+            return []
+        query = query.filter(PrintJob.point_of_sale_id.in_(assigned_point_ids))
+
     jobs = (
-        db.query(PrintJob)
-        .filter(PrintJob.point_of_sale_id == point_of_sale_id)
+        query
         .order_by(PrintJob.created_at.desc())
         .limit(limit)
         .all()
     )
+    point_ids = {job.point_of_sale_id for job in jobs}
+    point_names = {
+        point.id: point.name
+        for point in db.query(PointOfSale).filter(PointOfSale.id.in_(point_ids)).all()
+    } if point_ids else {}
+
     return [
         PrintJobHistoryResponse(
             id=job.id,
+            point_of_sale_id=job.point_of_sale_id,
+            point_of_sale_name=point_names.get(job.point_of_sale_id, "نقطة بيع غير متاحة"),
             template_code=job.template_code,
             print_options=job.print_options or {},
             card_count=job.card_count,

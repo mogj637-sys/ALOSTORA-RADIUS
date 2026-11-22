@@ -66,6 +66,8 @@ class PrintJobHistoryCardResponse(BaseModel):
 
 class PrintJobHistoryResponse(BaseModel):
     id: UUID
+    point_of_sale_id: int
+    point_of_sale_name: str
     template_code: str | None
     card_count: int
     is_reprint: bool

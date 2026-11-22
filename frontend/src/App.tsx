@@ -400,6 +400,8 @@ type PrintOptions = {
 
 type PrintJobHistory = {
   id: string;
+  point_of_sale_id: number;
+  point_of_sale_name: string;
   template_code: string | null;
   card_count: number;
   is_reprint: boolean;
@@ -534,12 +536,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     // Credential disclosure is never implied by a broad manage permission.
     return false;
   };
-  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "printing-history" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
   const [openNavGroup, setOpenNavGroup] = useState<"system" | "cards" | "printing" | null>(null);
   useEffect(() => {
     if (["card-create", "cards", "batches", "templates"].includes(page)) setOpenNavGroup("cards");
     else if (["plans", "routers", "reports"].includes(page)) setOpenNavGroup("system");
-    else if (page === "pos") setOpenNavGroup("printing");
+    else if (page === "pos" || page === "printing-history") setOpenNavGroup("printing");
   }, [page]);
   const [systemStatus, setSystemStatus] = useState<{ api: string; database: string; version: string; checkedAt: string } | null>(null);
   const [systemStatusLoading, setSystemStatusLoading] = useState(false);
@@ -1493,6 +1495,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setPrintHistory(result);
   }
 
+  async function loadAllPrintHistory() {
+    const result = await apiRequest<PrintJobHistory[]>(token, "/api/v1/print-jobs?limit=100");
+    setPrintHistory(result);
+  }
+
   async function loadPointsOfSale() {
     const result = await apiRequest<PointOfSale[]>(token, "/api/v1/points-of-sale?include_inactive=true");
     setPoints(result);
@@ -1697,6 +1704,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
 
   useEffect(() => {
     if (page !== "pos") setPrintPreviewCards([]);
+    if (page === "printing-history" && can("printing.view")) {
+      setError("");
+      loadAllPrintHistory().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل سجل الطباعة"));
+    }
     if (page === "audit" && can("audit.view")) {
       setError("");
       loadAuditLogs(0).catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل سجل العمليات"));
@@ -2804,6 +2815,39 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  function renderPrintingHistory() {
+    return (
+      <section className="panel report-section">
+        <div className="section-heading compact-heading">
+          <div>
+            <span className="eyebrow">صلاحية عرض الطباعة فقط</span>
+            <h2>سجل عمليات الطباعة</h2>
+            <p>يعرض السجل عمليات نقاط البيع المرتبطة بحسابك فقط، ولا يتضمن كلمات المرور.</p>
+          </div>
+          <div className="form-actions">
+            <span className="count-tag">{printHistory.length} عملية</span>
+            <button type="button" className="secondary-button" onClick={() => loadAllPrintHistory().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحديث سجل الطباعة"))}>تحديث</button>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>التاريخ</th><th>نقطة البيع</th><th>القالب</th><th>عدد الكروت</th><th>نوع العملية</th></tr></thead>
+            <tbody>{printHistory.map((job) => (
+              <tr key={job.id}>
+                <td>{new Date(job.created_at).toLocaleString("ar")}</td>
+                <td>{job.point_of_sale_name} · #{job.point_of_sale_id}</td>
+                <td>{job.template_code || "افتراضي"}</td>
+                <td>{job.card_count}</td>
+                <td>{job.is_reprint ? "إعادة طباعة" : "طباعة أصلية"}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+          {printHistory.length === 0 && <div className="empty-state">لا توجد عمليات طباعة ضمن نقاط البيع المرتبطة بحسابك.</div>}
+        </div>
+      </section>
+    );
+  }
+
   function renderPos() {
     const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
     const selectedLayout = selectedTemplate?.layout ?? {};
@@ -3379,7 +3423,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             </div>}
           </div>}
           {can("pos.view") && <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>}
-          {(can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && <div className="nav-group">
+          {(can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") && <div className="nav-group">
             <button type="button" className={openNavGroup === "printing" ? "nav-group-toggle expanded" : "nav-group-toggle"} aria-expanded={openNavGroup === "printing"} onClick={() => setOpenNavGroup((current) => current === "printing" ? null : "printing")}>
               <span>الطباعة</span><span className="nav-chevron" aria-hidden="true">⌄</span>
             </button>
@@ -3387,6 +3431,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               <button className={page === "pos" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("pos")}>الطباعة والدفعات</button>
             </div>}
           </div>}
+          {can("printing.view") && !(can("cards.view") && can("pos.view") && can("templates.view")) && <button className={page === "printing-history" ? "nav-item active" : "nav-item"} onClick={() => setPage("printing-history")}>سجل الطباعة</button>}
           {can("audit.view") && <button className={page === "audit" ? "nav-item active" : "nav-item"} onClick={() => setPage("audit")}>سجل عمليات النظام</button>}
           {user.roles.includes("owner") && <button className={page === "settings" ? "nav-item active" : "nav-item"} onClick={() => setPage("settings")}>الإعدادات والصيانة</button>}
         </nav>
@@ -3394,12 +3439,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "الطباعة والدفعات" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "reports" ? "التقارير" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : page === "settings" ? "الإعدادات والصيانة" : "إدارة أجهزة MikroTik"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "الطباعة والدفعات" : page === "printing-history" ? "سجل الطباعة" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "reports" ? "التقارير" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : page === "settings" ? "الإعدادات والصيانة" : "إدارة أجهزة MikroTik"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") ? renderPos() : page === "pos-management" && can("pos.view") ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && can("pos.view") ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>

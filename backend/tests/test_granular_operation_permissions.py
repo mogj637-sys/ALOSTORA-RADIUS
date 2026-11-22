@@ -105,6 +105,27 @@ def test_print_history_uses_printing_view_and_enforces_point_scope(owner_client)
         },
     )
     assert printed.status_code == 201, printed.text
+    card_b = client.post(
+        "/api/v1/cards/single",
+        headers=owner_headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": "CI_PRINT_" + secrets.token_hex(5),
+            "card_type": "username_only",
+            "point_of_sale_id": point_b.json()["id"],
+        },
+    )
+    assert card_b.status_code == 201, card_b.text
+    printed_b = client.post(
+        "/api/v1/print-jobs",
+        headers=owner_headers,
+        json={
+            "idempotency_key": "ci-print-history-" + secrets.token_hex(6),
+            "point_of_sale_id": point_b.json()["id"],
+            "card_ids": [card_b.json()["id"]],
+        },
+    )
+    assert printed_b.status_code == 201, printed_b.text
 
     role_code, username, _, staff_headers = _create_role_user(
         client, owner_headers, ["printing.view"], point_ids=[point_a.json()["id"]]
@@ -121,7 +142,15 @@ def test_print_history_uses_printing_view_and_enforces_point_scope(owner_client)
         )
         assert history.status_code == 200, history.text
         assert len(history.json()) == 1
+        assert history.json()[0]["point_of_sale_id"] == point_a.json()["id"]
+        assert history.json()[0]["point_of_sale_name"] == point_a.json()["name"]
         assert "password" not in history.json()[0]["cards"][0]
+
+        assigned_history = client.get("/api/v1/print-jobs?limit=100", headers=staff_headers)
+        assert assigned_history.status_code == 200, assigned_history.text
+        assert len(assigned_history.json()) == 1
+        assert assigned_history.json()[0]["point_of_sale_id"] == point_a.json()["id"]
+        assert "password" not in assigned_history.json()[0]["cards"][0]
 
         outside_scope = client.get(
             f"/api/v1/print-jobs?point_of_sale_id={point_b.json()['id']}",
