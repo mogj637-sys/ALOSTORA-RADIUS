@@ -281,6 +281,7 @@ class RadiusSession(Base):
         UniqueConstraint("router_id", "acct_session_id", name="uq_radius_router_session"),
         Index("ix_radius_sessions_card_active", "card_id", "stopped_at"),
         Index("ix_radius_sessions_started_at", "started_at"),
+        Index("ix_radius_sessions_card_started", "card_id", "started_at", "id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
