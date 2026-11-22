@@ -38,7 +38,7 @@ def _is_sensitive_key(value: Any) -> bool:
     # aliases such as pass_value, pwd, and userPass. These are credential
     # markers too, but matching the substring "pass" globally would also
     # redact ordinary fields such as "compass".
-    tokenized_key = re.sub(r"([a-z0-9])([A-Z])", r"\\1_\\2", raw_key)
+    tokenized_key = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", raw_key)
     tokens = {
         token.lower()
         for token in re.findall(r"[A-Za-z0-9]+", tokenized_key)
