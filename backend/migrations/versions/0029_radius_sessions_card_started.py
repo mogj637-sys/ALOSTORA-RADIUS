@@ -1,12 +1,12 @@
 """index card session history by card and start time
 
-Revision ID: 0029_radius_sessions_card_started
+Revision ID: 0029_radius_session_idx
 Revises: 0028_pos_delete_policy
 """
 from alembic import op
 
 
-revision = "0029_radius_sessions_card_started"
+revision = "0029_radius_session_idx"
 down_revision = "0028_pos_delete_policy"
 branch_labels = None
 depends_on = None
