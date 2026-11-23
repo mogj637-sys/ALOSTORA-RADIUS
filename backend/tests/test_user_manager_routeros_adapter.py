@@ -588,3 +588,28 @@ def test_probe_rejects_configured_version_mismatch_after_login(monkeypatch):
 
     assert FakePool.last.kwargs["plaintext_login"] is False
     assert FakePool.last.disconnected is True
+
+
+
+def test_v6_42_exact_user_inspection_uses_legacy_login_inside_tls(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    resources = _fake_resources(version="6.42.12")
+    resources["/tool/user-manager/user"] = FakeResource(rows=[], count=0)
+    api = FakeApi(resources)
+    monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
+
+    result = adapter.inspect_user_manager_user(
+        host="192.0.2.10",
+        port=8729,
+        username="reader",
+        password="secret",
+        routeros_version="6.42.12",
+        target_username="missing-card",
+    )
+
+    assert result is None
+    assert FakePool.last.kwargs["plaintext_login"] is False
+    assert FakePool.last.kwargs["use_ssl"] is True
+    assert FakePool.last.kwargs["ssl_verify"] is True
+    assert FakePool.last.kwargs["ssl_verify_hostname"] is True
+    assert FakePool.last.disconnected is True

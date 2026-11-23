@@ -173,6 +173,7 @@ def test_exact_user_inspection_endpoint_is_read_only_and_does_not_import(owner_c
     assert data["user"]["usage"]["download_used_bytes"] == "12345"
     assert data["user"]["usage"]["missing_fields_are_unknown"] is True
     assert seen["target_username"] == "voucher-100"
+    assert seen["routeros_version"] == "6.49.23"
     assert seen["host"] == "192.0.2.55"
     assert seen["use_ssl"] is True
 
