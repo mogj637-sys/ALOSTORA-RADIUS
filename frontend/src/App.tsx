@@ -67,7 +67,7 @@ type Card = {
   active_sessions_count: number;
   ended_sessions_count: number;
   last_session_at: string | null;
-  last_accounting_at: string | null;
+  last_session_update_at: string | null;
   remaining_time_seconds: number | null;
   remaining_data_bytes: number | null;
   shared_users_limit: number | null;
@@ -2589,7 +2589,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         {can("sessions.view") && <button type="button" role="tab" aria-selected={cardManagementTab === "sessions"} className={cardManagementTab === "sessions" ? "active" : ""} onClick={() => { setCardManagementTab("sessions"); setSelectedCardIds([]); loadRadiusSessions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل جلسات المستخدمين")); }}>جلسات المستخدمين ({radiusSessions.active_count.toLocaleString("ar")})</button>}
       </div>}
       {user.card_visibility !== "search_any" && cardManagementTab === "batches" ? renderBatches() : user.card_visibility !== "search_any" && cardManagementTab === "sessions" ? renderRadiusSessions() : <>
-      <p className="card-source-note">هذه القائمة تعرض الكروت المسجلة في قاعدة بيانات RADIUS. جلب كروت MikroTik مباشرة سيُضاف عند تنفيذ ربط مزامنة الراوتر. تُحدَّث أرصدة الوقت والرفع والتنزيل عند وصول رسائل محاسبة RADIUS (Start / Interim / Stop)، لذلك قد تتأخر عن الاستهلاك اللحظي بين الرسائل. تاريخ آخر محاسبة هو آخر تحديث استلمه الخادم، وليس مؤشراً لحظياً.</p>
+      <p className="card-source-note">هذه القائمة تعرض الكروت المسجلة في قاعدة بيانات RADIUS. جلب كروت MikroTik مباشرة سيُضاف عند تنفيذ ربط مزامنة الراوتر. تُحدَّث أرصدة الوقت والرفع والتنزيل عند وصول رسائل محاسبة RADIUS (Start / Interim / Stop)، لذلك قد تتأخر عن الاستهلاك اللحظي بين الرسائل. وقت آخر تحديث للجلسة هو آخر تحديث مسجل في RADIUS؛ وقد يتغير عند إغلاق جلسة قديمة آلياً، ولا يمثل مؤشراً لحظياً.</p>
       {(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <div className="card-selection-toolbar">
         <label><input type="checkbox" disabled={selectableCards.length === 0} checked={selectableCards.length > 0 && selectableCards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? selectableCards.map((card) => card.id) : [])} /> تحديد الكروت المؤهلة في الصفحة الحالية</label>
         <span>تم تحديد {selectedCardIds.length} كرت من الصفحة الحالية</span>
@@ -2612,7 +2612,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         {(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <div><strong>{selectedCardIds.length.toLocaleString("ar")}</strong><span>كرت محدد للطباعة</span></div>}
         {busy && <span className="card-results-loading">جارٍ تحديث النتائج…</span>}
       </div>
-      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>أول استخدام</th><th>تاريخ الانتهاء</th><th>وقت الجلسات المستخدم / المتبقي</th><th>الوقت المتبقي للصلاحية</th><th>الجلسات النشطة / المنتهية</th><th>آخر اتصال / تحديث محاسبة</th><th>الاستهلاك (رفع / تنزيل)</th><th>البيانات المستهلكة / المتبقية</th><th>حد التزامن المسموح</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.update") && <th>الإجراءات</th>}</tr></thead><tbody>
+      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>أول استخدام</th><th>تاريخ الانتهاء</th><th>وقت الجلسات المستخدم / المتبقي</th><th>الوقت المتبقي للصلاحية</th><th>الجلسات النشطة / المنتهية</th><th>آخر اتصال / تحديث الجلسة</th><th>الاستهلاك (رفع / تنزيل)</th><th>البيانات المستهلكة / المتبقية</th><th>حد التزامن المسموح</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.update") && <th>الإجراءات</th>}</tr></thead><tbody>
         {cards.map((card) => {
           const snapshot = card.plan_snapshot ?? {};
           const remaining = typeof card.remaining_time_seconds === "number" ? card.remaining_time_seconds : null;
@@ -2653,7 +2653,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <td>{formatDuration(card.used_seconds)} / {remaining === null ? "غير محدود" : formatDuration(remaining)}</td>
             <td>{validityRemainingLabel}</td>
             <td><div className="card-session-meta"><span>نشطة: {card.active_sessions_count.toLocaleString("ar")}</span><span>منتهية: {card.ended_sessions_count.toLocaleString("ar")}</span><small>الإجمالي: {card.total_sessions_count.toLocaleString("ar")}</small></div></td>
-            <td><div className="card-session-meta"><span>آخر اتصال: {formatDateTime(card.last_session_at)}</span><span>آخر تحديث محاسبة: {formatDateTime(card.last_accounting_at)}</span></div></td>
+            <td><div className="card-session-meta"><span>آخر اتصال: {formatDateTime(card.last_session_at)}</span><span>آخر تحديث للجلسة: {formatDateTime(card.last_session_update_at)}</span></div></td>
             <td>{formatBytes(card.upload_bytes)} / {formatBytes(card.download_bytes)}</td>
             <td>{formatBytes(totalConsumedBytes)} / {remainingDataBytes === null ? "غير محدود" : formatBytes(remainingDataBytes)}</td>
             <td>{sharedUsersLabel}</td>
