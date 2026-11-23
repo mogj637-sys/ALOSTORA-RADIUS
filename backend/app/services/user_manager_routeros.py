@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,6 +33,31 @@ USER_MANAGER_RESOURCES = {
     "sessions": "/tool/user-manager/session",
     "customers": "/tool/user-manager/customer",
 }
+
+
+def _routeros_version_key(version: str | None) -> tuple[int, int]:
+    match = re.match(r"^\\s*(\\d+)\\.(\\d+)(?=\\.|\\s|$)", version or "")
+    if not match:
+        raise ValueError(
+            "أدخل إصدار RouterOS v6 بدقة (مثال 6.49.17 أو 6.42.12) لتحديد طريقة تسجيل الدخول."
+        )
+    major, minor = (int(part) for part in match.groups())
+    if major != 6:
+        raise ValueError("موصل User Manager الحالي يدعم RouterOS v6 فقط.")
+    return major, minor
+
+
+def routeros_login_method(version: str | None) -> bool:
+    """Return True for the post-6.43 login, False for the legacy challenge flow."""
+    _major, minor = _routeros_version_key(version)
+    return minor >= 43
+
+
+def _ensure_routeros_version_matches(actual: str, configured: str | None) -> None:
+    if _routeros_version_key(actual) != _routeros_version_key(configured):
+        raise UserManagerConnectionError(
+            "إصدار RouterOS الفعلي لا يطابق الإصدار المسجل؛ حدّث الإصدار المحفوظ ثم أعد الفحص."
+        )
 
 
 def _first(items: list[dict[str, Any]], key: str) -> str | None:
@@ -91,18 +117,20 @@ def inspect_routeros_user_manager(
     username: str,
     password: str,
     use_ssl: bool | None = None,
+    routeros_version: str | None = None,
     timeout_seconds: float = 8.0,
 ) -> RouterProbe:
     """Connect and inspect metadata/counts only. Never changes router state."""
+    plaintext_login = routeros_login_method(routeros_version)
     tls_enabled = _require_api_tls(port, use_ssl)
     pool = routeros_api.RouterOsApiPool(
         host,
         username=username,
         password=password,
         port=port,
-        # RouterOS 6.43+ sends the password in an API word. The transport
-        # guard above guarantees that this modern login is protected by TLS.
-        plaintext_login=tls_enabled,
+        # RouterOS 6.43+ uses the modern login; earlier v6 uses the
+        # challenge-response flow. Both remain protected by verified TLS.
+        plaintext_login=plaintext_login,
         use_ssl=tls_enabled,
         ssl_verify=True,
         ssl_verify_hostname=True,
@@ -119,6 +147,7 @@ def inspect_routeros_user_manager(
             raise UserManagerConnectionError(
                 "هذا الموصل مخصص حالياً لـ RouterOS v6؛ دعم v7 يحتاج موصلاً واختبارات منفصلة."
             )
+        _ensure_routeros_version_matches(version, routeros_version)
         package_names = {
             str(row.get("name", "")).lower()
             for row in packages
@@ -201,6 +230,7 @@ def inspect_user_manager_user(
     password: str,
     target_username: str,
     use_ssl: bool | None = None,
+    routeros_version: str | None = None,
     timeout_seconds: float = 8.0,
 ) -> dict[str, Any] | None:
     """Read one exact user and its directly related profile/limitations.
@@ -211,15 +241,16 @@ def inspect_user_manager_user(
     if not target_username or len(target_username) > 120:
         raise ValueError("Invalid User Manager username")
 
+    plaintext_login = routeros_login_method(routeros_version)
     tls_enabled = _require_api_tls(port, use_ssl)
     pool = routeros_api.RouterOsApiPool(
         host,
         username=username,
         password=password,
         port=port,
-        # The post-6.43 login carries the password in the API payload;
-        # never use it unless TLS protects the transport.
-        plaintext_login=tls_enabled,
+        # Select the login protocol from the configured v6 minor release;
+        # both modern and legacy authentication remain inside verified TLS.
+        plaintext_login=plaintext_login,
         use_ssl=tls_enabled,
         ssl_verify=True,
         ssl_verify_hostname=True,
@@ -234,6 +265,7 @@ def inspect_user_manager_user(
             raise UserManagerConnectionError(
                 "هذا الفحص مخصص حالياً لـ RouterOS v6؛ دعم v7 يحتاج موصلاً واختبارات منفصلة."
             )
+        _ensure_routeros_version_matches(version, routeros_version)
 
         user_path = "/tool/user-manager/user"
         exact_count = _count_only(

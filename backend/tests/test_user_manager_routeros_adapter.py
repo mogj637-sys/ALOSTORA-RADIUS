@@ -100,7 +100,7 @@ def test_v6_probe_only_reads_metadata_and_count_only(monkeypatch):
     monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
 
     result = adapter.inspect_routeros_user_manager(
-        host="192.0.2.10", port=8729, username="reader", password="secret"
+        host="192.0.2.10", port=8729, username="reader", password="secret", routeros_version="6.49.23"
     )
 
     assert result.version.startswith("6.49.23")
@@ -162,7 +162,7 @@ def test_probe_disconnects_socket_when_login_fails_before_connected(monkeypatch)
     monkeypatch.setattr(FakePool, "get_api", fail_before_connected)
     with pytest.raises(adapter.UserManagerConnectionError):
         adapter.inspect_routeros_user_manager(
-            host="192.0.2.10", port=8729, username="reader", password="secret"
+            host="192.0.2.10", port=8729, username="reader", password="secret", routeros_version="6.49.23"
         )
 
     assert FakePool.last.connected is False
@@ -179,7 +179,7 @@ def test_user_inspection_disconnects_socket_when_login_fails_before_connected(mo
     with pytest.raises(adapter.UserManagerConnectionError):
         adapter.inspect_user_manager_user(
             host="192.0.2.10", port=8729, username="reader",
-            password="secret", target_username="voucher-100",
+            password="secret", routeros_version="6.49.23", target_username="voucher-100",
         )
 
     assert FakePool.last.connected is False
@@ -193,7 +193,7 @@ def test_v7_is_not_misreported_as_legacy_v6(monkeypatch):
 
     with pytest.raises(adapter.UserManagerConnectionError, match="RouterOS v6"):
         adapter.inspect_routeros_user_manager(
-            host="192.0.2.10", port=8729, username="reader", password="secret"
+            host="192.0.2.10", port=8729, username="reader", password="secret", routeros_version="6.49.23"
         )
 
 
@@ -203,7 +203,7 @@ def test_missing_user_manager_package_is_warning_not_empty_inventory(monkeypatch
     monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
 
     result = adapter.inspect_routeros_user_manager(
-        host="192.0.2.10", port=8729, username="reader", password="secret"
+        host="192.0.2.10", port=8729, username="reader", password="secret", routeros_version="6.49.23"
     )
 
     assert result.user_manager_available is False
@@ -221,7 +221,7 @@ def test_api_error_is_sanitized(monkeypatch):
     monkeypatch.setattr(FakePool, "get_api", fail)
     with pytest.raises(adapter.UserManagerConnectionError) as error:
         adapter.inspect_routeros_user_manager(
-            host="192.0.2.10", port=8729, username="reader", password="secret"
+            host="192.0.2.10", port=8729, username="reader", password="secret", routeros_version="6.49.23"
         )
     assert "sensitive router command details" not in str(error.value)
 
@@ -263,7 +263,7 @@ def test_exact_user_inspection_uses_device_query_and_never_requests_password(mon
         host="192.0.2.10",
         port=8729,
         username="reader",
-        password="secret",
+        password="secret", routeros_version="6.49.23",
         target_username="voucher-100",
     )
 
@@ -315,7 +315,7 @@ def test_exact_user_inspection_returns_none_when_not_found(monkeypatch):
         host="192.0.2.10",
         port=8729,
         username="reader",
-        password="secret",
+        password="secret", routeros_version="6.49.23",
         target_username="missing-card",
     )
 
@@ -337,7 +337,7 @@ def test_exact_user_inspection_rejects_unfiltered_or_ambiguous_result(monkeypatc
             host="192.0.2.10",
             port=8729,
             username="reader",
-            password="secret",
+            password="secret", routeros_version="6.49.23",
             target_username="voucher-100",
         )
 
@@ -356,7 +356,7 @@ def test_exact_user_inspection_rejects_wrong_username_returned_by_query(monkeypa
             host="192.0.2.10",
             port=8729,
             username="reader",
-            password="secret",
+            password="secret", routeros_version="6.49.23",
             target_username="voucher-100",
         )
 
@@ -377,7 +377,7 @@ def test_exact_user_filter_count_prevents_bulk_read_when_router_ignores_query(mo
             host="192.0.2.10",
             port=8729,
             username="reader",
-            password="secret",
+            password="secret", routeros_version="6.49.23",
             target_username="voucher-100",
         )
 
@@ -399,7 +399,7 @@ def test_exact_user_count_zero_skips_detail_print(monkeypatch):
         host="192.0.2.10",
         port=8729,
         username="reader",
-        password="secret",
+        password="secret", routeros_version="6.49.23",
         target_username="missing-card",
     )
 
@@ -433,7 +433,7 @@ def test_profile_relation_count_guard_stops_before_large_detail_read(monkeypatch
             host="192.0.2.10",
             port=8729,
             username="reader",
-            password="secret",
+            password="secret", routeros_version="6.49.23",
             target_username="voucher-100",
         )
 
@@ -452,7 +452,7 @@ def test_router_probe_rejects_unencrypted_api_before_opening_socket(monkeypatch)
             host="192.0.2.10",
             port=8728,
             username="reader",
-            password="secret",
+            password="secret", routeros_version="6.49.23",
             use_ssl=False,
         )
 
@@ -475,7 +475,7 @@ def test_exact_user_inspection_uses_explicit_tls_on_custom_port(monkeypatch):
         host="192.0.2.10",
         port=18729,
         username="reader",
-        password="secret",
+        password="secret", routeros_version="6.49.23",
         target_username="missing-card",
         use_ssl=True,
     )
@@ -495,7 +495,7 @@ def test_exact_user_inspection_rejects_unencrypted_api_before_opening_socket(mon
             host="192.0.2.10",
             port=8728,
             username="reader",
-            password="secret",
+            password="secret", routeros_version="6.49.23",
             target_username="missing-card",
             use_ssl=False,
         )
@@ -515,7 +515,7 @@ def test_nonstandard_api_port_defaults_to_tls_when_not_explicitly_overridden(mon
         host="192.0.2.10",
         port=18729,
         username="reader",
-        password="secret",
+        password="secret", routeros_version="6.49.23",
     )
 
     assert FakePool.last.kwargs["use_ssl"] is True
@@ -532,7 +532,59 @@ def test_router_probe_rejects_plain_api_port_when_tls_is_unspecified(monkeypatch
             host="192.0.2.10",
             port=8728,
             username="reader",
-            password="secret",
+            password="secret", routeros_version="6.49.23",
         )
 
     assert FakePool.last is None
+
+
+
+def test_routeros_login_method_switches_at_version_6_43():
+    assert adapter.routeros_login_method("6.42.12") is False
+    assert adapter.routeros_login_method("6.43.1") is True
+    assert adapter.routeros_login_method("6.49.23 (stable)") is True
+
+
+@pytest.mark.parametrize("version", [None, "", "6.x", "7.18"])
+def test_routeros_login_method_requires_a_precise_routeros_v6_version(version):
+    with pytest.raises(ValueError):
+        adapter.routeros_login_method(version)
+
+
+def test_v6_42_probe_uses_legacy_challenge_login_inside_tls(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    api = FakeApi(_fake_resources(version="6.42.12"))
+    monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
+
+    result = adapter.inspect_routeros_user_manager(
+        host="192.0.2.10",
+        port=8729,
+        username="reader",
+        password="secret",
+        routeros_version="6.42.12",
+    )
+
+    assert result.version == "6.42.12"
+    assert FakePool.last.kwargs["plaintext_login"] is False
+    assert FakePool.last.kwargs["use_ssl"] is True
+    assert FakePool.last.kwargs["ssl_verify"] is True
+    assert FakePool.last.kwargs["ssl_verify_hostname"] is True
+    assert FakePool.last.disconnected is True
+
+
+def test_probe_rejects_configured_version_mismatch_after_login(monkeypatch):
+    monkeypatch.setattr(adapter.routeros_api, "RouterOsApiPool", FakePool)
+    api = FakeApi(_fake_resources(version="6.49.23 (stable)"))
+    monkeypatch.setattr(FakePool, "get_api", lambda self: (setattr(self, "connected", True) or api))
+
+    with pytest.raises(adapter.UserManagerConnectionError, match="لا يطابق"):
+        adapter.inspect_routeros_user_manager(
+            host="192.0.2.10",
+            port=8729,
+            username="reader",
+            password="secret",
+            routeros_version="6.42.12",
+        )
+
+    assert FakePool.last.kwargs["plaintext_login"] is False
+    assert FakePool.last.disconnected is True

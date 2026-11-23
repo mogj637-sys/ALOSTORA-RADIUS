@@ -9,7 +9,7 @@ from app.models.user_manager_preview import UserManagerImportPreview
 from app.services.user_manager_routeros import RouterProbe
 
 
-def _create_router(client, headers, *, api_port=8729, api_use_ssl=None):
+def _create_router(client, headers, *, api_port=8729, api_use_ssl=None, routeros_version="6.49.23"):
     payload = {
         "name": "UM probe " + secrets.token_hex(3),
         "nas_identifier": "um-probe-" + secrets.token_hex(4),
@@ -17,6 +17,7 @@ def _create_router(client, headers, *, api_port=8729, api_use_ssl=None):
         "api_port": api_port,
         "api_username": "um-reader",
         "api_secret": "api-secret-" + secrets.token_hex(8),
+        "routeros_version": routeros_version,
         "radius_secret": "radius-secret-" + secrets.token_hex(8),
     }
     if api_use_ssl is not None:
@@ -68,7 +69,35 @@ def test_user_manager_probe_returns_read_only_router_inventory(owner_client, mon
     assert seen["host"] == "192.0.2.55"
     assert seen["username"] == "um-reader"
     assert seen["use_ssl"] is True
+    assert seen["routeros_version"] == "6.49.23"
     assert seen["password"].startswith("api-secret-")
+    db = SessionLocal()
+    try:
+        assert db.get(Router, router_id).routeros_version == "6.49.23 (stable)"
+    finally:
+        db.close()
+
+
+
+def test_user_manager_probe_requires_precise_routeros_version(owner_client, monkeypatch):
+    client, headers, _ = owner_client
+    router_id = _create_router(client, headers, routeros_version=None)
+    called = False
+
+    def unexpected_probe(**_kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("adapter must not be called without a precise version")
+
+    monkeypatch.setattr(user_manager, "inspect_routeros_user_manager", unexpected_probe)
+    response = client.post(
+        f"/api/v1/routers/{router_id}/user-manager/test-connection",
+        headers=headers,
+    )
+
+    assert response.status_code == 409
+    assert "إصدار RouterOS" in response.json()["detail"]
+    assert called is False
 
 
 def test_user_manager_probe_requires_owner(owner_client):

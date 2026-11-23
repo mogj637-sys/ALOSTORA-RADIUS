@@ -20,6 +20,7 @@ from app.services.user_manager_routeros import (
     UserManagerConnectionError,
     inspect_routeros_user_manager,
     inspect_user_manager_user,
+    routeros_login_method,
 )
 
 router = APIRouter(
@@ -27,6 +28,13 @@ router = APIRouter(
     tags=["user-manager-sync"],
     dependencies=[Depends(get_current_owner)],
 )
+
+
+def _require_routeros_login_version(item: Router) -> None:
+    try:
+        routeros_login_method(item.routeros_version)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/{router_id}/user-manager/test-connection")
@@ -41,6 +49,7 @@ def test_user_manager_connection(router_id: int, db: Session = Depends(get_db)):
             status_code=409,
             detail="بيانات RouterOS API غير محفوظة لهذا الراوتر",
         )
+    _require_routeros_login_version(item)
     try:
         api_password = decrypt_router_secret(item.api_secret_encrypted)
         probe = inspect_routeros_user_manager(
@@ -49,7 +58,10 @@ def test_user_manager_connection(router_id: int, db: Session = Depends(get_db)):
             use_ssl=item.api_use_ssl,
             username=item.api_username,
             password=api_password,
+            routeros_version=item.routeros_version,
         )
+        item.routeros_version = probe.version
+        db.commit()
     except RouterSecretEncryptionNotConfigured as exc:
         raise HTTPException(status_code=503, detail="مفتاح تشفير أسرار الراوتر غير مضبوط") from exc
     except ValueError as exc:
@@ -95,6 +107,7 @@ def inspect_user_manager_user_endpoint(
             status_code=409,
             detail="بيانات RouterOS API غير محفوظة لهذا الراوتر",
         )
+    _require_routeros_login_version(item)
     try:
         api_password = decrypt_router_secret(item.api_secret_encrypted)
         user = inspect_user_manager_user(
@@ -103,6 +116,7 @@ def inspect_user_manager_user_endpoint(
             use_ssl=item.api_use_ssl,
             username=item.api_username,
             password=api_password,
+            routeros_version=item.routeros_version,
             target_username=payload.username,
         )
     except RouterSecretEncryptionNotConfigured as exc:
@@ -140,6 +154,7 @@ def preview_user_manager_user_endpoint(
             status_code=409,
             detail="بيانات RouterOS API غير محفوظة لهذا الراوتر",
         )
+    _require_routeros_login_version(item)
 
     try:
         api_password = decrypt_router_secret(item.api_secret_encrypted)
@@ -149,6 +164,7 @@ def preview_user_manager_user_endpoint(
             use_ssl=item.api_use_ssl,
             username=item.api_username,
             password=api_password,
+            routeros_version=item.routeros_version,
             target_username=payload.username,
         )
     except RouterSecretEncryptionNotConfigured as exc:
