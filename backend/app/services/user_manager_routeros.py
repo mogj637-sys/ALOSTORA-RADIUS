@@ -36,7 +36,7 @@ USER_MANAGER_RESOURCES = {
 
 
 def _routeros_version_key(version: str | None) -> tuple[int, int]:
-    match = re.match(r"^\\s*(\\d+)\\.(\\d+)(?=\\.|\\s|$)", version or "")
+    match = re.match(r"^\s*(\d+)\.(\d+)(?=\.|\s|$)", version or "")
     if not match:
         raise ValueError(
             "أدخل إصدار RouterOS v6 بدقة (مثال 6.49.17 أو 6.42.12) لتحديد طريقة تسجيل الدخول."
