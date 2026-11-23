@@ -147,7 +147,7 @@ class CardListItem(BaseModel):
     active_sessions_count: int = 0
     ended_sessions_count: int = 0
     last_session_at: datetime | None = None
-    last_accounting_at: datetime | None = None
+    last_session_update_at: datetime | None = None
     remaining_time_seconds: int | None = None
     remaining_data_bytes: int | None = None
     shared_users_limit: int | None = None
