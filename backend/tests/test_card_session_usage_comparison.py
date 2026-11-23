@@ -108,7 +108,7 @@ def test_card_session_activity_summary_reports_active_ended_and_latest_timestamp
         "active_sessions_count": 2,
         "ended_sessions_count": 5,
         "last_session_at": last_session,
-        "last_accounting_at": last_accounting,
+        "last_session_update_at": last_accounting,
     }
 
 
@@ -118,5 +118,5 @@ def test_card_session_activity_summary_defaults_cards_without_sessions_to_empty(
         "active_sessions_count": 0,
         "ended_sessions_count": 0,
         "last_session_at": None,
-        "last_accounting_at": None,
+        "last_session_update_at": None,
     }
