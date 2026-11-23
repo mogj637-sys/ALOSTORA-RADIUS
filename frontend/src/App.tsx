@@ -1535,12 +1535,17 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           });
       setPosDraft({ code: "", name: "", contactName: "", phone: "", debtLimit: "", allowCardCreation: true, allowPrinting: true });
       setEditingPosId(null);
-      await loadPointsOfSale();
-      setSelectedPosId(String(point.id));
-      const refreshes: Promise<unknown>[] = [loadPosInventory(String(point.id))];
-      if (can("printing.view")) refreshes.push(loadPrintHistory(String(point.id)));
-      if (can("finance.view")) refreshes.push(loadPosAccount(String(point.id)));
-      await Promise.all(refreshes);
+      if (can("pos.view")) {
+        await loadPointsOfSale();
+        setSelectedPosId(String(point.id));
+        const refreshes: Promise<unknown>[] = [loadPosInventory(String(point.id))];
+        if (can("printing.view")) refreshes.push(loadPrintHistory(String(point.id)));
+        if (can("finance.view")) refreshes.push(loadPosAccount(String(point.id)));
+        await Promise.all(refreshes);
+      } else {
+        // A create-only account must not be forced through the POS listing API.
+        setSelectedPosId("");
+      }
       setNotice(editingPosId ? "تم تحديث نقطة البيع." : "تم إنشاء نقطة البيع بنجاح.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر إنشاء نقطة البيع");
@@ -2735,18 +2740,20 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <div>
             <span className="eyebrow">إدارة المخزون والتوزيع</span>
             <h2>نقاط البيع</h2>
-            <p>سجّل نقاط البيع مرة واحدة، ثم اختر النقطة المسجلة عند إنشاء الكروت أو تنفيذ الطباعة.</p>
+            <p>{can("pos.view")
+              ? "سجّل نقاط البيع مرة واحدة، ثم اختر النقطة المسجلة عند إنشاء الكروت أو تنفيذ الطباعة."
+              : "لديك صلاحية إضافة نقطة بيع دون صلاحية استعراض النقاط المسجلة."}</p>
           </div>
-          <span className="count-tag">{points.length.toLocaleString("ar")} نقطة بيع</span>
+          {can("pos.view") && <span className="count-tag">{points.length.toLocaleString("ar")} نقطة بيع</span>}
         </div>
 
-        <div className="pos-management-summary">
+        {can("pos.view") && <div className="pos-management-summary">
           <article><span>إجمالي النقاط</span><strong>{points.length.toLocaleString("ar")}</strong><small>جميع النقاط المسجلة</small></article>
           <article><span>نقاط مفعّلة</span><strong>{activePoints.toLocaleString("ar")}</strong><small>متاحة للعمليات الجديدة</small></article>
           <article><span>نقاط متوقفة</span><strong>{inactivePoints.toLocaleString("ar")}</strong><small>محفوظة دون حذف سجلاتها</small></article>
-        </div>
+        </div>}
 
-        <div className="pos-management-layout">
+        <div className="pos-management-layout" style={!can("pos.view") ? { gridTemplateColumns: "minmax(0, 1fr)" } : undefined}>
           {(can("pos.create") || (editingPosId !== null && can("pos.update"))) && <form className="panel pos-editor-panel" onSubmit={createPointOfSale}>
             <div className="pos-editor-heading">
               <div><span className="eyebrow">{editingPosId !== null ? "تحديث البيانات" : "نقطة بيع جديدة"}</span><h3>{editingPosId !== null ? "تعديل نقطة البيع" : "إضافة نقطة بيع"}</h3></div>
@@ -2769,7 +2776,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             </div>
           </form>}
 
-          <section className="panel pos-directory-panel">
+          {can("pos.view") && <section className="panel pos-directory-panel">
             <div className="pos-directory-heading">
               <div><span className="eyebrow">دليل الموزعين</span><h3>النقاط المسجلة</h3><p>يمكنك تعديل بيانات النقطة أو إيقافها وإعادة تفعيلها.</p></div>
               <span className="count-tag">{points.length.toLocaleString("ar")} سجل</span>
@@ -2809,7 +2816,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               {visiblePoints.length === 0 && <div className="empty-state">{points.length === 0 ? "لا توجد نقاط بيع مسجلة بعد. أضف أول نقطة بيع من النموذج." : "لا توجد نقاط تطابق البحث أو الحالة المحددة."}</div>}
             </div>
             <div className="pos-directory-note"><span>معلومة</span> إيقاف نقطة البيع يمنع استخدامها في عمليات الطباعة الجديدة، مع الاحتفاظ بسجلها وحركاتها السابقة.</div>
-          </section>
+          </section>}
         </div>
       </section>
     );
@@ -3422,7 +3429,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               {can("templates.view") && <button className={page === "templates" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("templates")}>تصاميم الكروت</button>}
             </div>}
           </div>}
-          {can("pos.view") && <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>}
+          {(can("pos.view") || can("pos.create")) && <button className={page === "pos-management" ? "nav-item active" : "nav-item"} onClick={() => setPage("pos-management")}>نقاط البيع</button>}
           {(can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") && <div className="nav-group">
             <button type="button" className={openNavGroup === "printing" ? "nav-group-toggle expanded" : "nav-group-toggle"} aria-expanded={openNavGroup === "printing"} onClick={() => setOpenNavGroup((current) => current === "printing" ? null : "printing")}>
               <span>الطباعة</span><span className="nav-chevron" aria-hidden="true">⌄</span>
@@ -3444,7 +3451,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && can("pos.view") ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && (can("pos.view") || can("pos.create")) ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
