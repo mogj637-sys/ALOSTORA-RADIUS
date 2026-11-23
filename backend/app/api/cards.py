@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -90,6 +90,23 @@ def _build_card(plan: Plan, username: str, password: str, card_type: str, is_fre
         plan_snapshot=_plan_snapshot(plan),
         price_snapshot=0 if is_free else plan.price,
     )
+
+
+def _card_session_activity_summary(
+    total_sessions: int,
+    active_sessions: int,
+    last_session_at: datetime | None,
+    last_accounting_at: datetime | None,
+) -> dict:
+    total_count = max(0, int(total_sessions or 0))
+    active_count = max(0, int(active_sessions or 0))
+    return {
+        "total_sessions_count": total_count,
+        "active_sessions_count": active_count,
+        "ended_sessions_count": max(0, total_count - active_count),
+        "last_session_at": last_session_at,
+        "last_accounting_at": last_accounting_at,
+    }
 
 
 @router.get("/batches", response_model=list[CardBatchListItem])
@@ -356,15 +373,21 @@ def list_cards(
     )
     if not cards:
         return cards
-    session_counts = dict(
-        db.query(RadiusSession.card_id, func.count(RadiusSession.id))
-        .filter(
-            RadiusSession.card_id.in_([card.id for card in cards]),
-            RadiusSession.stopped_at.is_(None),
+    session_activity = {
+        card_id: _card_session_activity_summary(total_count, active_count, last_session_at, last_accounting_at)
+        for card_id, total_count, active_count, last_session_at, last_accounting_at in (
+            db.query(
+                RadiusSession.card_id,
+                func.count(RadiusSession.id),
+                func.coalesce(func.sum(case((RadiusSession.stopped_at.is_(None), 1), else_=0)), 0),
+                func.max(RadiusSession.started_at),
+                func.max(RadiusSession.last_update_at),
+            )
+            .filter(RadiusSession.card_id.in_([card.id for card in cards]))
+            .group_by(RadiusSession.card_id)
+            .all()
         )
-        .group_by(RadiusSession.card_id)
-        .all()
-    )
+    }
     for card in cards:
         if (
             card.expires_at is not None
@@ -372,7 +395,12 @@ def list_cards(
             and card.status not in {"suspended", "cancelled", "exhausted"}
         ):
             card.status = "expired"
-        card.active_sessions_count = int(session_counts.get(card.id, 0))
+        activity = session_activity.get(card.id) or _card_session_activity_summary(0, 0, None, None)
+        card.total_sessions_count = activity["total_sessions_count"]
+        card.active_sessions_count = activity["active_sessions_count"]
+        card.ended_sessions_count = activity["ended_sessions_count"]
+        card.last_session_at = activity["last_session_at"]
+        card.last_accounting_at = activity["last_accounting_at"]
         card.remaining_time_seconds, card.remaining_data_bytes = _remaining_limits(card, now)
         card.shared_users_limit = _snapshot_shared_users(card)
         card.speed_limit = _snapshot_rate_limit(card)
