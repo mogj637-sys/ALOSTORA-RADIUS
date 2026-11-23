@@ -1,6 +1,11 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from app.api.cards import _card_session_usage_comparison, _card_session_usage_comparison_totals
+from app.api.cards import (
+    _card_session_activity_summary,
+    _card_session_usage_comparison,
+    _card_session_usage_comparison_totals,
+)
 
 
 def _session(upload: int, download: int, seconds: int):
@@ -90,3 +95,28 @@ def test_card_usage_comparison_normalizes_empty_database_aggregates():
         "used_seconds": 0,
     }
     assert result["is_consistent"] is True
+
+
+def test_card_session_activity_summary_reports_active_ended_and_latest_timestamps():
+    last_session = datetime(2026, 11, 23, 10, 30, tzinfo=timezone.utc)
+    last_accounting = datetime(2026, 11, 23, 10, 32, tzinfo=timezone.utc)
+
+    result = _card_session_activity_summary(7, 2, last_session, last_accounting)
+
+    assert result == {
+        "total_sessions_count": 7,
+        "active_sessions_count": 2,
+        "ended_sessions_count": 5,
+        "last_session_at": last_session,
+        "last_accounting_at": last_accounting,
+    }
+
+
+def test_card_session_activity_summary_defaults_cards_without_sessions_to_empty():
+    assert _card_session_activity_summary(0, 0, None, None) == {
+        "total_sessions_count": 0,
+        "active_sessions_count": 0,
+        "ended_sessions_count": 0,
+        "last_session_at": None,
+        "last_accounting_at": None,
+    }
