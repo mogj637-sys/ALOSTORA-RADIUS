@@ -96,7 +96,7 @@ def _card_session_activity_summary(
     total_sessions: int,
     active_sessions: int,
     last_session_at: datetime | None,
-    last_accounting_at: datetime | None,
+    last_session_update_at: datetime | None,
 ) -> dict:
     total_count = max(0, int(total_sessions or 0))
     active_count = max(0, int(active_sessions or 0))
@@ -105,7 +105,7 @@ def _card_session_activity_summary(
         "active_sessions_count": active_count,
         "ended_sessions_count": max(0, total_count - active_count),
         "last_session_at": last_session_at,
-        "last_accounting_at": last_accounting_at,
+        "last_session_update_at": last_session_update_at,
     }
 
 
@@ -374,8 +374,8 @@ def list_cards(
     if not cards:
         return cards
     session_activity = {
-        card_id: _card_session_activity_summary(total_count, active_count, last_session_at, last_accounting_at)
-        for card_id, total_count, active_count, last_session_at, last_accounting_at in (
+        card_id: _card_session_activity_summary(total_count, active_count, last_session_at, last_session_update_at)
+        for card_id, total_count, active_count, last_session_at, last_session_update_at in (
             db.query(
                 RadiusSession.card_id,
                 func.count(RadiusSession.id),
@@ -400,7 +400,7 @@ def list_cards(
         card.active_sessions_count = activity["active_sessions_count"]
         card.ended_sessions_count = activity["ended_sessions_count"]
         card.last_session_at = activity["last_session_at"]
-        card.last_accounting_at = activity["last_accounting_at"]
+        card.last_session_update_at = activity["last_session_update_at"]
         card.remaining_time_seconds, card.remaining_data_bytes = _remaining_limits(card, now)
         card.shared_users_limit = _snapshot_shared_users(card)
         card.speed_limit = _snapshot_rate_limit(card)
