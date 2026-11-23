@@ -318,3 +318,44 @@ def test_exact_checkpoint_replay_rejects_new_source_ids(owner_client):
     finally:
         verify.close()
 
+
+
+
+def test_preview_page_rejects_external_id_repeated_on_a_later_page(owner_client):
+    client, headers, _ = owner_client
+    run_id = _create_preview_run(client, headers)
+    first = [{"external_id": "*CROSSPAGE", "username": "cross-page-card"}]
+    first_checkpoint = _checkpoint(cursor="cursor-2", records=1, pages=1)
+
+    db = SessionLocal()
+    try:
+        persist_user_manager_preview_page(
+            db,
+            sync_run_id=run_id,
+            records=first,
+            checkpoint=first_checkpoint,
+        )
+    finally:
+        db.close()
+
+    db = SessionLocal()
+    try:
+        with pytest.raises(BatchPersistenceError, match="earlier page"):
+            persist_user_manager_preview_page(
+                db,
+                sync_run_id=run_id,
+                records=first,
+                checkpoint=_checkpoint(cursor="cursor-3", records=2, pages=2),
+            )
+    finally:
+        db.close()
+
+    verify = SessionLocal()
+    try:
+        run = verify.get(UserManagerSyncRun, run_id)
+        previews = verify.query(UserManagerImportPreview).filter_by(sync_run_id=run_id).all()
+        assert run.checkpoint == first_checkpoint
+        assert run.discovered_users == 1
+        assert [row.external_user_id for row in previews] == ["*CROSSPAGE"]
+    finally:
+        verify.close()

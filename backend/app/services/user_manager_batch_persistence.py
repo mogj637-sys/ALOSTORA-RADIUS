@@ -171,6 +171,10 @@ def persist_user_manager_preview_page(
                 raise BatchPersistenceError("source profile ID exceeds 160 characters")
             existing = existing_previews.get(external_id)
             if existing is not None:
+                if not exact_replay:
+                    raise BatchPersistenceError(
+                        "source page repeated an external ID from an earlier page"
+                    )
                 if existing.source_fingerprint != candidate["source_fingerprint"]:
                     raise BatchPersistenceError(
                         "source record changed within the same preview run"
