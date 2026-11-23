@@ -143,7 +143,11 @@ class CardListItem(BaseModel):
     upload_bytes: int
     download_bytes: int
     plan_snapshot: dict
+    total_sessions_count: int = 0
     active_sessions_count: int = 0
+    ended_sessions_count: int = 0
+    last_session_at: datetime | None = None
+    last_accounting_at: datetime | None = None
     remaining_time_seconds: int | None = None
     remaining_data_bytes: int | None = None
     shared_users_limit: int | None = None
