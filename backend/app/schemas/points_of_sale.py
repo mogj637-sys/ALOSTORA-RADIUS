@@ -39,6 +39,15 @@ class PointOfSaleResponse(BaseModel):
     created_at: datetime
 
 
+class PointOfSaleOperationOption(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    name: str
+    is_active: bool
+
+
 class PointOfSaleInventoryResponse(BaseModel):
     point_of_sale_id: int
     point_of_sale_name: str
