@@ -16,6 +16,7 @@ from app.services.audit import record_audit
 from app.schemas.cards import (
     CardBatchCreate,
     CardBatchResponse,
+    CardCreationOptionsResponse,
     CardBatchListItem,
     CardCreatedSecret,
     CardCreateResponse,
@@ -107,6 +108,32 @@ def _card_session_activity_summary(
         "last_session_at": last_session_at,
         "last_session_update_at": last_session_update_at,
     }
+
+
+@router.get("/creation-options", response_model=CardCreationOptionsResponse)
+def get_card_creation_options(
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("cards.create")),
+) -> CardCreationOptionsResponse:
+    active_plans = (
+        db.query(Plan)
+        .filter(Plan.is_active.is_(True))
+        .order_by(Plan.id.asc())
+        .all()
+    )
+    if not active_plans:
+        return CardCreationOptionsResponse(plans=[], templates=[])
+
+    active_plan_ids = [plan.id for plan in active_plans]
+    templates = (
+        db.query(CardTemplate)
+        .filter(CardTemplate.plan_id.in_(active_plan_ids))
+        .order_by(CardTemplate.is_default.desc(), CardTemplate.id.asc())
+        .all()
+    )
+    template_plan_ids = {template.plan_id for template in templates if template.plan_id is not None}
+    usable_plans = [plan for plan in active_plans if plan.id in template_plan_ids]
+    return CardCreationOptionsResponse(plans=usable_plans, templates=templates)
 
 
 @router.get("/batches", response_model=list[CardBatchListItem])
