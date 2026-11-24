@@ -653,6 +653,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [planEditorOpen, setPlanEditorOpen] = useState(false);
   const [cardSearch, setCardSearch] = useState("");
+  const [cardSort, setCardSort] = useState<"created" | "activity">("created");
   const [cardStatusFilter, setCardStatusFilter] = useState("");
   const [cardManagementTab, setCardManagementTab] = useState<"all" | "expired" | "batches" | "sessions">("all");
   const [cardPlanFilter, setCardPlanFilter] = useState("");
@@ -1378,13 +1379,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setSelectedPosId(nextPoint);
   }
 
-  async function loadCards(search = cardSearch, offset = cardOffset, batchId = cardBatchFilter, statusFilter = cardStatusFilter, planFilter = cardPlanFilter, freeFilter = cardFreeFilter) {
+  async function loadCards(search = cardSearch, offset = cardOffset, batchId = cardBatchFilter, statusFilter = cardStatusFilter, planFilter = cardPlanFilter, freeFilter = cardFreeFilter, sort = cardSort) {
     if (user.card_visibility === "search_any" && !search.trim()) {
       setCards([]);
       setHasMoreCards(false);
       return;
     }
     const params = new URLSearchParams({ offset: String(offset), limit: "200" });
+    params.set("sort", sort);
     if (search.trim()) params.set("search", search.trim());
     if (batchId) params.set("batch_id", batchId);
     if (statusFilter) params.set("status", statusFilter);
@@ -2653,6 +2655,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <label htmlFor="card-search">بحث في الكروت<input id="card-search" value={cardSearch} onChange={(e) => { setCardSearch(e.target.value); setCardSessionHistory(null); }} onKeyDown={(e) => { if (e.key === "Enter") applyCardSearch(); }} placeholder={user.card_visibility !== "search_any" ? "اسم المستخدم أو الرقم التسلسلي" : "أدخل اسم المستخدم أو الرقم التسلسلي كاملاً"} /></label>
         <button type="button" className="table-action" disabled={busy} onClick={applyCardSearch}>بحث</button>
         {user.card_visibility !== "search_any" && <>
+          <label htmlFor="card-sort">ترتيب الكروت<select id="card-sort" value={cardSort} onChange={(e) => { const nextSort = e.target.value as "created" | "activity"; setCardSort(nextSort); setCardOffset(0); setSelectedCardIds([]); loadCards(cardSearch, 0, cardBatchFilter, cardStatusFilter, cardPlanFilter, cardFreeFilter, nextSort).catch((err) => setError(err instanceof Error ? err.message : "تعذر ترتيب الكروت")); }}><option value="created">الأحدث إنشاءً</option><option value="activity">آخر اتصال أولاً</option></select></label>
           <label htmlFor="card-status-filter">الحالة<select id="card-status-filter" value={cardStatusFilter} onChange={(e) => { setCardStatusFilter(e.target.value); setCardOffset(0); setSelectedCardIds([]); loadCards(cardSearch, 0, cardBatchFilter, e.target.value, cardPlanFilter, cardFreeFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الحالة")); }}><option value="">كل الحالات</option><option value="generated">منشأ</option><option value="allocated">مخصص لنقطة بيع</option><option value="active">متصل</option><option value="suspended">موقوف</option><option value="cancelled">ملغي</option><option value="printed_free">مجاني مطبوع</option><option value="expired">منتهي الصلاحية</option><option value="exhausted">نفد الرصيد</option></select></label>
           <label htmlFor="card-plan-filter">الباقة<select id="card-plan-filter" value={cardPlanFilter} onChange={(e) => { setCardPlanFilter(e.target.value); setCardOffset(0); setSelectedCardIds([]); loadCards(cardSearch, 0, cardBatchFilter, cardStatusFilter, e.target.value, cardFreeFilter).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر الباقة")); }}><option value="">كل الباقات</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
           <label htmlFor="card-free-filter">نوع الكرت<select id="card-free-filter" value={cardFreeFilter} onChange={(e) => { setCardFreeFilter(e.target.value); setCardOffset(0); setSelectedCardIds([]); loadCards(cardSearch, 0, cardBatchFilter, cardStatusFilter, cardPlanFilter, e.target.value).catch((err) => setError(err instanceof Error ? err.message : "تعذر تطبيق فلتر نوع الكرت")); }}><option value="">الكل</option><option value="paid">تجاري</option><option value="free">مجاني</option></select></label>
