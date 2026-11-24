@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+from sqlalchemy import select
+
 from app.api.cards import (
+    _card_list_ordering,
     _card_session_activity_summary,
     _card_session_usage_comparison,
     _card_session_usage_comparison_totals,
@@ -120,3 +123,19 @@ def test_card_session_activity_summary_defaults_cards_without_sessions_to_empty(
         "last_session_at": None,
         "last_session_update_at": None,
     }
+
+
+def test_card_activity_sort_uses_latest_radius_session_and_places_missing_activity_last():
+    statement = select(Card.id).order_by(_card_list_ordering("activity")[0])
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True})).lower()
+
+    assert "select max(radius_sessions.started_at)" in sql
+    assert "where radius_sessions.card_id = cards.id" in sql
+    assert "nulls last" in sql
+
+
+def test_card_default_sort_keeps_newest_created_cards_first_with_stable_tie_breaker():
+    statement = select(Card.id).order_by(*_card_list_ordering("created"))
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True})).lower()
+
+    assert "order by cards.created_at desc, cards.id desc" in sql
