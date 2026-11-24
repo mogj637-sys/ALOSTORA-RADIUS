@@ -1,20 +1,22 @@
 from decimal import Decimal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_permission
+from app.api.deps import get_current_user, require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import Card, CardBatch, PointOfSale, PosAccountEntry, PosInventoryMovement, PrintJob, PrintJobItem
 from app.services.audit import record_audit
-from app.services.permissions import is_owner
+from app.services.permissions import has_permission, is_owner
 from app.schemas.points_of_sale import (
     PointOfSaleCreate,
     PointOfSaleInventoryResponse,
     PointOfSaleResponse,
+    PointOfSaleOperationOption,
     PointOfSaleUpdate,
 )
 
@@ -32,6 +34,34 @@ def list_points_of_sale(include_inactive: bool = False, db: Session = Depends(ge
         query = query.filter(PointOfSale.id.in_(assigned_ids)) if assigned_ids else query.filter(PointOfSale.id.is_(None))
     if not include_inactive:
         query = query.filter(PointOfSale.is_active.is_(True))
+    return query.order_by(PointOfSale.id.desc()).all()
+
+
+
+@router.get("/operation-options", response_model=list[PointOfSaleOperationOption])
+def list_operation_options(
+    operation: Literal["cards.create", "finance.create"] = Query(...),
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(get_current_user),
+):
+    if not has_permission(user, operation):
+        raise HTTPException(status_code=403, detail="ليست لديك صلاحية تنفيذ هذه العملية")
+
+    query = db.query(PointOfSale)
+    if operation == "cards.create":
+        query = query.filter(
+            PointOfSale.is_active.is_(True),
+            PointOfSale.allow_card_creation.is_(True),
+        )
+
+    if not is_owner(user):
+        assigned_ids = [point.id for point in user.point_of_sales]
+        query = (
+            query.filter(PointOfSale.id.in_(assigned_ids))
+            if assigned_ids
+            else query.filter(PointOfSale.id.is_(None))
+        )
+
     return query.order_by(PointOfSale.id.desc()).all()
 
 
