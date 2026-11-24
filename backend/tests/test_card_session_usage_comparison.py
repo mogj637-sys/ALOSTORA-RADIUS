@@ -3,6 +3,8 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
+from app.models.core import Card
+
 from app.api.cards import (
     _card_list_ordering,
     _card_session_activity_summary,
