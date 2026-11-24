@@ -214,3 +214,27 @@ def test_preview_removes_router_api_and_shared_secret_aliases_recursively():
         "passcode-value",
     ):
         assert secret not in repr(result)
+
+
+def test_preview_preserves_conflicting_aliases_that_normalize_to_same_key():
+    results = build_user_manager_preview([
+        {
+            "external_id": "*14",
+            "username": "alias-collision",
+            "password": "first-secret",
+            "pass-word": "second-secret",
+        },
+        {
+            "external_id": "*15",
+            "username": "verifier-collision",
+            "password_hash": "stored-verifier",
+            "password-hash": None,
+        },
+    ])
+
+    assert results[0]["credential_mode"] is None
+    assert results[0]["credential_state"] == "ambiguous"
+    assert results[1]["credential_mode"] is None
+    assert results[1]["credential_state"] == "verifier_unverified"
+    for secret in ("first-secret", "second-secret", "stored-verifier"):
+        assert secret not in repr(results)
