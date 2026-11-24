@@ -11,6 +11,35 @@ GenerationMode = Literal["digits", "letters", "alphanumeric"]
 CardAction = Literal["suspend", "reactivate", "cancel"]
 
 
+class CardCreationPlanOption(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    name: str
+    price: Decimal
+    data_limit_bytes: int | None
+    session_time_limit_seconds: int | None
+    validity_period_seconds: int | None
+    speed_profile: str | None
+    is_active: bool
+
+
+class CardCreationTemplateOption(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    name: str
+    plan_id: int
+    is_default: bool
+
+
+class CardCreationOptionsResponse(BaseModel):
+    plans: list[CardCreationPlanOption]
+    templates: list[CardCreationTemplateOption]
+
+
 class CardSingleCreate(BaseModel):
     plan_id: int = Field(gt=0)
     username: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
