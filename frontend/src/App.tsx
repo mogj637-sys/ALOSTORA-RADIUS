@@ -310,6 +310,11 @@ type PointOfSale = {
   allow_printing: boolean;
 };
 
+type CardCreationPlanOption = Pick<Plan, "id" | "code" | "name" | "price" | "data_limit_bytes" | "session_time_limit_seconds" | "validity_period_seconds" | "speed_profile" | "is_active">;
+type CardCreationTemplateOption = Pick<CardTemplate, "id" | "code" | "name" | "plan_id" | "is_default">;
+type CardCreationOptions = { plans: CardCreationPlanOption[]; templates: CardCreationTemplateOption[] };
+type OperationPointOption = Pick<PointOfSale, "id" | "code" | "name" | "is_active">;
+
 type PosInventory = {
   point_of_sale_id: number;
   point_of_sale_name: string;
@@ -540,11 +545,11 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     // Credential disclosure is never implied by a broad manage permission.
     return false;
   };
-  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "printing-history" | "pos-management" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "printing-history" | "pos-management" | "finance-entry" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
   const [openNavGroup, setOpenNavGroup] = useState<"system" | "cards" | "printing" | null>(null);
   useEffect(() => {
     if (["card-create", "cards", "batches", "templates"].includes(page)) setOpenNavGroup("cards");
-    else if (["plans", "routers", "reports"].includes(page)) setOpenNavGroup("system");
+    else if (["plans", "routers", "reports", "finance-entry"].includes(page)) setOpenNavGroup("system");
     else if (page === "pos" || page === "printing-history") setOpenNavGroup("printing");
   }, [page]);
   const [systemStatus, setSystemStatus] = useState<{ api: string; database: string; version: string; checkedAt: string } | null>(null);
@@ -636,6 +641,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [cardBatchFilter, setCardBatchFilter] = useState("");
   const [cardTemplates, setCardTemplates] = useState<CardTemplate[]>([]);
+  const [cardCreationOptions, setCardCreationOptions] = useState<CardCreationOptions>({ plans: [], templates: [] });
+  const [cardCreationPoints, setCardCreationPoints] = useState<OperationPointOption[]>([]);
+  const [financePointOptions, setFinancePointOptions] = useState<OperationPointOption[]>([]);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [templateDraft, setTemplateDraft] = useState({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37", plan_id: "" });
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
@@ -1335,6 +1343,41 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
   }
 
+  async function loadCardCreationOptions() {
+    const [options, pointOptions] = await Promise.all([
+      apiRequest<CardCreationOptions>(token, "/api/v1/cards/creation-options"),
+      apiRequest<OperationPointOption[]>(token, "/api/v1/points-of-sale/operation-options?operation=cards.create"),
+    ]);
+    setCardCreationOptions(options);
+    setCardCreationPoints(pointOptions);
+
+    const preferredTemplate = options.templates.find((item) => item.code === printTemplate)
+      ?? options.templates.find((item) => item.is_default)
+      ?? options.templates[0];
+    if (preferredTemplate) {
+      setPrintTemplate(preferredTemplate.code);
+      setSingleDraft((current) => ({ ...current, planId: String(preferredTemplate.plan_id) }));
+      setBatchDraft((current) => ({ ...current, planId: String(preferredTemplate.plan_id) }));
+    }
+
+    const nextPoint = selectedPosId && pointOptions.some((point) => String(point.id) === selectedPosId)
+      ? selectedPosId
+      : (pointOptions[0]?.id.toString() ?? "");
+    setSelectedPosId(nextPoint);
+  }
+
+  async function loadFinancePointOptions() {
+    const result = await apiRequest<OperationPointOption[]>(
+      token,
+      "/api/v1/points-of-sale/operation-options?operation=finance.create",
+    );
+    setFinancePointOptions(result);
+    const nextPoint = selectedPosId && result.some((point) => String(point.id) === selectedPosId)
+      ? selectedPosId
+      : (result[0]?.id.toString() ?? "");
+    setSelectedPosId(nextPoint);
+  }
+
   async function loadCards(search = cardSearch, offset = cardOffset, batchId = cardBatchFilter, statusFilter = cardStatusFilter, planFilter = cardPlanFilter, freeFilter = cardFreeFilter) {
     if (user.card_visibility === "search_any" && !search.trim()) {
       setCards([]);
@@ -1486,8 +1529,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         }),
       });
       setAccountDraft({ amount: "", entryType: "payment", direction: "credit", description: "", reference: "" });
-      await loadPosAccount(selectedPosId);
-      setNotice("تم تسجيل الحركة المالية وتحديث كشف الحساب.");
+      if (page === "pos-management" && can("finance.view")) {
+        await loadPosAccount(selectedPosId);
+        setNotice("تم تسجيل الحركة المالية وتحديث كشف الحساب.");
+      } else {
+        setNotice("تم تسجيل الحركة المالية بنجاح.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تسجيل الحركة المالية");
     } finally { setBusy(false); }
@@ -1733,7 +1780,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setError("");
       loadRadiusOverview().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل لوحة المعلومات"));
     }
-    if ((page === "pos" || page === "templates" || page === "card-create") && can("templates.view")) {
+    if (page === "card-create" && can("cards.create")) {
+      loadCardCreationOptions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل خيارات إنشاء الكروت"));
+    }
+    if (page === "finance-entry" && can("finance.create")) {
+      loadFinancePointOptions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل نقاط البيع المتاحة للعملية المالية"));
+    }
+    if ((page === "pos" || page === "templates") && can("templates.view")) {
       loadCardTemplates().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل قوالب الطباعة"));
     }
     if (page === "templates") setError("");
@@ -1749,9 +1802,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       loadReportData().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل التقارير"));
     }
     const requests: Promise<unknown>[] = [];
-    if ((page === "plans" || page === "templates" || page === "card-create" || page === "pos") && can("plans.view")) requests.push(loadPlans());
+    if ((page === "plans" || page === "templates" || page === "pos") && can("plans.view")) requests.push(loadPlans());
     if (page === "cards" && can("cards.view")) requests.push(loadCards());
-    if ((page === "pos" || page === "pos-management" || page === "card-create") && can("pos.view")) requests.push(loadPointsOfSale());
+    if ((page === "pos" || page === "pos-management") && can("pos.view")) requests.push(loadPointsOfSale());
     if (page === "routers" && can("routers.view")) requests.push(loadRouters());
     if (requests.length) {
       setError("");
@@ -2382,13 +2435,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderCardCreate() {
-    const activePlans = plans.filter((plan) => plan.is_active);
-    const availableTemplates = cardTemplates.filter((item) => item.plan_id !== null && activePlans.some((plan) => plan.id === item.plan_id));
+    const activePlans = cardCreationOptions.plans.filter((plan) => plan.is_active);
+    const availableTemplates = cardCreationOptions.templates.filter((item) => item.plan_id !== null && activePlans.some((plan) => plan.id === item.plan_id));
     const selectedTemplate = availableTemplates.find((item) => item.code === printTemplate)
       ?? availableTemplates.find((item) => item.is_default)
       ?? availableTemplates[0];
     const selectedPlan = selectedTemplate ? activePlans.find((plan) => plan.id === selectedTemplate.plan_id) : undefined;
-    const selectedPoint = points.find((point) => String(point.id) === selectedPosId && point.is_active);
+    const selectedPoint = cardCreationPoints.find((point) => String(point.id) === selectedPosId && point.is_active);
     const compatibleBatches = cardBatches.filter((batch) =>
       batch.plan_id === selectedPlan?.id &&
       batch.point_of_sale_id === selectedPoint?.id &&
@@ -2440,7 +2493,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <label>نقطة البيع
               <select value={selectedPosId} onChange={(e) => setSelectedPosId(e.target.value)} required>
                 <option value="">اختر نقطة بيع مسجلة</option>
-                {points.filter((point) => point.is_active).map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}</option>)}
+                {cardCreationPoints.filter((point) => point.is_active).map((point) => <option key={point.id} value={point.id}>{point.name} — {point.code}</option>)}
               </select>
               <span className="field-hint">اختر نقطة البيع التي ستتبع لها عملية التوزيع والطباعة.</span>
             </label>
@@ -2497,7 +2550,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         )}
 
         {generatedCards.length > 0 && <section className="generated-panel card-generated-panel">
-          <div className="section-heading compact-heading"><div><span className="eyebrow">تم إنشاء الكروت</span><h2>بيانات الدفعة الجديدة {generatedBatchNumber ? `— ${generatedBatchNumber}` : ""}</h2><p>{can("cards.credentials") ? "احفظ بيانات الدخول الآن؛ كلمات المرور لن تظهر مرة أخرى بعد مغادرة هذه الصفحة." : "تم إنشاء الكروت دون إظهار كلمات المرور؛ يتطلب عرضها صلاحية مستقلة."}</p></div><div className="form-actions"><button type="button" disabled={!selectedPrintCardIds.length || !selectedPosId} onClick={() => setPage("pos")}>متابعة الطباعة لنقطة البيع</button>{can("cards.credentials") && <button type="button" className="secondary-button" onClick={() => window.print()}>طباعة بيانات الدخول</button>}</div></div>
+          <div className="section-heading compact-heading"><div><span className="eyebrow">تم إنشاء الكروت</span><h2>بيانات الدفعة الجديدة {generatedBatchNumber ? `— ${generatedBatchNumber}` : ""}</h2><p>{can("cards.credentials") ? "احفظ بيانات الدخول الآن؛ كلمات المرور لن تظهر مرة أخرى بعد مغادرة هذه الصفحة." : "تم إنشاء الكروت دون إظهار كلمات المرور؛ يتطلب عرضها صلاحية مستقلة."}</p></div><div className="form-actions">{can("printing.create") && can("printing.credentials") && can("cards.view") && can("pos.view") && can("templates.view") && <button type="button" disabled={!selectedPrintCardIds.length || !selectedPosId} onClick={() => setPage("pos")}>متابعة الطباعة لنقطة البيع</button>}{can("cards.credentials") && <button type="button" className="secondary-button" onClick={() => window.print()}>طباعة بيانات الدخول</button>}</div></div>
           <div className="table-wrap"><table><thead><tr><th>التسلسل</th><th>اسم المستخدم</th><th>كلمة المرور</th></tr></thead><tbody>{generatedCards.map((card) => <tr key={card.serial_number}><td>{card.serial_number}</td><td>{card.username}</td><td>{card.password === null ? "محجوب بالصلاحيات" : card.password || "بدون كلمة مرور"}</td></tr>)}</tbody></table></div>
         </section>}
       </section>
@@ -3038,6 +3091,65 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  function renderFinanceEntry() {
+    return (
+      <section className="pos-management-page">
+        <div className="section-heading pos-page-heading">
+          <div>
+            <span className="eyebrow">العمليات المالية</span>
+            <h2>تسجيل حركة مالية</h2>
+            <p>يمكنك تسجيل حركة لنقطة بيع ضمن نطاق حسابك دون استعراض كشف الحساب أو بيانات النقاط الأخرى.</p>
+          </div>
+        </div>
+        <section className="panel">
+          <div className="form-grid">
+            <label>نقطة البيع
+              <select value={selectedPosId} onChange={(event) => setSelectedPosId(event.target.value)} required>
+                <option value="">اختر نقطة البيع</option>
+                {financePointOptions.map((point) => (
+                  <option key={point.id} value={point.id}>
+                    {point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {financePointOptions.length > 0 && <form className="panel form-grid account-entry-form" onSubmit={createAccountEntry}>
+            <label>نوع الحركة
+              <select value={accountDraft.entryType} onChange={(event) => setAccountDraft({ ...accountDraft, entryType: event.target.value, direction: event.target.value === "payment" || event.target.value === "commission" || event.target.value === "return" ? "credit" : accountDraft.direction })}>
+                <option value="payment">سداد من نقطة البيع</option>
+                <option value="commission">عمولة مستحقة للنقطة</option>
+                <option value="return">مرتجع / خصم</option>
+                <option value="adjustment">تسوية يدوية</option>
+              </select>
+            </label>
+            <label>اتجاه الحركة
+              <select value={accountDraft.direction} onChange={(event) => setAccountDraft({ ...accountDraft, direction: event.target.value as "debit" | "credit" })}>
+                <option value="credit">يخصم من المديونية (دائن)</option>
+                <option value="debit">يضاف للمديونية (مدين)</option>
+              </select>
+            </label>
+            <label>المبلغ بالريال
+              <input type="number" min="0.01" step="0.01" value={accountDraft.amount} onChange={(event) => setAccountDraft({ ...accountDraft, amount: event.target.value })} required />
+            </label>
+            <label>البيان
+              <input value={accountDraft.description} onChange={(event) => setAccountDraft({ ...accountDraft, description: event.target.value })} maxLength={500} placeholder="مثال: سداد نقدي" />
+            </label>
+            <label>رقم مرجعي (اختياري)
+              <input value={accountDraft.reference} onChange={(event) => setAccountDraft({ ...accountDraft, reference: event.target.value })} maxLength={120} />
+            </label>
+            <div className="form-actions">
+              <button type="submit" disabled={busy || !selectedPosId || !accountDraft.amount || Number(accountDraft.amount) <= 0}>
+                {busy ? "جارٍ التسجيل..." : "تسجيل الحركة"}
+              </button>
+            </div>
+          </form>}
+          {financePointOptions.length === 0 && <div className="empty-state">لا توجد نقاط بيع ضمن نطاق حسابك يمكن تسجيل حركة مالية عليها.</div>}
+        </section>
+      </section>
+    );
+  }
+
   function renderReports() {
     const totals = posReport?.totals ?? {
       opening_balance: 0, delivered_value: 0, other_debits: 0, commissions: 0,
@@ -3413,7 +3525,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
           {user.roles.includes("owner") && <button className={page === "admins" ? "nav-item active" : "nav-item"} onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات</button>}
 
-          {(can("plans.view") || can("routers.view") || can("reports.view") || can("finance.view")) && <div className="nav-group">
+          {(can("plans.view") || can("routers.view") || can("reports.view") || can("finance.view") || can("finance.create")) && <div className="nav-group">
             <button type="button" className={openNavGroup === "system" ? "nav-group-toggle expanded" : "nav-group-toggle"} aria-expanded={openNavGroup === "system"} onClick={() => setOpenNavGroup((current) => current === "system" ? null : "system")}>
               <span>إدارة النظام</span><span className="nav-chevron" aria-hidden="true">⌄</span>
             </button>
@@ -3421,6 +3533,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               {can("plans.view") && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>إدارة الباقات</button>}
               {can("routers.view") && <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات</button>}
               {(can("reports.view") || can("finance.view")) && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
+              {can("finance.create") && <button className={page === "finance-entry" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("finance-entry")}>تسجيل حركة مالية</button>}
             </div>}
           </div>}
           {(can("cards.create") || can("cards.view") || can("templates.view")) && <div className="nav-group">
@@ -3451,12 +3564,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "الطباعة والدفعات" : page === "printing-history" ? "سجل الطباعة" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "reports" ? "التقارير" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : page === "settings" ? "الإعدادات والصيانة" : "إدارة أجهزة MikroTik"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "الطباعة والدفعات" : page === "printing-history" ? "سجل الطباعة" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "finance-entry" ? "تسجيل حركة مالية" : page === "reports" ? "التقارير" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : page === "settings" ? "الإعدادات والصيانة" : "إدارة أجهزة MikroTik"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") && can("templates.view") && can("plans.view") && can("pos.view") ? renderCardCreate() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && (can("pos.view") || can("pos.create")) ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") ? renderCardCreate() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && (can("pos.view") || can("pos.create")) ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "finance-entry" && can("finance.create") ? renderFinanceEntry() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
