@@ -1944,8 +1944,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   async function createSingle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!can("cards.create")) { setError("ليست لديك صلاحية إنشاء الكروت."); return; }
-    const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
-    const linkedPlan = selectedTemplate?.plan_id ? plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
+    const selectedTemplate = cardCreationOptions.templates.find((item) => item.code === printTemplate);
+    const linkedPlan = selectedTemplate?.plan_id ? cardCreationOptions.plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
     if (!selectedTemplate || !linkedPlan) { setError("اختر قالباً مرتبطاً بباقة مفعّلة قبل إنشاء الكرت."); return; }
     setBusy(true); setError(""); setNotice(""); setGeneratedCards([]);
     try {
@@ -1976,8 +1976,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   async function createBatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!can("cards.create")) { setError("ليست لديك صلاحية إنشاء دفعات الكروت."); return; }
-    const selectedTemplate = cardTemplates.find((item) => item.code === printTemplate);
-    const linkedPlan = selectedTemplate?.plan_id ? plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
+    const selectedTemplate = cardCreationOptions.templates.find((item) => item.code === printTemplate);
+    const linkedPlan = selectedTemplate?.plan_id ? cardCreationOptions.plans.find((plan) => plan.id === selectedTemplate.plan_id && plan.is_active) : undefined;
     if (!selectedTemplate || !linkedPlan) { setError("اختر قالباً مرتبطاً بباقة مفعّلة قبل إنشاء الدفعة."); return; }
     setBusy(true); setError(""); setNotice(""); setGeneratedCards([]);
     try {
