@@ -93,6 +93,22 @@ def _build_card(plan: Plan, username: str, password: str, card_type: str, is_fre
     )
 
 
+def _card_list_ordering(sort: str):
+    if sort == "activity":
+        latest_session_at = (
+            select(func.max(RadiusSession.started_at))
+            .where(RadiusSession.card_id == Card.id)
+            .correlate(Card)
+            .scalar_subquery()
+        )
+        return (
+            latest_session_at.desc().nulls_last(),
+            Card.created_at.desc(),
+            Card.id.desc(),
+        )
+    return (Card.created_at.desc(), Card.id.desc())
+
+
 def _card_session_activity_summary(
     total_sessions: int,
     active_sessions: int,
@@ -344,6 +360,7 @@ def list_cards(
     plan_id: int | None = Query(default=None, gt=0),
     batch_id: UUID | None = Query(default=None),
     is_free: bool | None = None,
+    sort: str = Query(default="created", pattern="^(created|activity)$"),
     db: Session = Depends(get_db),
     user: AdminUser = Depends(require_permission("cards.view")),
 ):
@@ -393,7 +410,7 @@ def list_cards(
     if is_free is not None:
         query = query.filter(Card.is_free.is_(is_free))
     cards = (
-        query.order_by(Card.created_at.desc())
+        query.order_by(*_card_list_ordering(sort))
         .offset(offset if visibility != "search_any" else 0)
         .limit(limit if visibility != "search_any" else 1)
         .all()
