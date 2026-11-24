@@ -73,15 +73,24 @@ def _safe_value(value: Any) -> Any:
 
 def _credential_metadata(record: dict[str, Any], username: str) -> dict[str, str | None]:
     """Infer only credential shape; never return or persist a credential value."""
-    normalized = {_normalized_key(key): value for key, value in record.items()}
+    # Keep every raw alias until validation is complete. Building a dict here
+    # would silently discard one value when distinct source keys normalize to
+    # the same spelling (for example, "password" and "pass-word").
+    normalized_entries = [
+        (_normalized_key(key), value)
+        for key, value in record.items()
+    ]
 
-    if any(key in normalized and normalized[key] not in (None, "") for key in VERIFIER_KEYS):
+    verifier_values = [
+        value for key, value in normalized_entries if key in VERIFIER_KEYS
+    ]
+    if any(value not in (None, "") for value in verifier_values):
         return {"credential_mode": None, "credential_state": "verifier_unverified"}
 
     password_values = [
-        str(normalized[key])
-        for key in PASSWORD_KEYS
-        if key in normalized and normalized[key] is not None
+        str(value)
+        for key, value in normalized_entries
+        if key in PASSWORD_KEYS and value is not None
     ]
     if not password_values:
         return {"credential_mode": None, "credential_state": "unavailable"}
