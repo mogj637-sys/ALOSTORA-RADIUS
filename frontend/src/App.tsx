@@ -1416,6 +1416,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setResolvedPrintCards([]);
     setSelectedPrintCardIds([]);
     setPrintPreviewCards([]);
+    setPrintImportSummary("");
   }
 
   async function loadCards(search = cardSearch, offset = cardOffset, batchId = cardBatchFilter, statusFilter = cardStatusFilter, planFilter = cardPlanFilter, freeFilter = cardFreeFilter, sort = cardSort) {
