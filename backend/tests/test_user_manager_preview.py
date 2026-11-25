@@ -238,3 +238,23 @@ def test_preview_preserves_conflicting_aliases_that_normalize_to_same_key():
     assert results[1]["credential_state"] == "verifier_unverified"
     for secret in ("first-secret", "second-secret", "stored-verifier"):
         assert secret not in repr(results)
+
+class _SecretBearingOpaqueValue:
+    def __str__(self):
+        return "opaque-object-secret-must-not-leak"
+
+
+def test_preview_does_not_stringify_unsupported_objects_into_safe_snapshot():
+    secret_value = _SecretBearingOpaqueValue()
+    result = build_user_manager_preview([
+        {
+            "external_id": "*16",
+            "username": "opaque-value",
+            "metadata": {"extension": secret_value},
+            "opaque": secret_value,
+        }
+    ])[0]
+
+    assert result["safe_snapshot"]["metadata"]["extension"] is None
+    assert result["safe_snapshot"]["opaque"] is None
+    assert "opaque-object-secret-must-not-leak" not in repr(result)
