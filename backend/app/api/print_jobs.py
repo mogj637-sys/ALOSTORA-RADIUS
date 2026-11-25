@@ -190,12 +190,10 @@ def require_print_job_permission(payload: PrintJobCreate, user: AdminUser = Depe
         raise HTTPException(status_code=403, detail=message)
     if not has_permission(user, "printing.credentials"):
         raise HTTPException(status_code=403, detail="تتطلب الطباعة صلاحية مستقلة لعرض بيانات دخول الكروت")
-    if not has_permission(user, "cards.view") or not has_permission(user, "pos.view"):
-        raise HTTPException(status_code=403, detail="تتطلب الطباعة صلاحية عرض الكروت ونقاط البيع")
     return user
 
 
-@router.post("", response_model=PrintJobResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.view")), Depends(require_permission("pos.view"))])
+@router.post("", response_model=PrintJobResponse, status_code=status.HTTP_201_CREATED)
 def create_print_job(
     payload: PrintJobCreate,
     response: Response,
