@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from app.db.session import SessionLocal
 from app.models.auth import AdminUser, Role
-from app.models.core import CardTemplate, Plan, PointOfSale, Router
+from app.models.core import Card, CardBatch, CardEvent, CardTemplate, Plan, PointOfSale, PosAccountEntry, PosInventoryMovement, PrintJob, PrintJobItem, Router
 from app.models.user_manager import UserManagerSyncRun
 
 
@@ -509,3 +509,142 @@ def test_point_of_sale_delete_is_scoped_and_preserves_other_admin_assignments(ow
                         json={"is_active": False},
                     )
                 client.delete(f"/api/v1/points-of-sale/{cleanup_point_id}", headers=owner_headers)
+
+def test_printing_create_works_without_card_pos_or_template_view(owner_client):
+    client, owner_headers, _ = owner_client
+    suffix = secrets.token_hex(5)
+    point_id = None
+    plan_id = None
+    template_code = "CI-PRINT-ONLY-" + suffix.upper()
+    card_id = None
+    role_code = None
+    username = None
+
+    try:
+        point = client.post(
+            "/api/v1/points-of-sale",
+            headers=owner_headers,
+            json={"code": "CI-PRINT-ONLY-" + suffix.upper(), "name": "CI نقطة طباعة مستقلة"},
+        )
+        assert point.status_code == 201, point.text
+        point_id = point.json()["id"]
+
+        plan = client.post(
+            "/api/v1/plans",
+            headers=owner_headers,
+            json={"code": "CI-PRINT-PLAN-" + suffix.upper(), "name": "CI باقة طباعة", "price": "10.00"},
+        )
+        assert plan.status_code == 201, plan.text
+        plan_id = plan.json()["id"]
+
+        template = client.post(
+            "/api/v1/card-templates",
+            headers=owner_headers,
+            json={
+                "code": template_code,
+                "name": "CI قالب طباعة مستقل",
+                "plan_id": plan_id,
+                "width_mm": "90",
+                "height_mm": "50",
+                "background_color": "#ffffff",
+                "text_color": "#173b2d",
+                "layout": {},
+            },
+        )
+        assert template.status_code == 201, template.text
+
+        card = client.post(
+            "/api/v1/cards/single",
+            headers=owner_headers,
+            json={
+                "plan_id": plan_id,
+                "username": "CI_PRINT_ONLY_" + suffix.upper(),
+                "card_type": "username_only",
+                "template_code": template_code,
+                "point_of_sale_id": point_id,
+            },
+        )
+        assert card.status_code == 201, card.text
+        card_id = card.json()["id"]
+
+        role_code, username, _, staff_headers = _create_role_user(
+            client,
+            owner_headers,
+            ["printing.create", "printing.credentials"],
+            point_ids=[point_id],
+        )
+        identity = client.get("/api/v1/auth/me", headers=staff_headers)
+        assert identity.status_code == 200
+        assert "cards.view" not in identity.json()["permissions"]
+        assert "pos.view" not in identity.json()["permissions"]
+        assert "templates.view" not in identity.json()["permissions"]
+
+        options = client.get(
+            "/api/v1/points-of-sale/operation-options?operation=printing.create",
+            headers=staff_headers,
+        )
+        assert options.status_code == 200, options.text
+        assert [item["id"] for item in options.json()] == [point_id]
+        assert "phone" not in options.json()[0]
+        assert "debt_limit" not in options.json()[0]
+
+        assert client.get("/api/v1/points-of-sale", headers=staff_headers).status_code == 403
+        assert client.get("/api/v1/cards", headers=staff_headers).status_code == 403
+        assert client.get("/api/v1/card-templates", headers=staff_headers).status_code == 403
+
+        template_options = client.get("/api/v1/card-templates/printing-options", headers=staff_headers)
+        assert template_options.status_code == 200, template_options.text
+        assert any(item["code"] == template_code for item in template_options.json())
+
+        resolved = client.post(
+            "/api/v1/cards/print-selection/resolve",
+            headers=staff_headers,
+            json={"identifiers": [card.json()["username"]], "point_of_sale_id": point_id},
+        )
+        assert resolved.status_code == 200, resolved.text
+        assert resolved.json()["matched_count"] == 1
+        selected = resolved.json()["items"][0]
+        assert selected["template_code"] == template_code
+        assert "password" not in selected
+
+        printed = client.post(
+            "/api/v1/print-jobs",
+            headers=staff_headers,
+            json={
+                "idempotency_key": "ci-print-only-" + suffix,
+                "point_of_sale_id": point_id,
+                "card_ids": [selected["id"]],
+                "template_code": template_code,
+                "is_reprint": False,
+                "print_options": {"show_password": True},
+            },
+        )
+        assert printed.status_code == 201, printed.text
+        assert printed.json()["items"][0]["password"]
+        assert client.get(f"/api/v1/print-jobs?point_of_sale_id={point_id}", headers=staff_headers).status_code == 403
+    finally:
+        if role_code and username:
+            _cleanup_role_user(role_code, username)
+        cleanup = SessionLocal()
+        if point_id is not None:
+            job_ids = [
+                row[0]
+                for row in cleanup.query(PrintJob.id).filter(PrintJob.point_of_sale_id == point_id).all()
+            ]
+            if job_ids:
+                cleanup.query(PrintJobItem).filter(PrintJobItem.print_job_id.in_(job_ids)).delete(synchronize_session=False)
+            cleanup.query(PosInventoryMovement).filter(PosInventoryMovement.point_of_sale_id == point_id).delete(synchronize_session=False)
+            cleanup.query(PosAccountEntry).filter(PosAccountEntry.point_of_sale_id == point_id).delete(synchronize_session=False)
+            cleanup.query(PrintJob).filter(PrintJob.point_of_sale_id == point_id).delete(synchronize_session=False)
+        if card_id is not None:
+            cleanup.query(CardEvent).filter(CardEvent.card_id == card_id).delete(synchronize_session=False)
+            cleanup.query(Card).filter(Card.id == card_id).delete(synchronize_session=False)
+        if point_id is not None:
+            cleanup.query(CardBatch).filter(CardBatch.point_of_sale_id == point_id).delete(synchronize_session=False)
+        cleanup.query(CardTemplate).filter(CardTemplate.code == template_code).delete(synchronize_session=False)
+        if plan_id is not None:
+            cleanup.query(Plan).filter(Plan.id == plan_id).delete(synchronize_session=False)
+        if point_id is not None:
+            cleanup.query(PointOfSale).filter(PointOfSale.id == point_id).delete(synchronize_session=False)
+        cleanup.commit()
+        cleanup.close()
