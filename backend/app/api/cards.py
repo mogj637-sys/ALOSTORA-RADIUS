@@ -545,7 +545,7 @@ def list_cards(
 @router.post(
     "/print-selection/resolve",
     response_model=CardPrintSelectionResolveResponse,
-    dependencies=[Depends(require_permission("printing.create"))],
+    dependencies=[Depends(require_permission("printing.create")), Depends(require_permission("printing.credentials"))],
 )
 def resolve_print_selection(
     payload: CardPrintSelectionResolveRequest,
