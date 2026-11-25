@@ -26,6 +26,7 @@ from app.schemas.cards import (
     CardPrintSelectionResolveRequest,
     CardPrintSelectionResolveResponse,
     CardPrintSelectionItem,
+    CardDeleteOption,
 )
 from app.services.card_generator import generate_password, generate_username
 from app.services.credentials import CredentialEncryptionNotConfigured, encrypt_credential
@@ -126,6 +127,52 @@ def _card_session_activity_summary(
     }
 
 
+
+
+def _ensure_card_operation_scope(
+    card: Card,
+    user: AdminUser,
+    db: Session,
+    *,
+    exact_identifier: str | None = None,
+) -> None:
+    visibility = card_visibility(user)
+    if visibility == "search_any":
+        exact_term = (exact_identifier or "").strip().lower()
+        if not exact_term or exact_term not in {card.username.lower(), card.serial_number.lower()}:
+            raise HTTPException(status_code=404, detail="لم يتم العثور على الكرت بهذا البحث")
+        return
+
+    if visibility == "assigned":
+        assigned_pos_ids = {point.id for point in user.point_of_sales}
+        in_scope = card.assigned_pos_id in assigned_pos_ids or (
+            card.batch_id is not None
+            and bool(assigned_pos_ids)
+            and db.query(CardBatch.id).filter(
+                CardBatch.id == card.batch_id,
+                CardBatch.point_of_sale_id.in_(assigned_pos_ids),
+            ).first() is not None
+        )
+        if not in_scope:
+            raise HTTPException(status_code=403, detail="الكرت خارج نطاق نقاط البيع المسموح بها")
+
+
+def _card_delete_block_reason(card: Card, db: Session) -> str | None:
+    if card.status not in {"generated", "printed_free"}:
+        return "لا يمكن حذف كرت في حالته الحالية"
+    if card.first_used_at is not None:
+        return "لا يمكن حذف كرت بدأ استخدامه"
+    if card.assigned_pos_id is not None:
+        return "لا يمكن حذف كرت مخصص لنقطة بيع"
+    if db.query(RadiusSession.id).filter(RadiusSession.card_id == card.id).first() is not None:
+        return "لا يمكن حذف كرت له سجل جلسات محفوظ"
+    if card.batch_id is not None:
+        batch_point_id = db.query(CardBatch.point_of_sale_id).filter(CardBatch.id == card.batch_id).scalar()
+        if batch_point_id is not None:
+            return "لا يمكن حذف كرت من دفعة مخصصة لنقطة بيع"
+    return None
+
+
 @router.get("/creation-options", response_model=CardCreationOptionsResponse)
 def get_card_creation_options(
     db: Session = Depends(get_db),
@@ -150,6 +197,42 @@ def get_card_creation_options(
     template_plan_ids = {template.plan_id for template in templates if template.plan_id is not None}
     usable_plans = [plan for plan in active_plans if plan.id in template_plan_ids]
     return CardCreationOptionsResponse(plans=usable_plans, templates=templates)
+
+
+
+
+@router.get("/delete-options", response_model=CardDeleteOption)
+def get_card_delete_options(
+    identifier: str = Query(..., min_length=1, max_length=120),
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("cards.delete")),
+) -> CardDeleteOption:
+    exact_identifier = identifier.strip()
+    if not exact_identifier:
+        raise HTTPException(status_code=422, detail="أدخل اسم المستخدم أو الرقم التسلسلي كاملاً")
+    matches = db.query(Card).filter(
+        or_(
+            func.lower(Card.username) == exact_identifier.lower(),
+            func.lower(Card.serial_number) == exact_identifier.lower(),
+        )
+    ).limit(2).all()
+    if not matches:
+        raise HTTPException(status_code=404, detail="لم يتم العثور على الكرت بهذا البحث")
+    if len(matches) > 1:
+        raise HTTPException(status_code=409, detail="المعرّف يطابق أكثر من كرت؛ استخدم الرقم التسلسلي الكامل")
+    card = matches[0]
+    _ensure_card_operation_scope(card, user, db, exact_identifier=exact_identifier)
+    blocked_reason = _card_delete_block_reason(card, db)
+    return CardDeleteOption(
+        id=card.id,
+        username=card.username,
+        serial_number=card.serial_number,
+        status=card.status,
+        first_used_at=card.first_used_at,
+        assigned_pos_id=card.assigned_pos_id,
+        can_delete=blocked_reason is None,
+        blocked_reason=blocked_reason,
+    )
 
 
 @router.get("/batches", response_model=list[CardBatchListItem])
@@ -327,18 +410,21 @@ def list_radius_sessions(
 
 
 @router.post("/sessions/{session_id}/disconnect", dependencies=[Depends(require_permission("sessions.disconnect"))])
-def disconnect_radius_session(session_id: int, db: Session = Depends(get_db), user: AdminUser = Depends(require_permission("sessions.disconnect"))):
-    session = db.query(RadiusSession).filter(RadiusSession.id == session_id).first()
+def disconnect_radius_session(
+    session_id: int,
+    search: str | None = Query(default=None, min_length=1, max_length=120),
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("sessions.disconnect")),
+):
+    session = db.query(RadiusSession).filter(RadiusSession.id == session_id).with_for_update().first()
     if session is None:
         raise HTTPException(status_code=404, detail="جلسة المستخدم غير موجودة")
     if session.stopped_at is not None:
         raise HTTPException(status_code=409, detail="الجلسة منتهية بالفعل")
-    visibility = card_visibility(user)
-    if visibility == "assigned":
-        assigned_pos_ids = {point.id for point in user.point_of_sales}
-        session_card = db.get(Card, session.card_id)
-        if session_card is None or session_card.assigned_pos_id not in assigned_pos_ids:
-            raise HTTPException(status_code=403, detail="لا تملك صلاحية فصل جلسة هذا الكرت")
+    session_card = db.get(Card, session.card_id)
+    if session_card is None:
+        raise HTTPException(status_code=404, detail="الكرت المرتبط بالجلسة غير موجود")
+    _ensure_card_operation_scope(session_card, user, db, exact_identifier=search)
     result = send_disconnect_for_session(db, session)
     if result is None:
         raise HTTPException(status_code=503, detail="خدمة فصل الجلسات RADIUS CoA غير مفعلة")
@@ -587,23 +673,10 @@ def list_card_session_history(
     if card is None:
         raise HTTPException(status_code=404, detail="الكرت غير موجود")
 
-    visibility = card_visibility(user)
-    exact_term = search.strip().lower()
+    exact_term = search.strip()
     if not exact_term:
         raise HTTPException(status_code=422, detail="أدخل اسم المستخدم أو الرقم التسلسلي كاملاً")
-    if visibility == "search_any" and exact_term not in {card.username.lower(), card.serial_number.lower()}:
-        raise HTTPException(status_code=404, detail="لم يتم العثور على الكرت بهذا البحث")
-    if visibility == "assigned":
-        assigned_pos_ids = [point.id for point in user.point_of_sales]
-        in_scope = card.assigned_pos_id in assigned_pos_ids or (
-            card.batch_id is not None
-            and db.query(CardBatch.id).filter(
-                CardBatch.id == card.batch_id,
-                CardBatch.point_of_sale_id.in_(assigned_pos_ids),
-            ).first() is not None
-        )
-        if not in_scope:
-            raise HTTPException(status_code=403, detail="الكرت خارج نطاق نقاط البيع المسموح بها")
+    _ensure_card_operation_scope(card, user, db, exact_identifier=exact_term)
 
     if status_filter not in {"all", "active", "ended"}:
         raise HTTPException(status_code=422, detail="فلتر حالة الجلسة غير صالح")
@@ -740,18 +813,7 @@ def update_card_status(
     card = db.query(Card).filter(Card.id == card_uuid).with_for_update().first()
     if card is None:
         raise HTTPException(status_code=404, detail="الكرت غير موجود")
-    visibility = card_visibility(user)
-    if visibility == "assigned":
-        allowed_pos_ids = [point.id for point in user.point_of_sales]
-        in_scope = card.assigned_pos_id in allowed_pos_ids or (
-            card.batch_id is not None
-            and db.query(CardBatch.id).filter(
-                CardBatch.id == card.batch_id,
-                CardBatch.point_of_sale_id.in_(allowed_pos_ids),
-            ).first() is not None
-        )
-        if not in_scope:
-            raise HTTPException(status_code=403, detail="الكرت خارج نطاق نقاط البيع المسموح بها")
+    _ensure_card_operation_scope(card, user, db, exact_identifier=payload.confirmation_identifier)
 
     previous_status = card.status
     if payload.action == "suspend":
@@ -812,6 +874,49 @@ def update_card_status(
             db.commit()
     db.refresh(card)
     return card
+
+
+
+
+@router.delete("/{card_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("cards.delete"))])
+def delete_card(
+    card_id: str,
+    search: str | None = Query(default=None, min_length=1, max_length=120),
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_permission("cards.delete")),
+):
+    try:
+        card_uuid = UUID(card_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="معرّف الكرت غير صالح")
+
+    card = db.query(Card).filter(Card.id == card_uuid).with_for_update().first()
+    if card is None:
+        raise HTTPException(status_code=404, detail="الكرت غير موجود")
+    _ensure_card_operation_scope(card, user, db, exact_identifier=search)
+    blocked_reason = _card_delete_block_reason(card, db)
+    if blocked_reason:
+        raise HTTPException(status_code=409, detail=blocked_reason)
+
+    previous_status = card.status
+    card.status = "cancelled"
+    db.add(CardEvent(
+        card_id=card.id,
+        event_type="deleted",
+        details={"previous_status": previous_status, "soft_delete": True},
+        actor=user.username,
+    ))
+    record_audit(
+        db,
+        user,
+        "card.deleted",
+        "card",
+        f"حذف منطقي للكرت {card.username}",
+        entity_id=card.id,
+        details={"serial_number": card.serial_number, "previous_status": previous_status, "soft_delete": True},
+    )
+    db.commit()
+    return None
 
 
 @router.post("/single", response_model=CardCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission("cards.create"))])

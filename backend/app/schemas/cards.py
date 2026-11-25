@@ -151,6 +151,18 @@ class CardPrintSelectionResolveResponse(BaseModel):
 
 class CardStatusUpdate(BaseModel):
     action: CardAction
+    confirmation_identifier: str | None = Field(default=None, max_length=120)
+
+
+class CardDeleteOption(BaseModel):
+    id: UUID
+    username: str
+    serial_number: str
+    status: str
+    first_used_at: datetime | None
+    assigned_pos_id: int | None
+    can_delete: bool
+    blocked_reason: str | None = None
 
 
 class CardListItem(BaseModel):

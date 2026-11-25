@@ -74,6 +74,17 @@ type Card = {
   speed_limit: string | null;
 };
 
+type CardDeleteOption = {
+  id: string;
+  username: string;
+  serial_number: string;
+  status: string;
+  first_used_at: string | null;
+  assigned_pos_id: number | null;
+  can_delete: boolean;
+  blocked_reason: string | null;
+};
+
 type CardBatchRecord = {
   batch_id: string;
   batch_number: string;
@@ -545,7 +556,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     // Credential disclosure is never implied by a broad manage permission.
     return false;
   };
-  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "cards" | "pos" | "printing-history" | "pos-management" | "finance-entry" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "card-delete" | "cards" | "pos" | "printing-history" | "pos-management" | "finance-entry" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
   const [openNavGroup, setOpenNavGroup] = useState<"system" | "cards" | "printing" | null>(null);
   useEffect(() => {
     if (["card-create", "cards", "batches", "templates"].includes(page)) setOpenNavGroup("cards");
@@ -643,6 +654,8 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [cardTemplates, setCardTemplates] = useState<CardTemplate[]>([]);
   const [cardCreationOptions, setCardCreationOptions] = useState<CardCreationOptions>({ plans: [], templates: [] });
   const [cardCreationPoints, setCardCreationPoints] = useState<OperationPointOption[]>([]);
+  const [cardDeleteIdentifier, setCardDeleteIdentifier] = useState("");
+  const [cardDeleteCandidate, setCardDeleteCandidate] = useState<CardDeleteOption | null>(null);
   const [financePointOptions, setFinancePointOptions] = useState<OperationPointOption[]>([]);
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [templateDraft, setTemplateDraft] = useState({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37", plan_id: "" });
@@ -811,6 +824,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       "card.suspended": "إيقاف كرت",
       "card.reactivated": "إعادة تفعيل كرت",
       "card.cancelled": "إلغاء كرت",
+      "card.deleted": "حذف منطقي لكرت",
       "cards.batch_created": "إنشاء دفعة كروت",
       "cards.batch_extended": "إضافة كروت إلى دفعة",
       "card_template.created": "إنشاء قالب كروت",
@@ -1007,11 +1021,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
   }
 
-  async function disconnectRadiusSession(sessionId: number) {
+  async function disconnectRadiusSession(sessionId: number, username: string) {
     setBusy(true); setError(""); setNotice("");
     try {
+      const params = new URLSearchParams({ search: username });
       await apiRequest<{ session_id: number; disconnect_acknowledged: boolean }>(
-        token, `/api/v1/cards/sessions/${sessionId}/disconnect`, { method: "POST" }
+        token, `/api/v1/cards/sessions/${sessionId}/disconnect?${params.toString()}`, { method: "POST" }
       );
       setNotice("أكد الراوتر استلام طلب فصل الجلسة. سيظهر انتهاء الجلسة بعد وصول سجل المحاسبة.");
       await loadRadiusSessions();
@@ -1932,7 +1947,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     try {
       await apiRequest<Card>(token, `/api/v1/cards/${card.id}/status`, {
         method: "PATCH",
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, ...(user.card_visibility === "search_any" ? { confirmation_identifier: card.username } : {}) }),
       });
       await loadCards();
       setNotice(`تم ${labels[action]} الكرت ${card.username}.`);
@@ -1941,6 +1956,55 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } finally {
       setBusy(false);
     }
+  }
+
+
+
+  async function lookupCardForDeletion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!can("cards.delete")) { setError("ليست لديك صلاحية حذف الكروت."); return; }
+    const identifier = cardDeleteIdentifier.trim();
+    if (!identifier) return;
+    setBusy(true); setError(""); setNotice(""); setCardDeleteCandidate(null);
+    try {
+      const params = new URLSearchParams({ identifier });
+      const candidate = await apiRequest<CardDeleteOption>(token, `/api/v1/cards/delete-options?${params.toString()}`);
+      setCardDeleteCandidate(candidate);
+      setNotice(candidate.can_delete ? "تم العثور على الكرت وهو مؤهل للحذف المنطقي." : "تم العثور على الكرت، لكن شروط الحذف الآمن غير مكتملة.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر البحث عن الكرت");
+    } finally { setBusy(false); }
+  }
+
+  async function deleteCardByLookup() {
+    if (!can("cards.delete") || !cardDeleteCandidate) return;
+    const identifier = cardDeleteIdentifier.trim();
+    if (!identifier || !cardDeleteCandidate.can_delete) return;
+    if (!window.confirm("سيتم إلغاء الكرت مع الاحتفاظ بسجل الجلسات والطباعة والتدقيق. لا يمكن التراجع عن هذه العملية من الشاشة. هل تريد المتابعة؟")) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const params = new URLSearchParams({ search: identifier });
+      await apiRequest<void>(token, `/api/v1/cards/${cardDeleteCandidate.id}?${params.toString()}`, { method: "DELETE" });
+      setCardDeleteCandidate(null);
+      setCardDeleteIdentifier("");
+      setNotice(`تم إلغاء الكرت ${cardDeleteCandidate.username} مع الاحتفاظ بسجله.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر حذف الكرت");
+    } finally { setBusy(false); }
+  }
+
+  async function deleteCardFromList(card: Card) {
+    if (!can("cards.delete")) { setError("ليست لديك صلاحية حذف الكروت."); return; }
+    if (!window.confirm("سيتم إلغاء الكرت مع الاحتفاظ بسجل الجلسات والطباعة والتدقيق. هل تريد المتابعة؟")) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const params = new URLSearchParams({ search: card.username });
+      await apiRequest<void>(token, `/api/v1/cards/${card.id}?${params.toString()}`, { method: "DELETE" });
+      await loadCards();
+      setNotice(`تم إلغاء الكرت ${card.username} مع الاحتفاظ بسجله.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر حذف الكرت");
+    } finally { setBusy(false); }
   }
 
   async function createSingle(event: FormEvent<HTMLFormElement>) {
@@ -2624,12 +2688,30 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <td>{session.username}</td><td>{session.serial_number}</td><td>{session.router_name}</td><td>{session.nas_identifier}</td>
             <td>{session.framed_ip_address || "—"}</td><td>{session.calling_station_id || "—"}</td>
             <td>{formatDateTime(session.started_at)}</td><td>{formatDateTime(session.last_update_at)}</td>
-            <td>{formatDuration(session.session_time_seconds)}</td><td>{formatBytes(session.upload_bytes)}</td><td>{formatBytes(session.download_bytes)}</td>{can("sessions.disconnect") && <td><button type="button" className="table-action danger-action" disabled={busy} onClick={() => disconnectRadiusSession(session.id)}>فصل الجلسة</button></td>}
+            <td>{formatDuration(session.session_time_seconds)}</td><td>{formatBytes(session.upload_bytes)}</td><td>{formatBytes(session.download_bytes)}</td>{can("sessions.disconnect") && <td><button type="button" className="table-action danger-action" disabled={busy} onClick={() => disconnectRadiusSession(session.id, session.username)}>فصل الجلسة</button></td>}
           </tr>)}</tbody>
         </table>
         {radiusSessions.items.length === 0 && <div className="empty-state">لا توجد جلسات مستخدمين نشطة مسجلة حالياً.</div>}
       </div>
     </>;
+  }
+
+
+
+  function renderCardDelete() {
+    return <section className="panel">
+      <div className="section-heading"><div><h2>حذف كرت غير مستخدم</h2><p>الحذف هنا منطقي: يُلغى الكرت مع الاحتفاظ بسجلات الطباعة والتدقيق، ولا تُحذف بيانات الجلسات أو الدفعات.</p></div></div>
+      <form className="form-grid" onSubmit={lookupCardForDeletion}>
+        <label>اسم المستخدم أو الرقم التسلسلي الكامل<input value={cardDeleteIdentifier} onChange={(event) => { setCardDeleteIdentifier(event.target.value); setCardDeleteCandidate(null); }} maxLength={120} required placeholder="أدخل الاسم أو الرقم التسلسلي" /></label>
+        <div className="form-actions"><button type="submit" disabled={busy || !cardDeleteIdentifier.trim()}>{busy ? "جارٍ البحث..." : "بحث عن الكرت"}</button></div>
+      </form>
+      {cardDeleteCandidate && <section className="panel" style={{ marginTop: 16 }}>
+        <div className="section-heading compact-heading"><div><h3>{cardDeleteCandidate.username}</h3><p>التسلسل: {cardDeleteCandidate.serial_number} · الحالة: {cardDeleteCandidate.status}</p></div><span className="count-tag">{cardDeleteCandidate.can_delete ? "مؤهل للحذف" : "غير مؤهل"}</span></div>
+        {cardDeleteCandidate.first_used_at && <p>أول استخدام: {new Date(cardDeleteCandidate.first_used_at).toLocaleString("ar")}</p>}
+        {cardDeleteCandidate.blocked_reason && <div className="notice error-notice">{cardDeleteCandidate.blocked_reason}</div>}
+        {cardDeleteCandidate.can_delete && <div className="form-actions"><button type="button" className="danger-action" disabled={busy} onClick={deleteCardByLookup}>حذف الكرت مع حفظ السجل</button></div>}
+      </section>}
+    </section>;
   }
 
   function renderCards() {
@@ -2668,7 +2750,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         {(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <div><strong>{selectedCardIds.length.toLocaleString("ar")}</strong><span>كرت محدد للطباعة</span></div>}
         {busy && <span className="card-results-loading">جارٍ تحديث النتائج…</span>}
       </div>
-      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>أول استخدام</th><th>تاريخ الانتهاء</th><th>وقت الجلسات المستخدم / المتبقي</th><th>الوقت المتبقي للصلاحية</th><th>الجلسات النشطة / المنتهية</th><th>آخر اتصال / تحديث الجلسة</th><th>الاستهلاك (رفع / تنزيل)</th><th>البيانات المستهلكة / المتبقية</th><th>حد التزامن المسموح</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{can("cards.update") && <th>الإجراءات</th>}</tr></thead><tbody>
+      <div className="table-wrap card-management-table-wrap"><table className="card-management-table"><thead><tr>{(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <th>تحديد</th>}<th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>نوع الدخول</th><th>الباقة</th><th>الحالة</th><th>أول استخدام</th><th>تاريخ الانتهاء</th><th>وقت الجلسات المستخدم / المتبقي</th><th>الوقت المتبقي للصلاحية</th><th>الجلسات النشطة / المنتهية</th><th>آخر اتصال / تحديث الجلسة</th><th>الاستهلاك (رفع / تنزيل)</th><th>البيانات المستهلكة / المتبقية</th><th>حد التزامن المسموح</th><th>السرعة</th><th>مجاني</th>{can("sessions.view") && <th>الجلسات</th>}{(can("cards.update") || can("cards.delete")) && <th>الإجراءات</th>}</tr></thead><tbody>
         {cards.map((card) => {
           const snapshot = card.plan_snapshot ?? {};
           const remaining = typeof card.remaining_time_seconds === "number" ? card.remaining_time_seconds : null;
@@ -2715,7 +2797,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <td>{sharedUsersLabel}</td>
             <td>{speed}</td><td>{card.is_free ? "نعم" : "لا"}</td>
             {can("sessions.view") && <td><button type="button" className="table-action" disabled={cardSessionLoading} onClick={() => { const filters = { status: "all", routerId: "", search: "", dateFrom: "", dateTo: "" }; setCardSessionFilters(filters); setCardSessionHistory(null); setCardSessionOffset(0); loadCardSessionHistory(card, 0, filters); }}>عرض الجلسات</button></td>}
-            {can("cards.update") && user.card_visibility !== "search_any" && <td className="actions-cell">{card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null}{["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id && <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button>}</td>}
+            {(can("cards.update") || can("cards.delete")) && <td className="actions-cell">{can("cards.update") && (card.status === "suspended" ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "reactivate")}>إعادة تفعيل</button> : ["generated", "allocated", "active", "printed_free"].includes(card.status) ? <button type="button" className="table-action" disabled={busy} onClick={() => changeCardStatus(card, "suspend")}>إيقاف</button> : null)}{can("cards.delete") && ["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id ? <button type="button" className="table-action danger-action" disabled={busy} onClick={() => deleteCardFromList(card)}>حذف مع حفظ السجل</button> : !can("cards.delete") && can("cards.update") && ["generated", "printed_free"].includes(card.status) && !card.first_used_at && !card.assigned_pos_id ? <button type="button" className="table-action danger-action" disabled={busy} onClick={() => changeCardStatus(card, "cancel")}>إلغاء</button> : null}</td>}
           </tr>;
         })}
       </tbody></table>{cards.length === 0 && <div className="empty-state">لا توجد كروت تطابق البحث في هذه الصفحة.</div>}</div>
@@ -3539,13 +3621,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               {can("finance.create") && <button className={page === "finance-entry" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("finance-entry")}>تسجيل حركة مالية</button>}
             </div>}
           </div>}
-          {(can("cards.create") || can("cards.view") || can("templates.view")) && <div className="nav-group">
+          {(can("cards.create") || can("cards.view") || can("cards.delete") || can("templates.view")) && <div className="nav-group">
             <button type="button" className={openNavGroup === "cards" ? "nav-group-toggle expanded" : "nav-group-toggle"} aria-expanded={openNavGroup === "cards"} onClick={() => setOpenNavGroup((current) => current === "cards" ? null : "cards")}>
               <span>إدارة الكروت</span><span className="nav-chevron" aria-hidden="true">⌄</span>
             </button>
             {openNavGroup === "cards" && <div className="nav-group-items">
               {can("cards.create") && <button className={page === "card-create" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("card-create")}>إضافة الكروت</button>}
               {can("cards.view") && <button className={page === "cards" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("cards")}>إدارة الكروت</button>}
+              {can("cards.delete") && <button className={page === "card-delete" ? "nav-sub active" : "nav-sub"} onClick={() => { setCardDeleteCandidate(null); setCardDeleteIdentifier(""); setPage("card-delete"); }}>حذف كرت</button>}
               {can("cards.view") && user.card_visibility !== "search_any" && <button className={page === "batches" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("batches")}>دفعات الكروت</button>}
               {can("templates.view") && <button className={page === "templates" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("templates")}>تصاميم الكروت</button>}
             </div>}
@@ -3567,12 +3650,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "pos" ? "الطباعة والدفعات" : page === "printing-history" ? "سجل الطباعة" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "finance-entry" ? "تسجيل حركة مالية" : page === "reports" ? "التقارير" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : page === "settings" ? "الإعدادات والصيانة" : "إدارة أجهزة MikroTik"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "card-delete" ? "حذف كرت" : page === "pos" ? "الطباعة والدفعات" : page === "printing-history" ? "سجل الطباعة" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "finance-entry" ? "تسجيل حركة مالية" : page === "reports" ? "التقارير" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : page === "settings" ? "الإعدادات والصيانة" : "إدارة أجهزة MikroTik"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") ? renderCardCreate() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && (can("pos.view") || can("pos.create")) ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "finance-entry" && can("finance.create") ? renderFinanceEntry() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") ? renderCardCreate() : page === "card-delete" && can("cards.delete") ? renderCardDelete() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && (can("pos.view") || can("pos.create")) ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "finance-entry" && can("finance.create") ? renderFinanceEntry() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
