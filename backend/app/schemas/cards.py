@@ -139,6 +139,7 @@ class CardPrintSelectionItem(BaseModel):
     username: str
     serial_number: str
     plan_id: int
+    template_code: str | None = None
     is_free: bool
 
 
