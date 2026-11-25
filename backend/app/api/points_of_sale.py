@@ -40,7 +40,7 @@ def list_points_of_sale(include_inactive: bool = False, db: Session = Depends(ge
 
 @router.get("/operation-options", response_model=list[PointOfSaleOperationOption])
 def list_operation_options(
-    operation: Literal["cards.create", "finance.create"] = Query(...),
+    operation: Literal["cards.create", "finance.create", "printing.create"] = Query(...),
     db: Session = Depends(get_db),
     user: AdminUser = Depends(get_current_user),
 ):
@@ -52,6 +52,11 @@ def list_operation_options(
         query = query.filter(
             PointOfSale.is_active.is_(True),
             PointOfSale.allow_card_creation.is_(True),
+        )
+    elif operation == "printing.create":
+        query = query.filter(
+            PointOfSale.is_active.is_(True),
+            PointOfSale.allow_printing.is_(True),
         )
 
     if not is_owner(user):
