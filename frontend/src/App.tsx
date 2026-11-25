@@ -433,7 +433,7 @@ type PrintJobHistory = {
 type CardPrintSelectionResolveResponse = {
   total_requested: number;
   matched_count: number;
-  items: { id: string; username: string; serial_number: string; plan_id: number; is_free: boolean }[];
+  items: { id: string; username: string; serial_number: string; plan_id: number; template_code: string | null; is_free: boolean }[];
   unmatched: string[];
 };
 type PrintJobResult = {
@@ -556,12 +556,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     // Credential disclosure is never implied by a broad manage permission.
     return false;
   };
-  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "card-delete" | "cards" | "pos" | "printing-history" | "pos-management" | "finance-entry" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
+  const [page, setPage] = useState<"overview" | "plans" | "card-create" | "card-delete" | "cards" | "pos" | "printing-history" | "printing-create" | "pos-management" | "finance-entry" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
   const [openNavGroup, setOpenNavGroup] = useState<"system" | "cards" | "printing" | null>(null);
   useEffect(() => {
     if (["card-create", "card-delete", "cards", "batches", "templates"].includes(page)) setOpenNavGroup("cards");
     else if (["plans", "routers", "reports", "finance-entry"].includes(page)) setOpenNavGroup("system");
-    else if (page === "pos" || page === "printing-history") setOpenNavGroup("printing");
+    else if (page === "pos" || page === "printing-history" || page === "printing-create") setOpenNavGroup("printing");
   }, [page]);
   const [systemStatus, setSystemStatus] = useState<{ api: string; database: string; version: string; checkedAt: string } | null>(null);
   const [systemStatusLoading, setSystemStatusLoading] = useState(false);
@@ -692,6 +692,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [reportTo, setReportTo] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
   const [accountDraft, setAccountDraft] = useState({ amount: "", entryType: "payment", direction: "credit" as "debit" | "credit", description: "", reference: "" });
   const [printHistory, setPrintHistory] = useState<PrintJobHistory[]>([]);
+  const [printingPointOptions, setPrintingPointOptions] = useState<OperationPointOption[]>([]);
+  const [printingTemplateOptions, setPrintingTemplateOptions] = useState<CardTemplate[]>([]);
+  const [printIdentifiers, setPrintIdentifiers] = useState("");
+  const [resolvedPrintCards, setResolvedPrintCards] = useState<CardPrintSelectionResolveResponse["items"]>([]);
   const [posDraft, setPosDraft] = useState({ code: "", name: "", contactName: "", phone: "", debtLimit: "", allowCardCreation: true, allowPrinting: true });
   const [editingPosId, setEditingPosId] = useState<number | null>(null);
   const [selectedPrintCardIds, setSelectedPrintCardIds] = useState<string[]>([]);
@@ -1394,6 +1398,26 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setSelectedPosId(nextPoint);
   }
 
+  async function loadPrintingCreationOptions() {
+    const [pointOptions, templateOptions] = await Promise.all([
+      apiRequest<OperationPointOption[]>(token, "/api/v1/points-of-sale/operation-options?operation=printing.create"),
+      apiRequest<CardTemplate[]>(token, "/api/v1/card-templates/printing-options"),
+    ]);
+    setPrintingPointOptions(pointOptions);
+    setPrintingTemplateOptions(templateOptions);
+    const nextPoint = selectedPosId && pointOptions.some((point) => String(point.id) === selectedPosId)
+      ? selectedPosId
+      : (pointOptions[0]?.id.toString() ?? "");
+    setSelectedPosId(nextPoint);
+    const preferredTemplate = templateOptions.find((item) => item.code === printTemplate)
+      ?? templateOptions.find((item) => item.is_default)
+      ?? templateOptions[0];
+    setPrintTemplate(preferredTemplate?.code ?? "");
+    setResolvedPrintCards([]);
+    setSelectedPrintCardIds([]);
+    setPrintPreviewCards([]);
+  }
+
   async function loadCards(search = cardSearch, offset = cardOffset, batchId = cardBatchFilter, statusFilter = cardStatusFilter, planFilter = cardPlanFilter, freeFilter = cardFreeFilter, sort = cardSort) {
     if (user.card_visibility === "search_any" && !search.trim()) {
       setCards([]);
@@ -1775,6 +1799,92 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } finally { setBusy(false); }
   }
 
+  async function resolveStandalonePrintSelection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!can("printing.create") || !selectedPosId) {
+      setError("اختر نقطة بيع مسموحاً بالطباعة فيها.");
+      return;
+    }
+    const identifiers = Array.from(new Set(
+      printIdentifiers.split(/[\r\n,;\t]+/).map((value) => value.trim()).filter(Boolean)
+    )).slice(0, 5000);
+    if (!identifiers.length) {
+      setError("أدخل اسم مستخدم أو رقماً تسلسلياً واحداً على الأقل.");
+      return;
+    }
+    setBusy(true); setError(""); setNotice(""); setPrintPreviewCards([]);
+    try {
+      const result = await apiRequest<CardPrintSelectionResolveResponse>(token, "/api/v1/cards/print-selection/resolve", {
+        method: "POST",
+        body: JSON.stringify({ identifiers, point_of_sale_id: Number(selectedPosId) }),
+      });
+      setResolvedPrintCards(result.items);
+      const templateCodes = Array.from(new Set(result.items.map((item) => item.template_code).filter((code): code is string => Boolean(code))));
+      if (templateCodes.length > 1) {
+        setSelectedPrintCardIds([]);
+        setError("الكروت المختارة مرتبطة بأكثر من قالب. قسّمها إلى مجموعات حسب القالب ثم أعد التحقق.");
+      } else {
+        setSelectedPrintCardIds(result.items.map((item) => item.id));
+        if (templateCodes.length === 1) {
+          const templateCode = templateCodes[0];
+          if (printingTemplateOptions.some((item) => item.code === templateCode)) setPrintTemplate(templateCode);
+          else {
+            setSelectedPrintCardIds([]);
+            setError("قالب الدفعة غير متاح ضمن قوالب الطباعة الحالية.");
+          }
+        }
+      }
+      const unmatchedPreview = result.unmatched.slice(0, 10).join("، ");
+      setPrintImportSummary(
+        "تم العثور على " + result.matched_count + " كرت من أصل " + result.total_requested +
+        " قيمة. غير المطابق أو غير المؤهل للطباعة: " + result.unmatched.length +
+        (unmatchedPreview ? ". أول القيم غير المطابقة: " + unmatchedPreview : "")
+      );
+      if (!result.items.length) setError("لم يتم العثور على كروت مؤهلة للطباعة في نقطة البيع المحددة.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر التحقق من قائمة الكروت");
+    } finally { setBusy(false); }
+  }
+
+  async function submitStandalonePrint() {
+    if (!can("printing.create") || !can("printing.credentials")) {
+      setError("تتطلب الطباعة صلاحية التنفيذ وعرض بيانات دخول الكروت.");
+      return;
+    }
+    if (!selectedPosId || selectedPrintCardIds.length === 0) {
+      setError("تحقق من الكروت وحدد نقطة البيع قبل تسجيل الطباعة.");
+      return;
+    }
+    setBusy(true); setError(""); setNotice(""); setPrintPreviewCards([]);
+    try {
+      const result = await apiRequest<PrintJobResult>(token, "/api/v1/print-jobs", {
+        method: "POST",
+        body: JSON.stringify({
+          idempotency_key: "print-" + crypto.randomUUID(),
+          point_of_sale_id: Number(selectedPosId),
+          card_ids: selectedPrintCardIds,
+          template_code: printTemplate || null,
+          is_reprint: false,
+          print_options: printOptions,
+        }),
+      });
+      setSelectedPrintCardIds([]);
+      setPrintTemplate(result.template_code || printTemplate);
+      setPrintOptions(Object.assign(
+        { show_username: true, show_password: true, show_serial_number: true, show_plan: true, show_price: true, show_limits: true, sequential: false },
+        result.print_options,
+      ));
+      setPrintPreviewCards(result.items);
+      setNotice(
+        "تم تسجيل طباعة " + result.card_count + " كرت: " + result.commercial_card_count +
+        " تجاري و" + result.free_card_count + " مجاني. القيمة التجارية: " +
+        Number(result.total_amount).toFixed(2) + "."
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تنفيذ الطباعة");
+    } finally { setBusy(false); }
+  }
+
   useEffect(() => {
     if (page !== "pos") setPrintPreviewCards([]);
     if (page === "printing-history" && can("printing.view")) {
@@ -1802,6 +1912,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
     if (page === "finance-entry" && can("finance.create")) {
       loadFinancePointOptions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل نقاط البيع المتاحة للعملية المالية"));
+    }
+    if (page === "printing-create" && can("printing.create") && can("printing.credentials")) {
+      loadPrintingCreationOptions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل خيارات الطباعة المحدودة"));
     }
     if ((page === "pos" || page === "templates") && can("templates.view")) {
       loadCardTemplates().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل قوالب الطباعة"));
@@ -3176,6 +3289,127 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     );
   }
 
+  function renderPrintingCreate() {
+    const selectedTemplate = printingTemplateOptions.find((item) => item.code === printTemplate);
+    const selectedLayout = selectedTemplate?.layout ?? {};
+    const layoutPosition = (xKey: string, yKey: string) =>
+      selectedLayout[xKey] === undefined || selectedLayout[yKey] === undefined
+        ? undefined
+        : { position: "absolute" as const, left: String(selectedLayout[xKey]) + "%", top: String(selectedLayout[yKey]) + "%", transform: "translate(-50%, -50%)", width: "88%" };
+    const cardsPerPage = Math.max(1, Math.min(60, Number(selectedLayout.columns ?? 2) * Number(selectedLayout.rows ?? 5)));
+    return (
+      <section className="pos-management-page">
+        <div className="section-heading pos-page-heading">
+          <div>
+            <span className="eyebrow">صلاحية الطباعة المستقلة</span>
+            <h2>تنفيذ الطباعة</h2>
+            <p>حدد نقطة بيع ضمن نطاقك، ثم أدخل أسماء المستخدمين أو الأرقام التسلسلية. لا تحتاج هذه الشاشة إلى استعراض قائمة الكروت أو دليل نقاط البيع.</p>
+          </div>
+        </div>
+        <section className="panel">
+          <div className="form-grid">
+            <label>نقطة البيع
+              <select value={selectedPosId} onChange={(event) => {
+                setSelectedPosId(event.target.value);
+                setResolvedPrintCards([]);
+                setSelectedPrintCardIds([]);
+                setPrintPreviewCards([]);
+                setPrintImportSummary("");
+              }}>
+                <option value="">اختر نقطة البيع</option>
+                {printingPointOptions.map((point) => (
+                  <option key={point.id} value={point.id}>{point.name} — {point.code}</option>
+                ))}
+              </select>
+            </label>
+            <label>قالب الطباعة
+              <select value={printTemplate} onChange={(event) => setPrintTemplate(event.target.value)}>
+                <option value="">القالب الافتراضي</option>
+                {printingTemplateOptions.map((item) => <option key={item.id} value={item.code}>{item.name}</option>)}
+              </select>
+            </label>
+          </div>
+          <form className="panel form-grid" onSubmit={resolveStandalonePrintSelection}>
+            <label>أسماء المستخدمين أو الأرقام التسلسلية
+              <textarea rows={6} value={printIdentifiers} onChange={(event) => setPrintIdentifiers(event.target.value)} placeholder={"أدخل قيمة واحدة في كل سطر، أو افصل القيم بفاصلة"} required />
+              <small className="field-hint">الحد الأقصى 5000 قيمة. يعرض التحقق بيانات تعريف محدودة فقط ولا يعرض كلمات المرور.</small>
+            </label>
+            <div className="form-actions">
+              <button type="submit" disabled={busy || !selectedPosId}>{busy ? "جارٍ التحقق..." : "التحقق من الكروت"}</button>
+            </div>
+          </form>
+          {printImportSummary && <div className="notice print-import-summary">{printImportSummary}</div>}
+          {resolvedPrintCards.length > 0 && (
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>الرقم التسلسلي</th><th>اسم المستخدم</th><th>الباقة</th><th>التصنيف</th></tr></thead>
+                <tbody>{resolvedPrintCards.map((card) => (
+                  <tr key={card.id}>
+                    <td>{card.serial_number}</td>
+                    <td>{card.username}</td>
+                    <td>{card.plan_id}</td>
+                    <td>{card.is_free ? "مجاني" : "تجاري"}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+          <div className="plan-form-section">
+            <h3>خيارات الطباعة</h3>
+            <div className="day-selector">
+              <label><input type="checkbox" checked={printOptions.show_username} onChange={(event) => setPrintOptions({ ...printOptions, show_username: event.target.checked })} /> إظهار اسم المستخدم</label>
+              <label><input type="checkbox" checked={printOptions.show_password} onChange={(event) => setPrintOptions({ ...printOptions, show_password: event.target.checked })} /> إظهار كلمة المرور</label>
+              <label><input type="checkbox" checked={printOptions.show_serial_number} onChange={(event) => setPrintOptions({ ...printOptions, show_serial_number: event.target.checked })} /> إظهار الرقم التسلسلي</label>
+              <label><input type="checkbox" checked={printOptions.show_plan} onChange={(event) => setPrintOptions({ ...printOptions, show_plan: event.target.checked })} /> إظهار اسم الباقة</label>
+              <label><input type="checkbox" checked={printOptions.show_price} onChange={(event) => setPrintOptions({ ...printOptions, show_price: event.target.checked })} /> إظهار السعر</label>
+              <label><input type="checkbox" checked={printOptions.show_limits} onChange={(event) => setPrintOptions({ ...printOptions, show_limits: event.target.checked })} /> إظهار الرصيد والوقت والصلاحية</label>
+              <label><input type="checkbox" checked={printOptions.sequential} onChange={(event) => setPrintOptions({ ...printOptions, sequential: event.target.checked })} /> ترتيب متسلسل</label>
+            </div>
+          </div>
+          <div className="pos-print-summary">تم التحقق من {resolvedPrintCards.length} كرت. المحدد للطباعة: {selectedPrintCardIds.length}.</div>
+          <button type="button" disabled={busy || !selectedPosId || selectedPrintCardIds.length === 0} onClick={submitStandalonePrint}>
+            {busy ? "جارٍ التسجيل..." : "تسجيل دفعة الطباعة"}
+          </button>
+          {printingPointOptions.length === 0 && <div className="empty-state">لا توجد نقاط بيع نشطة ومسموح بالطباعة فيها ضمن نطاق حسابك.</div>}
+        </section>
+        {printPreviewCards.length > 0 && (
+          <section className="voucher-print-preview">
+            <div className="voucher-toolbar">
+              <div><strong>معاينة القسائم</strong><span>تظهر بيانات الدخول هنا بعد تسجيل الطباعة، ولا تُضاف إلى سجل الطباعة العام.</span></div>
+              <div>
+                <button type="button" onClick={() => window.print()}>طباعة القسائم</button>
+                <button type="button" className="secondary-button" onClick={() => setPrintPreviewCards([])}>إغلاق المعاينة</button>
+              </div>
+            </div>
+            <div className={printOptions.sequential ? "voucher-grid sequential-vouchers" : "voucher-grid"} style={selectedTemplate ? { gridTemplateColumns: `repeat(${Math.max(1, Math.min(5, Number(selectedLayout.columns ?? 2)))}, minmax(0, 1fr))`, gap: `${Number(selectedLayout.page_gap_mm ?? 4)}mm` } : undefined}>
+              {printPreviewCards.map((card, index) => (
+                <article className={`voucher-card ${printTemplate || "classic-green"}`} key={card.card_id} style={selectedTemplate ? {
+                  position: "relative",
+                  background: selectedTemplate.background_color,
+                  color: selectedTemplate.text_color,
+                  aspectRatio: `${selectedTemplate.width_mm}/${selectedTemplate.height_mm}`,
+                  minHeight: `${selectedTemplate.height_mm}mm`,
+                  fontFamily: String(selectedLayout.font_family ?? "Arial"),
+                  fontSize: `${Number(selectedLayout.font_size ?? 12)}px`,
+                  padding: `${Number(selectedLayout.card_padding_mm ?? 3)}mm`,
+                  border: selectedLayout.show_border === false ? "none" : `${Number(selectedLayout.border_width ?? 1)}px solid ${String(selectedLayout.border_color ?? "#b9d9c8")}`,
+                  breakAfter: (index + 1) % cardsPerPage === 0 && index < printPreviewCards.length - 1 ? "page" : undefined,
+                } : undefined}>
+                  <div className="voucher-head"><strong>{String(selectedLayout.header_text ?? "الأسطورة نت")}</strong><span>{String(selectedLayout.footer_text ?? (card.is_free ? "كرت مجاني" : "بطاقة إنترنت"))}</span></div>
+                  {printOptions.show_plan && selectedLayout.show_plan !== false && <div className="voucher-plan" style={layoutPosition("plan_x", "plan_y")}><span>الباقة</span><strong>{card.plan_name}</strong></div>}
+                  {printOptions.show_username && selectedLayout.show_username !== false && <div className="voucher-user" style={layoutPosition("username_x", "username_y")}><span>اسم المستخدم</span><strong>{card.username}</strong></div>}
+                  {printOptions.show_password && selectedLayout.show_password !== false && <div className="voucher-password" style={layoutPosition("password_x", "password_y")}><span>كلمة المرور</span><strong>{card.password || "بدون كلمة مرور"}</strong></div>}
+                  {printOptions.show_limits && selectedLayout.show_limits !== false && <div className="voucher-limits" style={layoutPosition("limits_x", "limits_y")}><span>{card.data_limit_bytes == null ? "رصيد مفتوح" : (Number(card.data_limit_bytes) / (1024 ** 2)).toFixed(0) + " MB"} · {card.session_time_limit_seconds == null ? "وقت مفتوح" : (Number(card.session_time_limit_seconds) / 3600).toFixed(0) + " ساعة"} · {card.validity_period_seconds == null ? "صلاحية مفتوحة" : (Number(card.validity_period_seconds) / 86400).toFixed(0) + " يوم"}</span></div>}
+                  <div className="voucher-foot"><span style={layoutPosition("serial_x", "serial_y")}>{printOptions.show_serial_number && selectedLayout.show_serial_number !== false ? card.serial_number : ""}</span><strong style={layoutPosition("price_x", "price_y")}>{printOptions.show_price && selectedLayout.show_price !== false ? (card.is_free ? "مجاني" : Number(card.price_snapshot).toLocaleString("en-US") + " ريال") : ""}</strong></div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+      </section>
+    );
+  }
+
   function renderFinanceEntry() {
     return (
       <section className="pos-management-page">
@@ -3643,6 +3877,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             </div>}
           </div>}
           {can("printing.view") && !(can("cards.view") && can("pos.view") && can("templates.view")) && <button className={page === "printing-history" ? "nav-item active" : "nav-item"} onClick={() => setPage("printing-history")}>سجل الطباعة</button>}
+          {can("printing.create") && can("printing.credentials") && !(can("cards.view") && can("pos.view") && can("templates.view")) && <button className={page === "printing-create" ? "nav-item active" : "nav-item"} onClick={() => setPage("printing-create")}>تنفيذ الطباعة</button>}
           {can("audit.view") && <button className={page === "audit" ? "nav-item active" : "nav-item"} onClick={() => setPage("audit")}>سجل عمليات النظام</button>}
           {user.roles.includes("owner") && <button className={page === "settings" ? "nav-item active" : "nav-item"} onClick={() => setPage("settings")}>الإعدادات والصيانة</button>}
         </nav>
@@ -3650,12 +3885,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "card-delete" ? "حذف كرت" : page === "pos" ? "الطباعة والدفعات" : page === "printing-history" ? "سجل الطباعة" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "finance-entry" ? "تسجيل حركة مالية" : page === "reports" ? "التقارير" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : page === "settings" ? "الإعدادات والصيانة" : "إدارة أجهزة MikroTik"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? "إدارة الباقات" : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "card-delete" ? "حذف كرت" : page === "pos" ? "الطباعة والدفعات" : page === "printing-history" ? "سجل الطباعة" : page === "printing-create" ? "تنفيذ الطباعة" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "finance-entry" ? "تسجيل حركة مالية" : page === "reports" ? "التقارير" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : page === "settings" ? "الإعدادات والصيانة" : "إدارة أجهزة MikroTik"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") ? renderCardCreate() : page === "card-delete" && can("cards.delete") ? renderCardDelete() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && (can("pos.view") || can("pos.create")) ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "finance-entry" && can("finance.create") ? renderFinanceEntry() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && can("plans.view") ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") ? renderCardCreate() : page === "card-delete" && can("cards.delete") ? renderCardDelete() : page === "printing-create" && can("printing.create") && can("printing.credentials") ? renderPrintingCreate() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && (can("pos.view") || can("pos.create")) ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "finance-entry" && can("finance.create") ? renderFinanceEntry() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
