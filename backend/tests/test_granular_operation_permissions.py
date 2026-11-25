@@ -519,6 +519,8 @@ def test_printing_create_works_without_card_pos_or_template_view(owner_client):
     card_id = None
     role_code = None
     username = None
+    create_only_role_code = None
+    create_only_username = None
 
     try:
         point = client.post(
@@ -573,6 +575,21 @@ def test_printing_create_works_without_card_pos_or_template_view(owner_client):
             ["printing.create", "printing.credentials"],
             point_ids=[point_id],
         )
+        create_only_role_code, create_only_username, _, create_only_headers = _create_role_user(
+            client,
+            owner_headers,
+            ["printing.create"],
+            point_ids=[point_id],
+        )
+        denied_template_options = client.get("/api/v1/card-templates/printing-options", headers=create_only_headers)
+        assert denied_template_options.status_code == 403
+        denied_selection = client.post(
+            "/api/v1/cards/print-selection/resolve",
+            headers=create_only_headers,
+            json={"identifiers": [card.json()["username"]], "point_of_sale_id": point_id},
+        )
+        assert denied_selection.status_code == 403
+
         identity = client.get("/api/v1/auth/me", headers=staff_headers)
         assert identity.status_code == 200
         assert "cards.view" not in identity.json()["permissions"]
@@ -625,6 +642,8 @@ def test_printing_create_works_without_card_pos_or_template_view(owner_client):
     finally:
         if role_code and username:
             _cleanup_role_user(role_code, username)
+        if create_only_role_code and create_only_username:
+            _cleanup_role_user(create_only_role_code, create_only_username)
         cleanup = SessionLocal()
         if point_id is not None:
             job_ids = [
