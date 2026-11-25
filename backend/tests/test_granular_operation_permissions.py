@@ -611,7 +611,9 @@ def test_printing_create_works_without_card_pos_or_template_view(owner_client):
 
         template_options = client.get("/api/v1/card-templates/printing-options", headers=staff_headers)
         assert template_options.status_code == 200, template_options.text
-        assert any(item["code"] == template_code for item in template_options.json())
+        template_option_items = template_options.json()
+        assert any(item["plan_id"] is None for item in template_option_items)
+        assert any(item["code"] == template_code for item in template_option_items)
 
         resolved = client.post(
             "/api/v1/cards/print-selection/resolve",

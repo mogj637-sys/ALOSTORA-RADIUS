@@ -794,7 +794,52 @@ tbody tr:hover { background: #fbfdfc; }
 }
 .card-session-meta span { color: #526b5d; }
 .card-session-meta small { color: #89968e; font-size: 9px; }
+.card-usage-cell {
+  display: grid;
+  gap: 6px;
+  min-width: 170px;
+  line-height: 1.5;
+}
+.card-usage-meter {
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 170px;
+}
+.card-usage-meter progress {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-width: 70px;
+  height: 7px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: #e8efe9;
+  accent-color: #17815b;
+}
+.card-usage-meter progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: #e8efe9;
+}
+.card-usage-meter progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: #17815b;
+}
+.card-usage-meter progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: #17815b;
+}
+.card-usage-meter small {
+  color: #7a8b81;
+  font-size: 9px;
+  white-space: nowrap;
+}
 @media (max-width: 700px) {
+  .card-usage-cell,
+  .card-usage-meter { min-width: 160px; }
+  .card-usage-meter small { font-size: 8px; }
   .card-management-table-wrap {
     border-radius: 9px;
     touch-action: pan-x pan-y;

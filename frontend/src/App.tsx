@@ -2873,6 +2873,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           const expiryTimestamp = card.expires_at ? Date.parse(card.expires_at) : Number.NaN;
           const sharedUsersLabel = typeof card.shared_users_limit === "number" ? String(card.shared_users_limit) : "غير محدود";
           const speed = card.speed_limit || "غير محددة";
+          const sessionTimeLimit = Number(snapshot.session_time_limit_seconds);
+          const sessionTimePercent = remaining !== null && Number.isFinite(sessionTimeLimit) && sessionTimeLimit > 0
+            ? Math.min(100, Math.max(0, (Math.max(0, Number(card.used_seconds || 0)) / sessionTimeLimit) * 100))
+            : null;
+          const dataLimit = Number(snapshot.data_limit_bytes);
+          const dataPercent = remainingDataBytes !== null && Number.isFinite(dataLimit) && dataLimit > 0
+            ? Math.min(100, Math.max(0, (totalConsumedBytes / dataLimit) * 100))
+            : null;
           const formatDateTime = (value: string | null) => value
             ? new Date(value).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" })
             : "—";
@@ -2902,12 +2910,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             <td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td>
             <td>{formatDateTime(card.first_used_at)}</td>
             <td>{formatDateTime(card.expires_at)}</td>
-            <td>{formatDuration(card.used_seconds)} / {remaining === null ? "غير محدود" : formatDuration(remaining)}</td>
+            <td><div className="card-usage-cell"><span>{formatDuration(card.used_seconds)} / {remaining === null ? "غير محدود" : formatDuration(remaining)}</span>{sessionTimePercent !== null && <div className="card-usage-meter"><progress max={100} value={sessionTimePercent} aria-label={`استهلاك وقت الجلسات ${Math.round(sessionTimePercent)}٪`} /><small>{Math.round(sessionTimePercent).toLocaleString("ar")}٪ من حد الجلسات</small></div>}</div></td>
             <td>{validityRemainingLabel}</td>
             <td><div className="card-session-meta"><span>نشطة: {card.active_sessions_count.toLocaleString("ar")}</span><span>منتهية: {card.ended_sessions_count.toLocaleString("ar")}</span><small>الإجمالي: {card.total_sessions_count.toLocaleString("ar")}</small></div></td>
             <td><div className="card-session-meta"><span>آخر اتصال: {formatDateTime(card.last_session_at)}</span><span>آخر تحديث للجلسة: {formatDateTime(card.last_session_update_at)}</span></div></td>
             <td>{formatBytes(card.upload_bytes)} / {formatBytes(card.download_bytes)}</td>
-            <td>{formatBytes(totalConsumedBytes)} / {remainingDataBytes === null ? "غير محدود" : formatBytes(remainingDataBytes)}</td>
+            <td><div className="card-usage-cell"><span>{formatBytes(totalConsumedBytes)} / {remainingDataBytes === null ? "غير محدود" : formatBytes(remainingDataBytes)}</span>{dataPercent !== null && <div className="card-usage-meter"><progress max={100} value={dataPercent} aria-label={`استهلاك البيانات ${Math.round(dataPercent)}٪`} /><small>{Math.round(dataPercent).toLocaleString("ar")}٪ من حد البيانات</small></div>}</div></td>
             <td>{sharedUsersLabel}</td>
             <td>{speed}</td><td>{card.is_free ? "نعم" : "لا"}</td>
             {can("sessions.view") && <td><button type="button" className="table-action" disabled={cardSessionLoading} onClick={() => { const filters = { status: "all", routerId: "", search: "", dateFrom: "", dateTo: "" }; setCardSessionFilters(filters); setCardSessionHistory(null); setCardSessionOffset(0); loadCardSessionHistory(card, 0, filters); }}>عرض الجلسات</button></td>}

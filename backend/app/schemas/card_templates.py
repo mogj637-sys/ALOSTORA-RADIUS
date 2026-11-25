@@ -27,4 +27,5 @@ class CardTemplateUpdate(BaseModel):
 class CardTemplateResponse(CardTemplateBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    plan_id: int | None
     is_default: bool
