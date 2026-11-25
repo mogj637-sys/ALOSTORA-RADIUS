@@ -161,6 +161,43 @@ def test_print_history_uses_printing_view_and_enforces_point_scope(owner_client)
         _cleanup_role_user(role_code, username)
 
 
+def test_plan_create_is_independent_from_plan_view(owner_client):
+    client, owner_headers, _ = owner_client
+    role_code = None
+    username = None
+    plan_code = "CI-CREATE-PLAN-" + secrets.token_hex(4).upper()
+
+    try:
+        role_code, username, _, create_headers = _create_role_user(
+            client, owner_headers, ["plans.create"]
+        )
+        assert client.get(
+            "/api/v1/plans?include_inactive=true", headers=create_headers
+        ).status_code == 403
+
+        created = client.post(
+            "/api/v1/plans",
+            headers=create_headers,
+            json={"code": plan_code, "name": "CI باقة إنشاء مستقل", "price": "10.00"},
+        )
+        assert created.status_code == 201, created.text
+        assert created.json()["code"] == plan_code
+
+        # Creation does not grant permission to enumerate the plans catalogue.
+        assert client.get(
+            "/api/v1/plans?include_inactive=true", headers=create_headers
+        ).status_code == 403
+    finally:
+        cleanup = SessionLocal()
+        plan = cleanup.query(Plan).filter_by(code=plan_code).first()
+        if plan is not None:
+            cleanup.delete(plan)
+        cleanup.commit()
+        cleanup.close()
+        if role_code and username:
+            _cleanup_role_user(role_code, username)
+
+
 def test_plan_delete_is_independent_and_blocks_active_or_referenced_plans(owner_client):
     client, owner_headers, _ = owner_client
     plan = client.post(
