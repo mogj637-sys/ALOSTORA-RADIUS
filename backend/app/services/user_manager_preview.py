@@ -68,7 +68,9 @@ def _safe_value(value: Any) -> Any:
         }
     if isinstance(value, (list, tuple)):
         return [_safe_value(item) for item in value]
-    return str(value)
+    # Never stringify unsupported objects into a supposedly safe snapshot:
+    # their __str__/__repr__ may contain opaque credentials or private data.
+    return None
 
 
 def _credential_metadata(record: dict[str, Any], username: str) -> dict[str, str | None]:
