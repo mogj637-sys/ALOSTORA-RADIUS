@@ -559,7 +559,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [page, setPage] = useState<"overview" | "plans" | "card-create" | "card-delete" | "cards" | "pos" | "printing-history" | "pos-management" | "finance-entry" | "batches" | "routers" | "reports" | "templates" | "admins" | "audit" | "settings">("overview");
   const [openNavGroup, setOpenNavGroup] = useState<"system" | "cards" | "printing" | null>(null);
   useEffect(() => {
-    if (["card-create", "cards", "batches", "templates"].includes(page)) setOpenNavGroup("cards");
+    if (["card-create", "card-delete", "cards", "batches", "templates"].includes(page)) setOpenNavGroup("cards");
     else if (["plans", "routers", "reports", "finance-entry"].includes(page)) setOpenNavGroup("system");
     else if (page === "pos" || page === "printing-history") setOpenNavGroup("printing");
   }, [page]);

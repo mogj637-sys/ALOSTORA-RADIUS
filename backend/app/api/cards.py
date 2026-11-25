@@ -157,7 +157,7 @@ def _ensure_card_operation_scope(
             raise HTTPException(status_code=403, detail="الكرت خارج نطاق نقاط البيع المسموح بها")
 
 
-def _card_delete_block_reason(card: Card, db: Session) -> str | None:
+def _card_delete_block_reason(card: Card, db: Session, *, lock_batch: bool = False) -> str | None:
     if card.status not in {"generated", "printed_free"}:
         return "لا يمكن حذف كرت في حالته الحالية"
     if card.first_used_at is not None:
@@ -167,8 +167,13 @@ def _card_delete_block_reason(card: Card, db: Session) -> str | None:
     if db.query(RadiusSession.id).filter(RadiusSession.card_id == card.id).first() is not None:
         return "لا يمكن حذف كرت له سجل جلسات محفوظ"
     if card.batch_id is not None:
-        batch_point_id = db.query(CardBatch.point_of_sale_id).filter(CardBatch.id == card.batch_id).scalar()
-        if batch_point_id is not None:
+        batch_query = db.query(CardBatch).filter(CardBatch.id == card.batch_id)
+        if lock_batch:
+            batch_query = batch_query.with_for_update()
+        batch = batch_query.first()
+        if batch is None:
+            return "تعذر التحقق من الدفعة المرتبطة بالكرت؛ أوقفنا الحذف احتياطياً"
+        if batch.point_of_sale_id is not None:
             return "لا يمكن حذف كرت من دفعة مخصصة لنقطة بيع"
     return None
 
@@ -894,7 +899,7 @@ def delete_card(
     if card is None:
         raise HTTPException(status_code=404, detail="الكرت غير موجود")
     _ensure_card_operation_scope(card, user, db, exact_identifier=search)
-    blocked_reason = _card_delete_block_reason(card, db)
+    blocked_reason = _card_delete_block_reason(card, db, lock_batch=True)
     if blocked_reason:
         raise HTTPException(status_code=409, detail=blocked_reason)
 
