@@ -4,14 +4,26 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_permission
+from app.api.deps import get_current_user, require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import CardBatch, CardTemplate, Plan, PrintJob
 from app.services.audit import record_audit
+from app.services.permissions import has_permission
 from app.schemas.card_templates import CardTemplateCreate, CardTemplateUpdate, CardTemplateResponse
 
 router = APIRouter(prefix="/api/v1/card-templates", tags=["card-templates"])
+
+
+@router.get("/printing-options", response_model=list[CardTemplateResponse])
+def list_printing_template_options(
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(get_current_user),
+):
+    if not has_permission(user, "printing.create") or not has_permission(user, "printing.credentials"):
+        raise HTTPException(status_code=403, detail="تتطلب خيارات قوالب الطباعة صلاحية الطباعة وبيانات الدخول")
+    return db.query(CardTemplate).order_by(CardTemplate.is_default.desc(), CardTemplate.id.asc()).all()
+
 
 @router.get("", response_model=list[CardTemplateResponse], dependencies=[Depends(require_permission("templates.view"))])
 def list_templates(db: Session = Depends(get_db)):
