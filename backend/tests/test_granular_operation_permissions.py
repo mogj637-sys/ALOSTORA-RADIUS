@@ -561,7 +561,7 @@ def test_printing_create_works_without_card_pos_or_template_view(owner_client):
             json={
                 "plan_id": plan_id,
                 "username": "CI_PRINT_ONLY_" + suffix.upper(),
-                "card_type": "username_only",
+                "card_type": "same_credentials",
                 "template_code": template_code,
                 "point_of_sale_id": point_id,
             },
@@ -639,7 +639,7 @@ def test_printing_create_works_without_card_pos_or_template_view(owner_client):
             },
         )
         assert printed.status_code == 201, printed.text
-        assert printed.json()["items"][0]["password"]
+        assert printed.json()["items"][0]["password"] == card.json()["username"]
         assert client.get(f"/api/v1/print-jobs?point_of_sale_id={point_id}", headers=staff_headers).status_code == 403
     finally:
         if role_code and username:
