@@ -545,7 +545,7 @@ def list_cards(
 @router.post(
     "/print-selection/resolve",
     response_model=CardPrintSelectionResolveResponse,
-    dependencies=[Depends(require_permission("printing.create")), Depends(require_permission("cards.view")), Depends(require_permission("pos.view"))],
+    dependencies=[Depends(require_permission("printing.create"))],
 )
 def resolve_print_selection(
     payload: CardPrintSelectionResolveRequest,
@@ -589,6 +589,17 @@ def resolve_print_selection(
         )
 
     matches = query.all()
+    batch_ids = {card.batch_id for card in matches if card.batch_id is not None}
+    batch_template_codes = {
+        batch_id: template_code
+        for batch_id, template_code in (
+            db.query(CardBatch.id, CardBatch.template_code)
+            .filter(CardBatch.id.in_(batch_ids))
+            .all()
+            if batch_ids
+            else []
+        )
+    }
     by_identifier: dict[str, Card] = {}
     for card in matches:
         by_identifier[card.username.lower()] = card
@@ -607,6 +618,7 @@ def resolve_print_selection(
                 username=card.username,
                 serial_number=card.serial_number,
                 plan_id=card.plan_id,
+                template_code=batch_template_codes.get(card.batch_id) if card.batch_id else None,
                 is_free=card.is_free,
             ))
             seen_card_ids.add(card.id)
