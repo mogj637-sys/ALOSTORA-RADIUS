@@ -1,4 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { calculateDataUsagePercent, calculateUsagePercent } from "./cardUsage.js";
 
 const API_BASE = "http://localhost:8000";
 
@@ -2959,14 +2960,17 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           const expiryTimestamp = card.expires_at ? Date.parse(card.expires_at) : Number.NaN;
           const sharedUsersLabel = typeof card.shared_users_limit === "number" ? String(card.shared_users_limit) : "غير محدود";
           const speed = card.speed_limit || "غير محددة";
-          const sessionTimeLimit = Number(snapshot.session_time_limit_seconds);
-          const sessionTimePercent = remaining !== null && Number.isFinite(sessionTimeLimit) && sessionTimeLimit > 0
-            ? Math.min(100, Math.max(0, (Math.max(0, Number(card.used_seconds || 0)) / sessionTimeLimit) * 100))
-            : null;
-          const dataLimit = Number(snapshot.data_limit_bytes);
-          const dataPercent = remainingDataBytes !== null && Number.isFinite(dataLimit) && dataLimit > 0
-            ? Math.min(100, Math.max(0, (totalConsumedBytes / dataLimit) * 100))
-            : null;
+          const sessionTimePercent = calculateUsagePercent(
+            card.used_seconds,
+            snapshot.session_time_limit_seconds,
+            remaining,
+          );
+          const dataPercent = calculateDataUsagePercent(
+            card.upload_bytes,
+            card.download_bytes,
+            snapshot.data_limit_bytes,
+            remainingDataBytes,
+          );
           const formatDateTime = (value: string | null) => value
             ? new Date(value).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" })
             : "—";
