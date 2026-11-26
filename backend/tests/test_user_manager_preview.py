@@ -244,6 +244,29 @@ class _SecretBearingOpaqueValue:
         return "opaque-object-secret-must-not-leak"
 
 
+class _CredentialValueWithStringSideEffect:
+    def __init__(self):
+        self.stringified = False
+
+    def __str__(self):
+        self.stringified = True
+        return "opaque-password-secret-must-not-be-stringified"
+
+
+def test_preview_does_not_stringify_unsupported_password_values():
+    secret_value = _CredentialValueWithStringSideEffect()
+    result = build_user_manager_preview([{
+        "external_id": "*17",
+        "username": "opaque-password",
+        "password": secret_value,
+    }])[0]
+
+    assert secret_value.stringified is False
+    assert result["credential_mode"] is None
+    assert result["credential_state"] == "ambiguous"
+    assert "opaque-password-secret-must-not-be-stringified" not in repr(result)
+
+
 def test_preview_does_not_stringify_unsupported_objects_into_safe_snapshot():
     secret_value = _SecretBearingOpaqueValue()
     result = build_user_manager_preview([

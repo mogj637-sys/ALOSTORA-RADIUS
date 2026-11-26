@@ -86,14 +86,22 @@ def _credential_metadata(record: dict[str, Any], username: str) -> dict[str, str
     verifier_values = [
         value for key, value in normalized_entries if key in VERIFIER_KEYS
     ]
-    if any(value not in (None, "") for value in verifier_values):
+    if any(
+        value is not None and (not isinstance(value, str) or value != "")
+        for value in verifier_values
+    ):
         return {"credential_mode": None, "credential_state": "verifier_unverified"}
 
-    password_values = [
-        str(value)
+    password_entries = [
+        value
         for key, value in normalized_entries
         if key in PASSWORD_KEYS and value is not None
     ]
+    # RouterOS API values are strings. Do not call str() on an unexpected
+    # object here: its __str__ may execute code or expose opaque credentials.
+    if any(not isinstance(value, str) for value in password_entries):
+        return {"credential_mode": None, "credential_state": "ambiguous"}
+    password_values = password_entries
     if not password_values:
         return {"credential_mode": None, "credential_state": "unavailable"}
 
