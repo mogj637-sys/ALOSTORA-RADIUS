@@ -29,5 +29,7 @@ jobs:
           node-version: "20"
       - name: Install dependencies
         run: npm install --no-package-lock --no-audit --no-fund
+      - name: Test card usage indicators
+        run: npm test
       - name: Type-check and build
         run: npm run build
