@@ -1,13 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_permission
+from app.api.deps import get_current_user, require_permission
 from app.db.session import get_db
 from app.models.auth import AdminUser
 from app.models.core import Card, CardBatch, CardTemplate, Plan
 from app.services.audit import record_audit
-from app.schemas.plans import PlanCreate, PlanResponse, PlanUpdate
+from app.services.permissions import has_permission
+from app.schemas.plans import PlanCreate, PlanOperationOption, PlanResponse, PlanUpdate
 
 router = APIRouter(prefix="/api/v1/plans", tags=["plans"])
 
@@ -35,6 +39,39 @@ def create_plan(payload: PlanCreate, db: Session = Depends(get_db), user: AdminU
         db.rollback()
         raise HTTPException(status_code=409, detail="رمز الباقة مستخدم من قبل")
     db.refresh(plan)
+    return plan
+
+
+@router.get("/operation-options", response_model=list[PlanOperationOption])
+def plan_operation_options(
+    operation: Literal["update", "delete"],
+    q: str = Query(..., min_length=2, max_length=80),
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(get_current_user),
+):
+    permission_code = f"plans.{operation}"
+    if not has_permission(user, permission_code):
+        raise HTTPException(status_code=403, detail=f"ليست لديك صلاحية تنفيذ هذه العملية ({permission_code})")
+
+    normalized = q.strip()
+    if len(normalized) < 2:
+        raise HTTPException(status_code=422, detail="اكتب حرفين على الأقل للبحث عن باقة")
+    escaped = normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    pattern = f"%{escaped}%"
+    return (
+        db.query(Plan)
+        .filter(or_(Plan.code.ilike(pattern, escape="\\"), Plan.name.ilike(pattern, escape="\\")))
+        .order_by(Plan.id.desc())
+        .limit(20)
+        .all()
+    )
+
+
+@router.get("/{plan_id}/edit", response_model=PlanResponse, dependencies=[Depends(require_permission("plans.update"))])
+def get_plan_for_update(plan_id: int, db: Session = Depends(get_db)):
+    plan = db.get(Plan, plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="الباقة غير موجودة")
     return plan
 
 

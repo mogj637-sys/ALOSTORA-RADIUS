@@ -198,6 +198,91 @@ def test_plan_create_is_independent_from_plan_view(owner_client):
             _cleanup_role_user(role_code, username)
 
 
+def test_plan_operation_options_are_permission_scoped_and_return_minimal_fields(owner_client):
+    client, owner_headers, _ = owner_client
+    plan_code = "CI-PLAN-OPS-" + secrets.token_hex(4).upper()
+    update_role = update_name = delete_role = delete_name = None
+
+    try:
+        created = client.post(
+            "/api/v1/plans",
+            headers=owner_headers,
+            json={"code": plan_code, "name": "CI باقة العمليات", "price": "15.00"},
+        )
+        assert created.status_code == 201, created.text
+        plan_id = created.json()["id"]
+
+        update_role, update_name, _, update_headers = _create_role_user(
+            client, owner_headers, ["plans.update"]
+        )
+        delete_role, delete_name, _, delete_headers = _create_role_user(
+            client, owner_headers, ["plans.delete"]
+        )
+
+        assert client.get("/api/v1/plans?include_inactive=true", headers=update_headers).status_code == 403
+        assert client.get("/api/v1/plans?include_inactive=true", headers=delete_headers).status_code == 403
+
+        update_options = client.get(
+            "/api/v1/plans/operation-options",
+            params={"operation": "update", "q": plan_code},
+            headers=update_headers,
+        )
+        assert update_options.status_code == 200, update_options.text
+        assert update_options.json() == [{
+            "id": plan_id,
+            "code": plan_code,
+            "name": "CI باقة العمليات",
+            "is_active": True,
+        }]
+
+        edit_details = client.get(f"/api/v1/plans/{plan_id}/edit", headers=update_headers)
+        assert edit_details.status_code == 200, edit_details.text
+        assert edit_details.json()["code"] == plan_code
+        assert "settings" in edit_details.json()
+
+        changed = client.patch(
+            f"/api/v1/plans/{plan_id}",
+            headers=update_headers,
+            json={"name": "CI باقة العمليات المعدلة"},
+        )
+        assert changed.status_code == 200, changed.text
+
+        assert client.get(
+            "/api/v1/plans/operation-options",
+            params={"operation": "delete", "q": plan_code},
+            headers=update_headers,
+        ).status_code == 403
+        assert client.get(f"/api/v1/plans/{plan_id}/edit", headers=delete_headers).status_code == 403
+
+        delete_options = client.get(
+            "/api/v1/plans/operation-options",
+            params={"operation": "delete", "q": plan_code},
+            headers=delete_headers,
+        )
+        assert delete_options.status_code == 200, delete_options.text
+        assert delete_options.json()[0]["id"] == plan_id
+
+        short_query = client.get(
+            "/api/v1/plans/operation-options",
+            params={"operation": "update", "q": "x"},
+            headers=update_headers,
+        )
+        assert short_query.status_code == 422
+    finally:
+        cleanup = SessionLocal()
+        plan = cleanup.query(Plan).filter_by(code=plan_code).first()
+        if plan is None:
+            plan = cleanup.query(Plan).filter_by(name="CI باقة العمليات المعدلة").first()
+        if plan is not None:
+            cleanup.delete(plan)
+        cleanup.commit()
+        cleanup.close()
+        if update_role and update_name:
+            _cleanup_role_user(update_role, update_name)
+        if delete_role and delete_name:
+            _cleanup_role_user(delete_role, delete_name)
+
+
 def test_plan_delete_is_independent_and_blocks_active_or_referenced_plans(owner_client):
     client, owner_headers, _ = owner_client
     plan = client.post(

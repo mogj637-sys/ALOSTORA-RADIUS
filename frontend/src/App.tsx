@@ -44,6 +44,8 @@ type Plan = {
   is_active: boolean;
 };
 
+type PlanOperationOption = Pick<Plan, "id" | "code" | "name" | "is_active">;
+
 type CardTemplate = { id: number; code: string; name: string; width_mm: number; height_mm: number; background_color: string; text_color: string; layout: Record<string, unknown>; plan_id: number | null; is_default: boolean; };
 
 type Card = {
@@ -665,6 +667,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [generatedBatchNumber, setGeneratedBatchNumber] = useState("");
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [planEditorOpen, setPlanEditorOpen] = useState(!can("plans.view") && can("plans.create"));
+  const [planOperationQuery, setPlanOperationQuery] = useState("");
+  const [planOperationOptions, setPlanOperationOptions] = useState<PlanOperationOption[]>([]);
+  const [planOperationSearched, setPlanOperationSearched] = useState(false);
+  const [planOperationLoading, setPlanOperationLoading] = useState(false);
   const [cardSearch, setCardSearch] = useState("");
   const [cardSort, setCardSort] = useState<"created" | "activity">("created");
   const [cardStatusFilter, setCardStatusFilter] = useState("");
@@ -1945,6 +1951,56 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, token]);
 
+  async function loadPlanOperationOptions(query = planOperationQuery) {
+    const normalized = query.trim();
+    if (normalized.length < 2) {
+      setPlanOperationOptions([]);
+      setPlanOperationSearched(false);
+      setError("اكتب حرفين على الأقل للبحث عن باقة.");
+      return;
+    }
+    const operation = can("plans.update") ? "update" : "delete";
+    setPlanOperationLoading(true);
+    setError("");
+    try {
+      const items = await apiRequest<PlanOperationOption[]>(
+        token,
+        "/api/v1/plans/operation-options?operation=" + operation + "&q=" + encodeURIComponent(normalized),
+      );
+      setPlanOperationOptions(items);
+      setPlanOperationSearched(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر البحث عن الباقات");
+    } finally {
+      setPlanOperationLoading(false);
+    }
+  }
+
+  async function refreshPlanOperationsAfterMutation() {
+    if (can("plans.view")) {
+      await loadPlans();
+    } else if (planOperationQuery.trim().length >= 2) {
+      await loadPlanOperationOptions(planOperationQuery);
+    }
+  }
+
+  async function openPlanForEdit(planId: number) {
+    if (!can("plans.update")) {
+      setError("ليست لديك صلاحية تعديل الباقات.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const plan = await apiRequest<Plan>(token, "/api/v1/plans/" + planId + "/edit");
+      editPlan(plan);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تحميل بيانات الباقة للتعديل");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function createPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (editingPlanId !== null ? !can("plans.update") : !can("plans.create")) { setError("ليست لديك صلاحية هذه العملية على الباقات."); return; }
@@ -1980,8 +2036,9 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       const wasEditing = editingPlanId !== null;
       setEditingPlanId(null);
       const canViewPlans = can("plans.view");
-      setPlanEditorOpen(!canViewPlans);
+      setPlanEditorOpen(!canViewPlans && can("plans.create"));
       if (canViewPlans) await loadPlans();
+      else if (wasEditing && planOperationQuery.trim().length >= 2) await loadPlanOperationOptions(planOperationQuery);
       setNotice(wasEditing ? "تم تحديث الباقة بنجاح." : "تم إنشاء الباقة بنجاح.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر حفظ الباقة");
@@ -2021,7 +2078,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setNotice("أنت تعدّل بيانات الباقة المحددة.");
   }
 
-  async function togglePlan(plan: Plan) {
+  async function togglePlan(plan: Pick<Plan, "id" | "name" | "is_active">) {
     if (!can("plans.update")) { setError("ليست لديك صلاحية تعديل الباقات."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
@@ -2029,7 +2086,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         method: "PATCH",
         body: JSON.stringify({ is_active: !plan.is_active }),
       });
-      await loadPlans();
+      await refreshPlanOperationsAfterMutation();
       setNotice(plan.is_active ? "تم إيقاف الباقة. لن تظهر عند إنشاء كروت جديدة." : "تم تفعيل الباقة.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تغيير حالة الباقة");
@@ -2038,14 +2095,14 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     }
   }
 
-  async function deletePlan(plan: Plan) {
+  async function deletePlan(plan: Pick<Plan, "id" | "name" | "is_active">) {
     if (!can("plans.delete")) { setError("ليست لديك صلاحية حذف الباقات."); return; }
     if (plan.is_active) { setError("أوقف الباقة أولاً قبل حذفها."); return; }
     if (!window.confirm(`حذف الباقة ${plan.name}؟ لا يمكن حذف باقة مرتبطة بكروت أو دفعات أو قوالب محفوظة.`)) return;
     setBusy(true); setError(""); setNotice("");
     try {
       await apiRequest<void>(token, `/api/v1/plans/${plan.id}`, { method: "DELETE" });
-      await loadPlans();
+      await refreshPlanOperationsAfterMutation();
       setNotice("تم حذف الباقة.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر حذف الباقة");
@@ -2393,17 +2450,45 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       setEditingPlanId(null);
       setPlanDraft({ code: "", name: "", price: "", commissionType: "none", commissionValue: "", dataAmount: "", dataUnit: "GB", timeHours: "", validityDays: "", speedProfile: "", sharedUsers: "", groupName: "", rateRx: "", rateTx: "", rateUnit: "Kbps", scheduleEnabled: false, scheduleDays: ["0","1","2","3","4","5","6"], scheduleFrom: "00:00", scheduleTo: "23:59", notificationsEnabled: false, notifyRemaining: "70", notifyExhausted: "95" });
       setNotice("");
-      setPlanEditorOpen(!can("plans.view"));
+      setPlanEditorOpen(!can("plans.view") && can("plans.create"));
     };
     return (
       <section className="plans-workspace">
         <div className="section-heading plans-page-heading">
-          <div><span className="eyebrow">إعدادات الاشتراكات والخدمات</span><h2>{can("plans.view") ? "إدارة الباقات" : "إضافة باقة"}</h2><p>{can("plans.view") ? "أنشئ باقات الإنترنت وحدد أسعارها وحدود الاستخدام والسرعة والعمولات والإضافات المرتبطة بها." : "يمكنك إنشاء باقة جديدة دون استعراض الباقات المسجلة."}</p></div>
+          <div><span className="eyebrow">إعدادات الاشتراكات والخدمات</span><h2>{can("plans.view") ? "إدارة الباقات" : can("plans.create") ? "إضافة باقة" : "عمليات الباقات"}</h2><p>{can("plans.view") ? "أنشئ باقات الإنترنت وحدد أسعارها وحدود الاستخدام والسرعة والعمولات والإضافات المرتبطة بها." : can("plans.create") ? "يمكنك إنشاء باقة جديدة دون استعراض الباقات المسجلة." : "ابحث عن باقة محددة لتنفيذ التعديل أو الحذف المسموح به دون استعراض الدليل العام."}</p></div>
           <div className="plans-heading-actions">
             {can("plans.view") && <span className="count-tag">{plans.length.toLocaleString("ar")} باقة</span>}
             {!planEditorOpen && can("plans.create") && <button type="button" className="plans-add-button" onClick={() => { resetPlanDraft(); setPlanEditorOpen(true); setError(""); }}>إضافة باقة جديدة</button>}
           </div>
         </div>
+
+        {!can("plans.view") && (can("plans.update") || can("plans.delete")) && (
+          <section className="panel plans-operation-panel">
+            <div className="section-heading compact-heading">
+              <div><span className="eyebrow">عمليات مستقلة</span><h3>العثور على باقة للتعديل أو الحذف</h3><p>ابحث برمز الباقة أو اسمها. تظهر بيانات تعريف محدودة فقط، وتُحمّل التفاصيل عند اختيار التعديل.</p></div>
+            </div>
+            <form className="form-grid" onSubmit={(event) => { event.preventDefault(); void loadPlanOperationOptions(); }}>
+              <label>رمز أو اسم الباقة
+                <input value={planOperationQuery} onChange={(event) => setPlanOperationQuery(event.target.value)} minLength={2} maxLength={80} required placeholder="اكتب حرفين على الأقل" />
+              </label>
+              <div className="form-actions"><button type="submit" disabled={planOperationLoading || planOperationQuery.trim().length < 2}>{planOperationLoading ? "جارٍ البحث..." : "بحث عن باقة"}</button></div>
+            </form>
+            {planOperationSearched && <div className="table-wrap plans-table-wrap">
+              <table><thead><tr><th>الرمز</th><th>اسم الباقة</th><th>الحالة</th><th>العمليات المسموحة</th></tr></thead>
+                <tbody>{planOperationOptions.map((plan) => <tr key={plan.id}>
+                  <td><span className="plan-code">{plan.code}</span></td>
+                  <td><strong>{plan.name}</strong></td>
+                  <td><span className={plan.is_active ? "plan-status active" : "plan-status inactive"}>{plan.is_active ? "مفعّلة" : "متوقفة"}</span></td>
+                  <td>
+                    {can("plans.update") && <><button type="button" className="table-action" disabled={busy} onClick={() => openPlanForEdit(plan.id)}>تعديل</button><button type="button" className={plan.is_active ? "table-action danger-action" : "table-action"} disabled={busy} onClick={() => togglePlan(plan)}>{plan.is_active ? "إيقاف" : "تفعيل"}</button></>}
+                    {can("plans.delete") && <button type="button" className="table-action danger-action" disabled={busy || plan.is_active} title={plan.is_active ? "أوقف الباقة أولاً بصلاحية التعديل" : "حذف الباقة"} onClick={() => deletePlan(plan)}>حذف</button>}
+                  </td>
+                </tr>)}</tbody>
+              </table>
+              {planOperationOptions.length === 0 && <div className="empty-state">لا توجد باقات مطابقة لعبارة البحث.</div>}
+            </div>}
+          </section>
+        )}
 
         {!planEditorOpen && can("plans.view") && <>
         <div className="plans-summary">
@@ -3854,12 +3939,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
           {user.roles.includes("owner") && <button className={page === "admins" ? "nav-item active" : "nav-item"} onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات</button>}
 
-          {(can("plans.view") || can("plans.create") || can("routers.view") || can("reports.view") || can("finance.view") || can("finance.create")) && <div className="nav-group">
+          {(can("plans.view") || can("plans.create") || can("plans.update") || can("plans.delete") || can("routers.view") || can("reports.view") || can("finance.view") || can("finance.create")) && <div className="nav-group">
             <button type="button" className={openNavGroup === "system" ? "nav-group-toggle expanded" : "nav-group-toggle"} aria-expanded={openNavGroup === "system"} onClick={() => setOpenNavGroup((current) => current === "system" ? null : "system")}>
               <span>إدارة النظام</span><span className="nav-chevron" aria-hidden="true">⌄</span>
             </button>
             {openNavGroup === "system" && <div className="nav-group-items">
-              {(can("plans.view") || can("plans.create")) && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>{can("plans.view") ? "إدارة الباقات" : "إضافة باقة"}</button>}
+              {(can("plans.view") || can("plans.create") || can("plans.update") || can("plans.delete")) && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>{can("plans.view") ? "إدارة الباقات" : can("plans.create") ? "إضافة باقة" : "عمليات الباقات"}</button>}
               {can("routers.view") && <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات</button>}
               {(can("reports.view") || can("finance.view")) && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
               {can("finance.create") && <button className={page === "finance-entry" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("finance-entry")}>تسجيل حركة مالية</button>}
@@ -3895,12 +3980,12 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? (can("plans.view") ? "إدارة الباقات" : "إضافة باقة") : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "card-delete" ? "حذف كرت" : page === "pos" ? "الطباعة والدفعات" : page === "printing-history" ? "سجل الطباعة" : page === "printing-create" ? "تنفيذ الطباعة" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "finance-entry" ? "تسجيل حركة مالية" : page === "reports" ? "التقارير" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : page === "settings" ? "الإعدادات والصيانة" : "إدارة أجهزة MikroTik"}</h1></div>
+          <div><span className="eyebrow">مركز إدارة الشبكة</span><h1>{page === "overview" ? "لوحة التحكم" : page === "plans" ? (can("plans.view") ? "إدارة الباقات" : can("plans.create") ? "إضافة باقة" : "عمليات الباقات") : page === "cards" ? "إدارة الكروت" : page === "card-create" ? "إضافة الكروت" : page === "card-delete" ? "حذف كرت" : page === "pos" ? "الطباعة والدفعات" : page === "printing-history" ? "سجل الطباعة" : page === "printing-create" ? "تنفيذ الطباعة" : page === "pos-management" ? "إدارة نقاط البيع" : page === "batches" ? "دفعات الكروت" : page === "finance-entry" ? "تسجيل حركة مالية" : page === "reports" ? "التقارير" : page === "templates" ? "استديو تصميم الكروت" : page === "admins" ? "حسابات الإدارة والصلاحيات" : page === "audit" ? "سجل عمليات النظام" : page === "settings" ? "الإعدادات والصيانة" : "إدارة أجهزة MikroTik"}</h1></div>
           <div className="topbar-actions"><div className="environment"><span className="status-dot" /> بيئة التطوير</div><div className="user-chip">{user.display_name}</div><button className="logout-button" onClick={onLogout}>تسجيل الخروج</button></div>
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && (can("plans.view") || can("plans.create")) ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") ? renderCardCreate() : page === "card-delete" && can("cards.delete") ? renderCardDelete() : page === "printing-create" && can("printing.create") && can("printing.credentials") ? renderPrintingCreate() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && (can("pos.view") || can("pos.create")) ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "finance-entry" && can("finance.create") ? renderFinanceEntry() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && (can("plans.view") || can("plans.create") || can("plans.update") || can("plans.delete")) ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") ? renderCardCreate() : page === "card-delete" && can("cards.delete") ? renderCardDelete() : page === "printing-create" && can("printing.create") && can("printing.credentials") ? renderPrintingCreate() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && (can("pos.view") || can("pos.create")) ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "finance-entry" && can("finance.create") ? renderFinanceEntry() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
