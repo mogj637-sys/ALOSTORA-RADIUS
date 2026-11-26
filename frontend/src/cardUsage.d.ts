@@ -1,12 +1,12 @@
 export function calculateUsagePercent(
-  usedValue: number | string | null | undefined,
-  limitValue: number | string | null | undefined,
-  remainingValue: number | null | undefined,
+  usedValue: unknown,
+  limitValue: unknown,
+  remainingValue: unknown,
 ): number | null;
 
 export function calculateDataUsagePercent(
-  uploadValue: number | string | null | undefined,
-  downloadValue: number | string | null | undefined,
-  limitValue: number | string | null | undefined,
-  remainingValue: number | null | undefined,
+  uploadValue: unknown,
+  downloadValue: unknown,
+  limitValue: unknown,
+  remainingValue: unknown,
 ): number | null;
