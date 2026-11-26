@@ -545,10 +545,17 @@ def test_routeros_login_method_switches_at_version_6_43():
     assert adapter.routeros_login_method("6.49.23 (stable)") is True
 
 
-@pytest.mark.parametrize("version", [None, "", "6.x", "7.18"])
+@pytest.mark.parametrize("version", [None, "", "6.x", "6.49", "7.18"])
 def test_routeros_login_method_requires_a_precise_routeros_v6_version(version):
     with pytest.raises(ValueError):
         adapter.routeros_login_method(version)
+
+
+def test_routeros_version_match_checks_the_full_release_not_only_major_minor():
+    adapter._ensure_routeros_version_matches("6.49.23 (stable)", "6.49.23")
+
+    with pytest.raises(adapter.UserManagerConnectionError, match="لا يطابق"):
+        adapter._ensure_routeros_version_matches("6.49.24 (stable)", "6.49.23")
 
 
 def test_v6_42_probe_uses_legacy_challenge_login_inside_tls(monkeypatch):

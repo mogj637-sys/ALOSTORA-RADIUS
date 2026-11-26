@@ -35,22 +35,24 @@ USER_MANAGER_RESOURCES = {
 }
 
 
-def _routeros_version_key(version: str | None) -> tuple[int, int]:
-    match = re.match(r"^\s*(\d+)\.(\d+)(?=\.|\s|$)", version or "")
+def _routeros_version_key(version: str | None) -> tuple[int, ...]:
+    # RouterOS reports a dotted release number (for example 6.49.23) followed
+    # optionally by a release-channel label. Keep every numeric component so
+    # the configured release is checked exactly, not merely by major/minor.
+    match = re.match(r"^\s*(\d+(?:\.\d+){2,})(?=[^0-9.]|$)", version or "")
     if not match:
         raise ValueError(
             "أدخل إصدار RouterOS v6 بدقة (مثال 6.49.17 أو 6.42.12) لتحديد طريقة تسجيل الدخول."
         )
-    major, minor = (int(part) for part in match.groups())
-    if major != 6:
+    parts = tuple(int(part) for part in match.group(1).split("."))
+    if parts[0] != 6:
         raise ValueError("موصل User Manager الحالي يدعم RouterOS v6 فقط.")
-    return major, minor
+    return parts
 
 
 def routeros_login_method(version: str | None) -> bool:
     """Return True for the post-6.43 login, False for the legacy challenge flow."""
-    _major, minor = _routeros_version_key(version)
-    return minor >= 43
+    return _routeros_version_key(version)[1] >= 43
 
 
 def _ensure_routeros_version_matches(actual: str, configured: str | None) -> None:
