@@ -1,4 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
+import {
+  USER_MANAGER_PREVIEW_PAGE_SIZE,
+  getNextPreviewOffset,
+  getPreviousPreviewOffset,
+  getPreviewPageRange,
+} from "./userManagerPreviewPagination.js";
 
 const API_BASE = "http://localhost:8000";
 
@@ -338,6 +344,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [userManagerPreviewRuns, setUserManagerPreviewRuns] = useState<UserManagerPreviewRun[]>([]);
   const [selectedPreviewRunId, setSelectedPreviewRunId] = useState("");
   const [loadingPreviewRuns, setLoadingPreviewRuns] = useState(false);
+  const [loadingUserManagerPreviews, setLoadingUserManagerPreviews] = useState(false);
   const [savingUserPreview, setSavingUserPreview] = useState(false);
   const [inspectingUser, setInspectingUser] = useState(false);
   const [routerDraft, setRouterDraft] = useState({ name: "", nasIdentifier: "", managementHost: "", radiusClientAddress: "", apiPort: "8729", apiUseSsl: true, apiUsername: "", apiSecret: "", radiusSecret: "", routerosVersion: "" });
@@ -479,7 +486,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       if (nextRunId) {
         const previews = await apiRequest<UserManagerPreviewList>(
           token,
-          `/api/v1/routers/${routerId}/user-manager/previews?run_id=${encodeURIComponent(nextRunId)}&offset=0&limit=50`,
+          `/api/v1/routers/${routerId}/user-manager/previews?run_id=${encodeURIComponent(nextRunId)}&offset=0&limit=${USER_MANAGER_PREVIEW_PAGE_SIZE}`,
         );
         setUserManagerPreviews(previews);
       } else {
@@ -499,12 +506,32 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     try {
       const result = await apiRequest<UserManagerPreviewList>(
         token,
-        `/api/v1/routers/${Number(inspectRouterId)}/user-manager/previews?run_id=${encodeURIComponent(runId)}&offset=0&limit=50`,
+        `/api/v1/routers/${Number(inspectRouterId)}/user-manager/previews?run_id=${encodeURIComponent(runId)}&offset=0&limit=${USER_MANAGER_PREVIEW_PAGE_SIZE}`,
       );
       setUserManagerPreviews(result);
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تحميل المعاينة المختارة");
+    }
+  }
+
+  async function changeUserManagerPreviewPage(nextOffset: number) {
+    const routerId = Number(inspectRouterId);
+    if (!routerId || !selectedPreviewRunId || !userManagerPreviews || nextOffset < 0) return;
+    if (nextOffset === userManagerPreviews.offset) return;
+
+    setLoadingUserManagerPreviews(true);
+    try {
+      const result = await apiRequest<UserManagerPreviewList>(
+        token,
+        `/api/v1/routers/${routerId}/user-manager/previews?run_id=${encodeURIComponent(selectedPreviewRunId)}&offset=${nextOffset}&limit=${USER_MANAGER_PREVIEW_PAGE_SIZE}`,
+      );
+      setUserManagerPreviews(result);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تحميل صفحة المعاينة");
+    } finally {
+      setLoadingUserManagerPreviews(false);
     }
   }
 
@@ -1250,6 +1277,16 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderRouters() {
+    const previewRange = userManagerPreviews
+      ? getPreviewPageRange(userManagerPreviews.total, userManagerPreviews.offset, userManagerPreviews.items.length)
+      : { start: 0, end: 0 };
+    const previousPreviewOffset = userManagerPreviews
+      ? getPreviousPreviewOffset(userManagerPreviews.offset, userManagerPreviews.limit)
+      : 0;
+    const nextPreviewOffset = userManagerPreviews
+      ? getNextPreviewOffset(userManagerPreviews.offset, userManagerPreviews.limit, userManagerPreviews.total)
+      : null;
+
     return (
       <>
         <div className="section-heading">
@@ -1378,6 +1415,28 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                 {preview.issues.length > 0 && <div>ملاحظات: {preview.issues.join("، ")}</div>}
               </div>
             ))}
+            <div className="form-actions">
+              <button
+                type="button"
+                className="table-action"
+                disabled={loadingUserManagerPreviews || previousPreviewOffset === userManagerPreviews.offset}
+                onClick={() => changeUserManagerPreviewPage(previousPreviewOffset)}
+              >
+                السابق
+              </button>
+              <small className="field-hint">
+                عرض {previewRange.start}–{previewRange.end} من {userManagerPreviews.total}
+              </small>
+              <button
+                type="button"
+                className="table-action"
+                disabled={loadingUserManagerPreviews || nextPreviewOffset === null}
+                onClick={() => changeUserManagerPreviewPage(nextPreviewOffset ?? userManagerPreviews.offset)}
+              >
+                التالي
+              </button>
+            </div>
+            {loadingUserManagerPreviews && <small className="field-hint">جارٍ تحميل صفحة المعاينة...</small>}
             <small className="field-hint">حالة المعاينة: قراءة فقط · الاستيراد: متوقف · قراءة كلمات المرور: لم تتم.</small>
           </section>
         )}
