@@ -629,3 +629,76 @@ def test_card_list_returns_server_calculated_usage_and_policy_limits(owner_clien
     assert match["remaining_data_bytes"] == 700
     assert match["shared_users_limit"] == 3
     assert match["speed_limit"] == "usage-test-profile"
+
+
+def test_expired_generated_card_is_excluded_from_print_resolution_and_original_print(owner_client):
+    from datetime import datetime, timedelta, timezone
+
+    client, headers, _ = owner_client
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "code": "EXPIRED-PRINT-" + secrets.token_hex(4).upper(),
+            "name": "Expired print guard plan",
+            "price": "5.00",
+            "validity_period_seconds": 3600,
+        },
+    )
+    assert plan.status_code == 201, plan.text
+
+    username = "EXPIRED-PRINT-" + secrets.token_hex(4).upper()
+    created = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": username,
+            "card_type": "username_only",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    point = client.post(
+        "/api/v1/points-of-sale",
+        headers=headers,
+        json={
+            "code": "EXP-PRINT-" + secrets.token_hex(4).upper(),
+            "name": "Expired print guard point",
+        },
+    )
+    assert point.status_code == 201, point.text
+
+    now = datetime.now(timezone.utc)
+    db = SessionLocal()
+    card = db.get(Card, UUID(created.json()["id"]))
+    assert card is not None
+    card.first_used_at = now - timedelta(days=2)
+    card.expires_at = now - timedelta(days=1)
+    db.commit()
+    db.close()
+
+    resolved = client.post(
+        "/api/v1/cards/print-selection/resolve",
+        headers=headers,
+        json={
+            "point_of_sale_id": point.json()["id"],
+            "identifiers": [username],
+        },
+    )
+    assert resolved.status_code == 200, resolved.text
+    assert resolved.json()["matched_count"] == 0
+    assert resolved.json()["unmatched"] == [username]
+
+    print_attempt = client.post(
+        "/api/v1/print-jobs",
+        headers=headers,
+        json={
+            "idempotency_key": "expired-print-" + secrets.token_hex(12),
+            "point_of_sale_id": point.json()["id"],
+            "card_ids": [created.json()["id"]],
+            "template_code": "green-voucher",
+        },
+    )
+    assert print_attempt.status_code == 409, print_attempt.text
+    assert print_attempt.json()["detail"] == "لا يمكن تنفيذ طباعة أصلية لكرت انتهت صلاحيته"

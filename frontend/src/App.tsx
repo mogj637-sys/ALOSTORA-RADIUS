@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { calculateDataUsagePercent, calculateUsagePercent } from "./cardUsage.js";
+import { getOriginalPrintEligibleCards, isOriginalPrintEligible, resolveOriginalPrintSelection } from "./cardSelection.js";
 
 const API_BASE = "http://localhost:8000";
 
@@ -1453,14 +1454,16 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function toggleSelectedCard(cardId: string) {
+    const card = cards.find((item) => item.id === cardId);
+    if (!card || !isOriginalPrintEligible(card)) return;
     setSelectedCardIds((current) => current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]);
   }
 
   function prepareSelectedCardsForPrinting() {
-    const eligible = cards.filter((card) => selectedCardIds.includes(card.id) && card.status === "generated" && card.assigned_pos_id === null);
-    if (!eligible.length) { setError("حدد كروتاً منشأة وغير مخصصة للطباعة الأصلية."); return; }
-    if (eligible.length !== selectedCardIds.length) { setError("تغيّرت نتائج التحديد؛ أعد تحديد الكروت المؤهلة في الصفحة الحالية."); return; }
-    setSelectedPrintCardIds(eligible.map((card) => card.id));
+    const selection = resolveOriginalPrintSelection(cards, selectedCardIds);
+    if (!selection.eligibleIds.length) { setError("حدد كروتاً منشأة وغير مخصصة للطباعة الأصلية."); return; }
+    if (selection.rejectedCount > 0) { setError("تغيّرت نتائج التحديد أو انتهت صلاحية بعض الكروت؛ أعد تحديد الكروت المؤهلة في الصفحة الحالية."); return; }
+    setSelectedPrintCardIds(selection.eligibleIds);
     setPage("pos");
     setNotice("تم تجهيز الكروت المحددة. اختر نقطة البيع لمتابعة الطباعة.");
   }
@@ -2916,7 +2919,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   }
 
   function renderCards() {
-    const selectableCards = cards.filter((card) => card.status === "generated" && card.assigned_pos_id === null);
+    const selectableCards = getOriginalPrintEligibleCards(cards);
     return <>
       <div className="section-heading"><div><h2>{user.card_visibility !== "search_any" ? "إدارة الكروت" : "البحث عن كرت"}</h2><p>{user.card_visibility === "all" ? "عرض وإدارة جميع كروت النظام." : user.card_visibility === "assigned" ? "عرض وإدارة كروت نقاط البيع المرتبطة بحسابك." : "ابحث باسم المستخدم أو الرقم التسلسلي الكامل للوصول إلى كرت من أي نقطة بيع، ثم اعرض بياناته وجلساته."}</p></div>{user.card_visibility !== "search_any" && <span className="count-tag">200 كرت لكل صفحة</span>}</div>
       {user.card_visibility !== "search_any" && cardBatchFilter && <div className="notice">تُعرض كروت الدفعة المحددة فقط. <button type="button" className="table-action" onClick={() => { setCardBatchFilter(""); setCardOffset(0); setSelectedCardIds([]); loadCards(cardSearch, 0, "").catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل الكروت")); }}>إلغاء فلتر الدفعة</button></div>}
@@ -2930,7 +2933,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
       <p className="card-source-note">هذه القائمة تعرض الكروت المسجلة في قاعدة بيانات RADIUS. جلب كروت MikroTik مباشرة سيُضاف عند تنفيذ ربط مزامنة الراوتر. تُحدَّث أرصدة الوقت والرفع والتنزيل عند وصول رسائل محاسبة RADIUS (Start / Interim / Stop)، لذلك قد تتأخر عن الاستهلاك اللحظي بين الرسائل. وقت آخر تحديث للجلسة هو آخر تحديث مسجل في RADIUS؛ وقد يتغير عند إغلاق جلسة قديمة آلياً، ولا يمثل مؤشراً لحظياً.</p>
       {(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <div className="card-selection-toolbar">
         <label><input type="checkbox" disabled={selectableCards.length === 0} checked={selectableCards.length > 0 && selectableCards.every((card) => selectedCardIds.includes(card.id))} onChange={(e) => setSelectedCardIds(e.target.checked ? selectableCards.map((card) => card.id) : [])} /> تحديد الكروت المؤهلة في الصفحة الحالية</label>
-        <span>تم تحديد {selectedCardIds.length} كرت من الصفحة الحالية</span>
+        <span aria-live="polite">تم تحديد {selectedCardIds.length} من {selectableCards.length} كرت مؤهل للطباعة في الصفحة الحالية</span>
         <button type="button" disabled={!selectedCardIds.length || busy} onClick={prepareSelectedCardsForPrinting}>تجهيز المحدد للطباعة</button>
         <button type="button" className="secondary-button" disabled={!selectedCardIds.length} onClick={() => setSelectedCardIds([])}>إلغاء التحديد</button>
       </div>}
@@ -2994,7 +2997,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
             return mb >= 1024 ? `${(mb / 1024).toFixed(2)} جيجابايت` : `${mb.toFixed(1)} ميجابايت`;
           };
           return <tr key={card.id}>
-            {(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <td><input type="checkbox" aria-label={`تحديد ${card.username}`} disabled={card.status !== "generated" || card.assigned_pos_id !== null} checked={selectedCardIds.includes(card.id)} onChange={() => toggleSelectedCard(card.id)} /></td>}
+            {(can("printing.create") && can("printing.credentials") && can("pos.view")) && user.card_visibility !== "search_any" && <td><input type="checkbox" aria-label={`تحديد ${card.username}`} disabled={!isOriginalPrintEligible(card)} checked={selectedCardIds.includes(card.id)} onChange={() => toggleSelectedCard(card.id)} /></td>}
             <td>{card.serial_number}</td><td>{card.username}</td><td>{card.card_type}</td>
             <td>{plans.find((p) => p.id === card.plan_id)?.name ?? card.plan_id}</td>
             <td>{card.status === "generated" ? "منشأ" : card.status === "allocated" ? "مخصص لنقطة بيع" : card.status === "active" ? "متصل" : card.status === "suspended" ? "موقوف" : card.status === "cancelled" ? "ملغي" : card.status === "printed_free" ? "مجاني مطبوع" : card.status === "expired" ? "منتهي الصلاحية" : card.status === "exhausted" ? "نفد الرصيد" : card.status}</td>

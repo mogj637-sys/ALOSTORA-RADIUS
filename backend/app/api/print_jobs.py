@@ -287,6 +287,20 @@ def create_print_job(
             if card.status == "cancelled":
                 raise HTTPException(status_code=409, detail="لا يمكن إعادة طباعة كرت ملغي")
     else:
+        expired_card = (
+            db.query(Card.id)
+            .filter(
+                Card.id.in_(payload.card_ids),
+                Card.expires_at.is_not(None),
+                Card.expires_at <= datetime.now(timezone.utc),
+            )
+            .first()
+        )
+        if expired_card is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="لا يمكن تنفيذ طباعة أصلية لكرت انتهت صلاحيته",
+            )
         for card in cards:
             if card.status != "generated" or card.assigned_pos_id is not None:
                 raise HTTPException(

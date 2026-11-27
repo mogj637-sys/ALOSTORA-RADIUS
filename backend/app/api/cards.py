@@ -562,9 +562,11 @@ def resolve_print_selection(
 
     identifiers = list(dict.fromkeys(value.strip() for value in payload.identifiers if value.strip()))
     normalized = [value.lower() for value in identifiers]
+    now = datetime.now(timezone.utc)
     query = db.query(Card).filter(
         Card.status == "generated",
         Card.assigned_pos_id.is_(None),
+        or_(Card.expires_at.is_(None), Card.expires_at > now),
         or_(
             func.lower(Card.username).in_(normalized),
             func.lower(Card.serial_number).in_(normalized),
