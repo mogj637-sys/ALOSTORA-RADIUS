@@ -310,6 +310,7 @@ class PosAccountEntry(Base):
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_pos_account_entry_amount_positive"),
         UniqueConstraint("idempotency_key", name="uq_pos_account_entry_idempotency"),
+        UniqueConstraint("reversal_of_id", name="uq_pos_account_entry_reversal"),
         Index("ix_pos_account_entries_pos_created", "point_of_sale_id", "created_at"),
     )
 
@@ -322,6 +323,9 @@ class PosAccountEntry(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    reversal_of_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pos_account_entries.id", ondelete="RESTRICT"), nullable=True
+    )
     idempotency_key: Mapped[str] = mapped_column(String(120), nullable=False)
     created_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
