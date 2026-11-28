@@ -1663,7 +1663,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setError("");
     setNotice("");
     try {
-      await apiRequest<PosAccountEntry>(
+      await apiRequest<PosAccountOperationOption>(
         token,
         "/api/v1/points-of-sale/" + financeOperationPointId + "/account/entries/" + entryId,
         {
@@ -1697,7 +1697,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setError("");
     setNotice("");
     try {
-      await apiRequest<PosAccountEntry>(
+      await apiRequest<PosAccountOperationOption>(
         token,
         "/api/v1/points-of-sale/" + financeOperationPointId +
           "/account/entries/" + entryId + "/reverse",
