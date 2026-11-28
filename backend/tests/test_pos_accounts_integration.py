@@ -463,3 +463,47 @@ def test_finance_delete_creates_one_audited_compensating_entry(owner_client):
     assert report.status_code == 200, report.text
     row = next(item for item in report.json()["points"] if item["point_of_sale_id"] == point["id"])
     assert Decimal(row["payments"]) == Decimal("0.00")
+
+    from app.db.session import SessionLocal
+    from app.models.audit import AuditLog
+
+    audit_db = SessionLocal()
+    audit = audit_db.query(AuditLog).filter_by(
+        action="finance.entry_reversed",
+        entity_type="pos_account_entry",
+        entity_id=str(reversal["id"]),
+    ).one()
+    assert audit.details["original_entry_id"] == original["id"]
+    assert audit.details["reversal_entry_id"] == reversal["id"]
+    audit_db.close()
+
+
+def test_finance_delete_cannot_reverse_print_generated_commission(owner_client):
+    client, owner_headers, _ = owner_client
+    point = _point(client, owner_headers)
+    account_url = f"/api/v1/points-of-sale/{point['id']}/account"
+    created = client.post(
+        account_url + "/entries",
+        headers=owner_headers,
+        json={
+            "idempotency_key": "finance-commission-" + secrets.token_hex(8),
+            "entry_type": "commission",
+            "direction": "credit",
+            "amount": "7.50",
+            "description": "عمولة مرتبطة بالطباعة",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    role_code, username, headers = _create_finance_permission_user(
+        client, owner_headers, ["finance.delete"], [point["id"]]
+    )
+    try:
+        blocked = client.post(
+            account_url + f"/entries/{created.json()['id']}/reverse",
+            headers=headers,
+            json={"idempotency_key": "blocked-reversal-" + secrets.token_hex(8)},
+        )
+        assert blocked.status_code == 409
+    finally:
+        _cleanup_finance_permission_user(role_code, username)
