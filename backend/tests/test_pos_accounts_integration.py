@@ -201,3 +201,254 @@ def test_point_of_sale_statement_requires_existing_point(owner_client):
         headers=headers,
     )
     assert response.status_code == 404
+
+
+def _create_finance_permission_user(client, owner_headers, permissions, point_ids):
+    import secrets
+
+    role_code = "ci_finance_" + secrets.token_hex(4)
+    username = "ci_finance_" + secrets.token_hex(4)
+    password = "ci-finance-user-password-123"
+    role = client.post(
+        "/api/v1/admins/roles",
+        headers=owner_headers,
+        json={"code": role_code, "name": "CI Finance Operations"},
+    )
+    assert role.status_code == 201, role.text
+    granted = client.put(
+        f"/api/v1/admins/roles/{role_code}/permissions",
+        headers=owner_headers,
+        json={"permission_codes": permissions},
+    )
+    assert granted.status_code == 200, granted.text
+    created = client.post(
+        "/api/v1/admins",
+        headers=owner_headers,
+        json={
+            "username": username,
+            "display_name": "CI Finance Operations",
+            "password": password,
+            "role_codes": [role_code],
+            "point_of_sale_ids": point_ids,
+        },
+    )
+    assert created.status_code == 201, created.text
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": password},
+    )
+    assert login.status_code == 200, login.text
+    return role_code, username, {
+        "Authorization": f"Bearer {login.json()['access_token']}"
+    }
+
+
+def _cleanup_finance_permission_user(role_code, username):
+    from app.db.session import SessionLocal
+    from app.models.auth import AdminUser, Role
+
+    db = SessionLocal()
+    user = db.query(AdminUser).filter_by(username=username).first()
+    if user is not None:
+        user.roles = []
+        user.point_of_sales = []
+        db.delete(user)
+    role = db.query(Role).filter_by(code=role_code).first()
+    if role is not None:
+        role.permissions = []
+        db.delete(role)
+    db.commit()
+    db.close()
+
+
+def test_finance_update_is_metadata_only_and_works_without_finance_view(owner_client):
+    client, owner_headers, _ = owner_client
+    point = _point(client, owner_headers)
+    other_point = _point(client, owner_headers)
+    account_url = f"/api/v1/points-of-sale/{point['id']}/account"
+    other_url = f"/api/v1/points-of-sale/{other_point['id']}/account"
+    created = client.post(
+        account_url + "/entries",
+        headers=owner_headers,
+        json={
+            "idempotency_key": "finance-update-" + secrets.token_hex(8),
+            "entry_type": "adjustment",
+            "direction": "debit",
+            "amount": "80.00",
+            "description": "وصف قبل المراجعة",
+            "reference": "OLD-REF",
+        },
+    )
+    assert created.status_code == 201, created.text
+    entry_id = created.json()["id"]
+
+    role_code, username, headers = _create_finance_permission_user(
+        client, owner_headers, ["finance.update"], [point["id"]]
+    )
+    try:
+        options = client.get(
+            "/api/v1/points-of-sale/operation-options?operation=finance.update",
+            headers=headers,
+        )
+        assert options.status_code == 200, options.text
+        assert [item["id"] for item in options.json()] == [point["id"]]
+        assert client.get(
+            "/api/v1/points-of-sale/operation-options?operation=finance.delete",
+            headers=headers,
+        ).status_code == 403
+
+        search = client.get(
+            account_url + f"/entries/operation-options?operation=finance.update&query={entry_id}",
+            headers=headers,
+        )
+        assert search.status_code == 200, search.text
+        assert len(search.json()) == 1
+        assert search.json()[0]["id"] == entry_id
+        assert "idempotency_key" not in search.json()[0]
+        assert "created_by" not in search.json()[0]
+
+        assert client.get(account_url, headers=headers).status_code == 403
+        assert client.get(account_url + "/entries", headers=headers).status_code == 403
+
+        updated = client.patch(
+            account_url + f"/entries/{entry_id}",
+            headers=headers,
+            json={"description": "وصف بعد المراجعة", "reference": "NEW-REF"},
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["description"] == "وصف بعد المراجعة"
+        assert updated.json()["reference"] == "NEW-REF"
+        assert updated.json()["amount"] == "80.00"
+        assert updated.json()["direction"] == "debit"
+
+        forbidden_amount_change = client.patch(
+            account_url + f"/entries/{entry_id}",
+            headers=headers,
+            json={"amount": "1.00"},
+        )
+        assert forbidden_amount_change.status_code == 422
+
+        cross_point = client.patch(
+            other_url + f"/entries/{entry_id}",
+            headers=headers,
+            json={"description": "محاولة خارج النطاق"},
+        )
+        assert cross_point.status_code == 403
+    finally:
+        _cleanup_finance_permission_user(role_code, username)
+
+
+def test_finance_delete_creates_one_audited_compensating_entry(owner_client):
+    from datetime import date
+
+    client, owner_headers, _ = owner_client
+    point = _point(client, owner_headers)
+    account_url = f"/api/v1/points-of-sale/{point['id']}/account"
+    original_response = client.post(
+        account_url + "/entries",
+        headers=owner_headers,
+        json={
+            "idempotency_key": "finance-reverse-" + secrets.token_hex(8),
+            "entry_type": "payment",
+            "direction": "credit",
+            "amount": "45.00",
+            "description": "سداد نقدي",
+            "reference": "PAY-REV-01",
+        },
+    )
+    assert original_response.status_code == 201, original_response.text
+    original = original_response.json()
+
+    role_code, username, headers = _create_finance_permission_user(
+        client, owner_headers, ["finance.delete"], [point["id"]]
+    )
+    try:
+        options = client.get(
+            "/api/v1/points-of-sale/operation-options?operation=finance.delete",
+            headers=headers,
+        )
+        assert options.status_code == 200, options.text
+        assert [item["id"] for item in options.json()] == [point["id"]]
+        assert client.get(
+            "/api/v1/points-of-sale/operation-options?operation=finance.update",
+            headers=headers,
+        ).status_code == 403
+
+        search = client.get(
+            account_url + f"/entries/operation-options?operation=finance.delete&query={original['id']}",
+            headers=headers,
+        )
+        assert search.status_code == 200, search.text
+        assert len(search.json()) == 1
+        assert search.json()[0]["id"] == original["id"]
+        assert client.get(account_url + "/entries", headers=headers).status_code == 403
+
+        reversal_key = "reverse-" + secrets.token_hex(10)
+        reverse_url = account_url + f"/entries/{original['id']}/reverse"
+        reversed_response = client.post(
+            reverse_url,
+            headers=headers,
+            json={"idempotency_key": reversal_key, "reason": "مراجعة مالية"},
+        )
+        assert reversed_response.status_code == 201, reversed_response.text
+        reversal = reversed_response.json()
+        assert reversal["reversal_of_id"] == original["id"]
+        assert reversal["entry_type"] == original["entry_type"]
+        assert reversal["direction"] == "debit"
+        assert reversal["amount"] == original["amount"]
+
+        replay = client.post(
+            reverse_url,
+            headers=headers,
+            json={"idempotency_key": reversal_key, "reason": "مراجعة مالية"},
+        )
+        assert replay.status_code == 201
+        assert replay.json()["id"] == reversal["id"]
+
+        second_reversal = client.post(
+            reverse_url,
+            headers=headers,
+            json={"idempotency_key": "reverse-again-" + secrets.token_hex(8)},
+        )
+        assert second_reversal.status_code == 409
+
+        reverse_the_reversal = client.post(
+            account_url + f"/entries/{reversal['id']}/reverse",
+            headers=headers,
+            json={"idempotency_key": "reverse-chain-" + secrets.token_hex(8)},
+        )
+        assert reverse_the_reversal.status_code == 409
+
+        assert client.patch(
+            account_url + f"/entries/{original['id']}",
+            headers=headers,
+            json={"description": "تعديل بلا صلاحية"},
+        ).status_code == 403
+        assert client.get(account_url, headers=headers).status_code == 403
+    finally:
+        _cleanup_finance_permission_user(role_code, username)
+
+    entries = client.get(account_url + "/entries", headers=owner_headers)
+    assert entries.status_code == 200, entries.text
+    assert len(entries.json()) == 2
+    original_after = next(item for item in entries.json() if item["id"] == original["id"])
+    reversal_after = next(item for item in entries.json() if item["id"] == reversal["id"])
+    assert original_after["direction"] == "credit"
+    assert original_after["amount"] == "45.00"
+    assert original_after["reversed_by_id"] == reversal["id"]
+    assert reversal_after["reversal_of_id"] == original["id"]
+
+    summary = client.get(account_url, headers=owner_headers)
+    assert summary.status_code == 200
+    assert Decimal(summary.json()["total_debit"]) == Decimal("45.00")
+    assert Decimal(summary.json()["total_credit"]) == Decimal("45.00")
+    assert Decimal(summary.json()["balance_due"]) == Decimal("0.00")
+
+    today = date.today().isoformat()
+    report = client.get(
+        f"/api/v1/reports/points-of-sale?date_from={today}&date_to={today}",
+        headers=owner_headers,
+    )
+    assert report.status_code == 200, report.text
+    row = next(item for item in report.json()["points"] if item["point_of_sale_id"] == point["id"])
+    assert Decimal(row["payments"]) == Decimal("0.00")
