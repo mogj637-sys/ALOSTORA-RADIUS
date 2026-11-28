@@ -321,6 +321,11 @@ def reverse_account_entry(
     )
     if entry is None:
         raise HTTPException(status_code=404, detail="الحركة المالية غير موجودة")
+    if entry.entry_type not in {"payment", "return", "adjustment"}:
+        raise HTTPException(
+            status_code=409,
+            detail="لا يمكن عكس حركات تسليم الكروت أو العمولات المرتبطة بعملية الطباعة من شاشة الحساب المالي",
+        )
 
     reason = payload.reason.strip() if payload.reason else ""
     description = f"عكس الحركة رقم {entry.id}"
