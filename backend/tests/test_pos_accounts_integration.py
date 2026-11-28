@@ -530,6 +530,91 @@ def test_finance_update_rejects_entries_in_reversal_pair(owner_client):
     assert reversal["description"].startswith(f"عكس الحركة رقم {original_id}")
 
 
+def test_concurrent_finance_reversals_create_only_one_compensating_entry(owner_client):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    import pytest
+    from fastapi import HTTPException
+    from sqlalchemy.orm import selectinload
+
+    from app.api.pos_accounts import reverse_account_entry
+    from app.db.session import SessionLocal, engine
+    from app.models.auth import AdminUser
+    from app.models.core import PosAccountEntry
+    from app.schemas.pos_accounts import PosAccountEntryReverse
+
+    if engine.dialect.name != "postgresql":
+        pytest.skip("row-lock reversal concurrency is verified on PostgreSQL")
+
+    client, owner_headers, owner_username = owner_client
+    point = _point(client, owner_headers)
+    account_url = f"/api/v1/points-of-sale/{point['id']}/account"
+    created = client.post(
+        account_url + "/entries",
+        headers=owner_headers,
+        json={
+            "idempotency_key": "finance-race-" + secrets.token_hex(8),
+            "entry_type": "adjustment",
+            "direction": "debit",
+            "amount": "31.00",
+            "description": "قيد لاختبار تزامن العكس",
+        },
+    )
+    assert created.status_code == 201, created.text
+    entry_id = created.json()["id"]
+    start_together = Barrier(2)
+
+    def reverse_with_key(idempotency_key: str):
+        db = SessionLocal()
+        try:
+            actor = (
+                db.query(AdminUser)
+                .options(
+                    selectinload(AdminUser.roles),
+                    selectinload(AdminUser.point_of_sales),
+                )
+                .filter_by(username=owner_username)
+                .one()
+            )
+            start_together.wait(timeout=10)
+            try:
+                return reverse_account_entry(
+                    point["id"],
+                    entry_id,
+                    PosAccountEntryReverse(
+                        idempotency_key=idempotency_key,
+                        reason="طلبان متزامنان",
+                    ),
+                    db,
+                    actor,
+                )
+            except HTTPException as exc:
+                return exc.status_code
+        finally:
+            db.close()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(reverse_with_key, "finance-race-a-" + secrets.token_hex(8)),
+            pool.submit(reverse_with_key, "finance-race-b-" + secrets.token_hex(8)),
+        ]
+        results = [future.result(timeout=20) for future in futures]
+
+    assert sum(isinstance(result, dict) for result in results) == 1
+    assert results.count(409) == 1
+
+    verify = SessionLocal()
+    try:
+        reversals = verify.query(PosAccountEntry).filter_by(reversal_of_id=entry_id).all()
+        assert len(reversals) == 1
+        assert reversals[0].point_of_sale_id == point["id"]
+        assert reversals[0].direction == "credit"
+        assert reversals[0].amount == Decimal("31.00")
+    finally:
+        verify.close()
+
+
 def test_finance_delete_cannot_reverse_print_generated_commission(owner_client):
     client, owner_headers, _ = owner_client
     point = _point(client, owner_headers)
