@@ -320,6 +320,8 @@ def test_finance_update_is_metadata_only_and_works_without_finance_view(owner_cl
         assert updated.json()["reference"] == "NEW-REF"
         assert updated.json()["amount"] == "80.00"
         assert updated.json()["direction"] == "debit"
+        assert "idempotency_key" not in updated.json()
+        assert "created_by" not in updated.json()
 
         forbidden_amount_change = client.patch(
             account_url + f"/entries/{entry_id}",
@@ -396,6 +398,15 @@ def test_finance_delete_creates_one_audited_compensating_entry(owner_client):
         assert reversal["entry_type"] == original["entry_type"]
         assert reversal["direction"] == "debit"
         assert reversal["amount"] == original["amount"]
+        assert "idempotency_key" not in reversal
+        assert "created_by" not in reversal
+
+        changed_reason_replay = client.post(
+            reverse_url,
+            headers=headers,
+            json={"idempotency_key": reversal_key, "reason": "سبب مختلف"},
+        )
+        assert changed_reason_replay.status_code == 409
 
         replay = client.post(
             reverse_url,
