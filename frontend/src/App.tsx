@@ -359,7 +359,10 @@ type PosAccountEntry = {
   idempotency_key: string;
   created_by: string | null;
   created_at: string;
+  reversal_of_id: number | null;
+  reversed_by_id: number | null;
 };
+type PosAccountOperationOption = Pick<PosAccountEntry, "id" | "point_of_sale_id" | "entry_type" | "direction" | "amount" | "description" | "reference" | "created_at" | "reversal_of_id" | "reversed_by_id">;
 
 type CardsReportData = { total_cards: number; total_value: number; used_seconds: number; upload_bytes: number; download_bytes: number; by_status: { status: string; count: number }[]; by_plan: { plan_name: string; count: number }[] };
 type SessionsReportData = { total_sessions: number; unique_users: number; session_seconds: number; upload_bytes: number; download_bytes: number; active_sessions: number; by_router: { router_name: string; sessions: number }[] };
@@ -661,6 +664,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
   const [cardDeleteIdentifier, setCardDeleteIdentifier] = useState("");
   const [cardDeleteCandidate, setCardDeleteCandidate] = useState<CardDeleteOption | null>(null);
   const [financePointOptions, setFinancePointOptions] = useState<OperationPointOption[]>([]);
+  const [financeOperationPointOptions, setFinanceOperationPointOptions] = useState<OperationPointOption[]>([]);
+  const [financeOperationPointId, setFinanceOperationPointId] = useState("");
+  const [financeOperationQuery, setFinanceOperationQuery] = useState("");
+  const [financeOperationEntries, setFinanceOperationEntries] = useState<PosAccountOperationOption[]>([]);
+  const [financeOperationSearched, setFinanceOperationSearched] = useState(false);
+  const [editingFinanceEntryId, setEditingFinanceEntryId] = useState<number | null>(null);
+  const [financeEntryEditDraft, setFinanceEntryEditDraft] = useState({ description: "", reference: "" });
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [templateDraft, setTemplateDraft] = useState({ code: "", name: "", width_mm: "90", height_mm: "50", background_color: "#e9f6ef", text_color: "#174c37", plan_id: "" });
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
@@ -1406,6 +1416,21 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     setSelectedPosId(nextPoint);
   }
 
+  async function loadFinanceOperationPointOptions() {
+    const operation = can("finance.update") ? "finance.update" : "finance.delete";
+    const result = await apiRequest<OperationPointOption[]>(
+      token,
+      "/api/v1/points-of-sale/operation-options?operation=" + operation,
+    );
+    setFinanceOperationPointOptions(result);
+    const nextPoint = financeOperationPointId && result.some((point) => String(point.id) === financeOperationPointId)
+      ? financeOperationPointId
+      : (result[0]?.id.toString() ?? "");
+    setFinanceOperationPointId(nextPoint);
+    setFinanceOperationEntries([]);
+    setFinanceOperationSearched(false);
+  }
+
   async function loadPrintingCreationOptions() {
     const [pointOptions, templateOptions] = await Promise.all([
       apiRequest<OperationPointOption[]>(token, "/api/v1/points-of-sale/operation-options?operation=printing.create"),
@@ -1590,6 +1615,110 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تسجيل الحركة المالية");
     } finally { setBusy(false); }
+  }
+
+  async function searchFinanceOperationEntries() {
+    if (!can("finance.update") && !can("finance.delete")) {
+      setError("ليست لديك صلاحية مراجعة الحركات المالية.");
+      return;
+    }
+    if (!financeOperationPointId) {
+      setError("اختر نقطة البيع أولاً.");
+      return;
+    }
+    const query = financeOperationQuery.trim();
+    if (query.length < 2) {
+      setFinanceOperationEntries([]);
+      setFinanceOperationSearched(false);
+      setError("اكتب حرفين على الأقل للبحث عن الحركة المالية.");
+      return;
+    }
+    const operation = can("finance.update") ? "finance.update" : "finance.delete";
+    setBusy(true);
+    setError("");
+    try {
+      const result = await apiRequest<PosAccountOperationOption[]>(
+        token,
+        "/api/v1/points-of-sale/" + financeOperationPointId +
+          "/account/entries/operation-options?operation=" + operation +
+          "&query=" + encodeURIComponent(query),
+      );
+      setFinanceOperationEntries(result);
+      setFinanceOperationSearched(true);
+    } catch (err) {
+      setFinanceOperationEntries([]);
+      setFinanceOperationSearched(false);
+      setError(err instanceof Error ? err.message : "تعذر البحث عن الحركات المالية");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveFinanceEntryMetadata(entryId: number) {
+    if (!can("finance.update")) {
+      setError("ليست لديك صلاحية تعديل بيانات الحركة المالية.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await apiRequest<PosAccountEntry>(
+        token,
+        "/api/v1/points-of-sale/" + financeOperationPointId + "/account/entries/" + entryId,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            description: financeEntryEditDraft.description || null,
+            reference: financeEntryEditDraft.reference || null,
+          }),
+        },
+      );
+      setEditingFinanceEntryId(null);
+      await searchFinanceOperationEntries();
+      if (can("finance.view") && selectedPosId === financeOperationPointId) {
+        await loadPosAccount(selectedPosId);
+      }
+      setNotice("تم تحديث البيان والمرجع مع إبقاء المبلغ والاتجاه ونوع الحركة كما هي.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تعديل بيانات الحركة المالية");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reverseFinanceEntry(entryId: number) {
+    if (!can("finance.delete")) {
+      setError("ليست لديك صلاحية عكس الحركة المالية.");
+      return;
+    }
+    if (!window.confirm("سيُضاف قيد مقابل ويظل القيد الأصلي محفوظاً. هل تريد المتابعة؟")) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await apiRequest<PosAccountEntry>(
+        token,
+        "/api/v1/points-of-sale/" + financeOperationPointId +
+          "/account/entries/" + entryId + "/reverse",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            idempotency_key: "finance-reversal-" + crypto.randomUUID(),
+            reason: null,
+          }),
+        },
+      );
+      await searchFinanceOperationEntries();
+      if (can("finance.view") && selectedPosId === financeOperationPointId) {
+        await loadPosAccount(selectedPosId);
+      }
+      setNotice("تم عكس الحركة بقيد مقابل مع الاحتفاظ بالقيد الأصلي وسجل التدقيق.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر عكس الحركة المالية");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function loadPrintHistory(pointId: string) {
@@ -1921,8 +2050,13 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
     if (page === "card-create" && can("cards.create")) {
       loadCardCreationOptions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل خيارات إنشاء الكروت"));
     }
-    if (page === "finance-entry" && can("finance.create")) {
-      loadFinancePointOptions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل نقاط البيع المتاحة للعملية المالية"));
+    if (page === "finance-entry") {
+      if (can("finance.create")) {
+        loadFinancePointOptions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل نقاط البيع المتاحة للتسجيل المالي"));
+      }
+      if (can("finance.update") || can("finance.delete")) {
+        loadFinanceOperationPointOptions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل نقاط البيع المتاحة لمراجعة الحركات"));
+      }
     }
     if (page === "printing-create" && can("printing.create") && can("printing.credentials")) {
       loadPrintingCreationOptions().catch((err) => setError(err instanceof Error ? err.message : "تعذر تحميل خيارات الطباعة المحدودة"));
@@ -3518,55 +3652,143 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         <div className="section-heading pos-page-heading">
           <div>
             <span className="eyebrow">العمليات المالية</span>
-            <h2>تسجيل حركة مالية</h2>
-            <p>يمكنك تسجيل حركة لنقطة بيع ضمن نطاق حسابك دون استعراض كشف الحساب أو بيانات النقاط الأخرى.</p>
+            <h2>تسجيل ومراجعة الحركات المالية</h2>
+            <p>تُحفظ القيود المالية الأصلية. التعديل يقتصر على البيان والمرجع، والعكس يُسجل بقيد مقابل دون حذف السجل.</p>
           </div>
         </div>
-        <section className="panel">
-          <div className="form-grid">
-            <label>نقطة البيع
-              <select value={selectedPosId} onChange={(event) => setSelectedPosId(event.target.value)} required>
-                <option value="">اختر نقطة البيع</option>
-                {financePointOptions.map((point) => (
-                  <option key={point.id} value={point.id}>
-                    {point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {financePointOptions.length > 0 && <form className="panel form-grid account-entry-form" onSubmit={createAccountEntry}>
-            <label>نوع الحركة
-              <select value={accountDraft.entryType} onChange={(event) => setAccountDraft({ ...accountDraft, entryType: event.target.value, direction: event.target.value === "payment" || event.target.value === "commission" || event.target.value === "return" ? "credit" : accountDraft.direction })}>
-                <option value="payment">سداد من نقطة البيع</option>
-                <option value="commission">عمولة مستحقة للنقطة</option>
-                <option value="return">مرتجع / خصم</option>
-                <option value="adjustment">تسوية يدوية</option>
-              </select>
-            </label>
-            <label>اتجاه الحركة
-              <select value={accountDraft.direction} onChange={(event) => setAccountDraft({ ...accountDraft, direction: event.target.value as "debit" | "credit" })}>
-                <option value="credit">يخصم من المديونية (دائن)</option>
-                <option value="debit">يضاف للمديونية (مدين)</option>
-              </select>
-            </label>
-            <label>المبلغ بالريال
-              <input type="number" min="0.01" step="0.01" value={accountDraft.amount} onChange={(event) => setAccountDraft({ ...accountDraft, amount: event.target.value })} required />
-            </label>
-            <label>البيان
-              <input value={accountDraft.description} onChange={(event) => setAccountDraft({ ...accountDraft, description: event.target.value })} maxLength={500} placeholder="مثال: سداد نقدي" />
-            </label>
-            <label>رقم مرجعي (اختياري)
-              <input value={accountDraft.reference} onChange={(event) => setAccountDraft({ ...accountDraft, reference: event.target.value })} maxLength={120} />
-            </label>
-            <div className="form-actions">
-              <button type="submit" disabled={busy || !selectedPosId || !accountDraft.amount || Number(accountDraft.amount) <= 0}>
-                {busy ? "جارٍ التسجيل..." : "تسجيل الحركة"}
-              </button>
+
+        {can("finance.create") && (
+          <section className="panel">
+            <h3>تسجيل حركة مالية</h3>
+            <div className="form-grid">
+              <label>نقطة البيع
+                <select value={selectedPosId} onChange={(event) => setSelectedPosId(event.target.value)} required>
+                  <option value="">اختر نقطة البيع</option>
+                  {financePointOptions.map((point) => (
+                    <option key={point.id} value={point.id}>
+                      {point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-          </form>}
-          {financePointOptions.length === 0 && <div className="empty-state">لا توجد نقاط بيع ضمن نطاق حسابك يمكن تسجيل حركة مالية عليها.</div>}
-        </section>
+            {financePointOptions.length > 0 && <form className="panel form-grid account-entry-form" onSubmit={createAccountEntry}>
+              <label>نوع الحركة
+                <select value={accountDraft.entryType} onChange={(event) => setAccountDraft({ ...accountDraft, entryType: event.target.value, direction: event.target.value === "payment" || event.target.value === "commission" || event.target.value === "return" ? "credit" : accountDraft.direction })}>
+                  <option value="payment">سداد من نقطة البيع</option>
+                  <option value="commission">عمولة مستحقة للنقطة</option>
+                  <option value="return">مرتجع / خصم</option>
+                  <option value="adjustment">تسوية يدوية</option>
+                </select>
+              </label>
+              <label>اتجاه الحركة
+                <select value={accountDraft.direction} onChange={(event) => setAccountDraft({ ...accountDraft, direction: event.target.value as "debit" | "credit" })}>
+                  <option value="credit">يخصم من المديونية (دائن)</option>
+                  <option value="debit">يضاف للمديونية (مدين)</option>
+                </select>
+              </label>
+              <label>المبلغ بالريال
+                <input type="number" min="0.01" step="0.01" value={accountDraft.amount} onChange={(event) => setAccountDraft({ ...accountDraft, amount: event.target.value })} required />
+              </label>
+              <label>البيان
+                <input value={accountDraft.description} onChange={(event) => setAccountDraft({ ...accountDraft, description: event.target.value })} maxLength={500} placeholder="مثال: سداد نقدي" />
+              </label>
+              <label>رقم مرجعي (اختياري)
+                <input value={accountDraft.reference} onChange={(event) => setAccountDraft({ ...accountDraft, reference: event.target.value })} maxLength={120} />
+              </label>
+              <div className="form-actions">
+                <button type="submit" disabled={busy || !selectedPosId || !accountDraft.amount || Number(accountDraft.amount) <= 0}>
+                  {busy ? "جارٍ التسجيل..." : "تسجيل الحركة"}
+                </button>
+              </div>
+            </form>}
+            {financePointOptions.length === 0 && <div className="empty-state">لا توجد نقاط بيع ضمن نطاق حسابك يمكن تسجيل حركة مالية عليها.</div>}
+          </section>
+        )}
+
+        {(can("finance.update") || can("finance.delete")) && (
+          <section className="panel">
+            <h3>البحث عن حركة لمراجعتها</h3>
+            <p className="field-hint">البحث يعرض بيانات الحركة اللازمة للعملية فقط، ولا يمنح صلاحية كشف الحساب أو التقرير المالي.</p>
+            <div className="form-grid">
+              <label>نقطة البيع
+                <select
+                  value={financeOperationPointId}
+                  onChange={(event) => {
+                    setFinanceOperationPointId(event.target.value);
+                    setFinanceOperationEntries([]);
+                    setFinanceOperationSearched(false);
+                    setEditingFinanceEntryId(null);
+                  }}
+                >
+                  <option value="">اختر نقطة البيع</option>
+                  {financeOperationPointOptions.map((point) => (
+                    <option key={point.id} value={point.id}>{point.name} — {point.code}{point.is_active ? "" : " (متوقفة)"}</option>
+                  ))}
+                </select>
+              </label>
+              <label>بحث برقم الحركة أو البيان أو المرجع
+                <input
+                  value={financeOperationQuery}
+                  onChange={(event) => {
+                    setFinanceOperationQuery(event.target.value);
+                    setFinanceOperationSearched(false);
+                  }}
+                  maxLength={120}
+                  placeholder="رقم الحركة أو جزء من البيان/المرجع"
+                />
+              </label>
+              <div className="form-actions">
+                <button type="button" disabled={busy || !financeOperationPointId || financeOperationQuery.trim().length < 2} onClick={() => searchFinanceOperationEntries()}>
+                  {busy ? "جارٍ البحث..." : "بحث"}
+                </button>
+              </div>
+            </div>
+            {financeOperationPointOptions.length === 0 && <div className="empty-state">لا توجد نقاط بيع ضمن نطاق حسابك لهذه العملية.</div>}
+            {financeOperationSearched && financeOperationEntries.length === 0 && <div className="empty-state">لا توجد حركات مطابقة لعبارة البحث.</div>}
+            {financeOperationEntries.length > 0 && (
+              <div className="table-wrap pos-account-table">
+                <table>
+                  <thead><tr><th>التاريخ</th><th>نوع الحركة</th><th>البيان</th><th>الاتجاه</th><th>المبلغ</th><th>المرجع</th><th>الإجراء</th></tr></thead>
+                  <tbody>
+                    {financeOperationEntries.map((entry) => (
+                      <tr key={entry.id}>
+                        <td>{new Date(entry.created_at).toLocaleString("ar")}</td>
+                        <td>{entry.reversal_of_id !== null ? "عكس حركة" : (({ payment: "سداد", commission: "عمولة", return: "مرتجع", adjustment: "تسوية", card_delivery: "تسليم كروت" } as Record<string, string>)[entry.entry_type] ?? entry.entry_type)}</td>
+                        <td>{entry.description || "—"}</td>
+                        <td>{entry.direction === "debit" ? "مدين" : "دائن"}</td>
+                        <td>{Number(entry.amount).toFixed(2)}</td>
+                        <td>{entry.reference || "—"}</td>
+                        <td>
+                          {editingFinanceEntryId === entry.id ? (
+                            <form onSubmit={(event) => { event.preventDefault(); saveFinanceEntryMetadata(entry.id); }}>
+                              <input value={financeEntryEditDraft.description} onChange={(event) => setFinanceEntryEditDraft({ ...financeEntryEditDraft, description: event.target.value })} maxLength={500} placeholder="البيان" />
+                              <input value={financeEntryEditDraft.reference} onChange={(event) => setFinanceEntryEditDraft({ ...financeEntryEditDraft, reference: event.target.value })} maxLength={120} placeholder="المرجع" />
+                              <button type="submit" disabled={busy}>حفظ البيانات</button>
+                              <button type="button" className="secondary-button" onClick={() => setEditingFinanceEntryId(null)}>إلغاء</button>
+                            </form>
+                          ) : (
+                            <>
+                              {can("finance.update") && <button type="button" className="table-action" onClick={() => {
+                                setEditingFinanceEntryId(entry.id);
+                                setFinanceEntryEditDraft({ description: entry.description ?? "", reference: entry.reference ?? "" });
+                              }}>تعديل البيان</button>}
+                              {can("finance.delete") && entry.reversal_of_id === null && entry.reversed_by_id === null && (
+                                <button type="button" className="table-action danger" disabled={busy} onClick={() => reverseFinanceEntry(entry.id)}>عكس الحركة</button>
+                              )}
+                              {entry.reversed_by_id !== null && <small>تم عكسها بالقيد رقم {entry.reversed_by_id}</small>}
+                              {entry.reversal_of_id !== null && <small>قيد عكس للحركة رقم {entry.reversal_of_id}</small>}
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
       </section>
     );
   }
@@ -3946,7 +4168,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
           <button className={page === "overview" ? "nav-item active" : "nav-item"} onClick={() => setPage("overview")}>لوحة المعلومات</button>
           {user.roles.includes("owner") && <button className={page === "admins" ? "nav-item active" : "nav-item"} onClick={() => setPage("admins")}>حسابات الإدارة والصلاحيات</button>}
 
-          {(can("plans.view") || can("plans.create") || can("plans.update") || can("plans.delete") || can("routers.view") || can("reports.view") || can("finance.view") || can("finance.create")) && <div className="nav-group">
+          {(can("plans.view") || can("plans.create") || can("plans.update") || can("plans.delete") || can("routers.view") || can("reports.view") || can("finance.view") || can("finance.create") || can("finance.update") || can("finance.delete")) && <div className="nav-group">
             <button type="button" className={openNavGroup === "system" ? "nav-group-toggle expanded" : "nav-group-toggle"} aria-expanded={openNavGroup === "system"} onClick={() => setOpenNavGroup((current) => current === "system" ? null : "system")}>
               <span>إدارة النظام</span><span className="nav-chevron" aria-hidden="true">⌄</span>
             </button>
@@ -3954,7 +4176,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
               {(can("plans.view") || can("plans.create") || can("plans.update") || can("plans.delete")) && <button className={page === "plans" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("plans")}>{can("plans.view") ? "إدارة الباقات" : can("plans.create") ? "إضافة باقة" : "عمليات الباقات"}</button>}
               {can("routers.view") && <button className={page === "routers" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("routers")}>الراوترات</button>}
               {(can("reports.view") || can("finance.view")) && <button className={page === "reports" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("reports")}>التقارير</button>}
-              {can("finance.create") && <button className={page === "finance-entry" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("finance-entry")}>تسجيل حركة مالية</button>}
+              {(can("finance.create") || can("finance.update") || can("finance.delete")) && <button className={page === "finance-entry" ? "nav-sub active" : "nav-sub"} onClick={() => setPage("finance-entry")}>العمليات المالية</button>}
             </div>}
           </div>}
           {(can("cards.create") || can("cards.view") || can("cards.delete") || can("templates.view")) && <div className="nav-group">
@@ -3992,7 +4214,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
         </header>
         {error && <div className="notice error-notice" role="alert">{error}</div>}
         {notice && <div className="notice success-notice" role="status">{notice}</div>}
-        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && (can("plans.view") || can("plans.create") || can("plans.update") || can("plans.delete")) ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") ? renderCardCreate() : page === "card-delete" && can("cards.delete") ? renderCardDelete() : page === "printing-create" && can("printing.create") && can("printing.credentials") ? renderPrintingCreate() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && (can("pos.view") || can("pos.create")) ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "finance-entry" && can("finance.create") ? renderFinanceEntry() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
+        {page === "settings" && user.roles.includes("owner") ? renderSystemSettings() : page === "audit" && can("audit.view") ? renderAuditLogs() : page === "admins" && user.roles.includes("owner") ? renderAdmins() : page === "overview" ? renderOverview() : page === "plans" && (can("plans.view") || can("plans.create") || can("plans.update") || can("plans.delete")) ? renderPlans() : page === "cards" && (can("cards.view") || (cardManagementTab === "sessions" && can("sessions.view"))) ? renderCards() : page === "card-create" && can("cards.create") ? renderCardCreate() : page === "card-delete" && can("cards.delete") ? renderCardDelete() : page === "printing-create" && can("printing.create") && can("printing.credentials") ? renderPrintingCreate() : page === "printing-history" && can("printing.view") ? renderPrintingHistory() : page === "pos" && (can("printing.view") || can("printing.create") || can("printing.reprint")) && can("cards.view") && can("pos.view") && can("templates.view") ? renderPos() : page === "pos-management" && (can("pos.view") || can("pos.create")) ? renderPosManagement() : page === "batches" && can("cards.view") ? renderBatches() : page === "finance-entry" && (can("finance.create") || can("finance.update") || can("finance.delete")) ? renderFinanceEntry() : page === "reports" && (can("reports.view") || can("finance.view")) ? renderReports() : page === "templates" && can("templates.view") ? renderTemplates() : page === "routers" && can("routers.view") ? renderRouters() : renderOverview()}
         <footer>© شبكة الأسطورة نت · ALOSTORA-RADIUS</footer>
       </section>
     </main>
