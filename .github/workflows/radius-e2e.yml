@@ -1,5 +1,8 @@
 name: RADIUS end-to-end
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main, feature/user-manager-sync]
