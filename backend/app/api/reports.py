@@ -69,12 +69,36 @@ def _report_data(date_from: date, date_to: date, db: Session, user: AdminUser) -
             PosAccountEntry.point_of_sale_id,
             func.coalesce(func.sum(case((PosAccountEntry.direction == "debit", PosAccountEntry.amount), else_=0)), 0).label("period_debit"),
             func.coalesce(func.sum(case((PosAccountEntry.direction == "credit", PosAccountEntry.amount), else_=0)), 0).label("period_credit"),
-            func.coalesce(func.sum(case(((PosAccountEntry.entry_type == "card_delivery") & (PosAccountEntry.direction == "debit"), PosAccountEntry.amount), else_=0)), 0).label("delivered_value"),
-            func.coalesce(func.sum(case(((PosAccountEntry.entry_type == "commission") & (PosAccountEntry.direction == "credit"), PosAccountEntry.amount), else_=0)), 0).label("commissions"),
-            func.coalesce(func.sum(case(((PosAccountEntry.entry_type == "payment") & (PosAccountEntry.direction == "credit"), PosAccountEntry.amount), else_=0)), 0).label("payments"),
-            func.coalesce(func.sum(case(((PosAccountEntry.entry_type == "return") & (PosAccountEntry.direction == "credit"), PosAccountEntry.amount), else_=0)), 0).label("returns"),
-            func.coalesce(func.sum(case(((PosAccountEntry.direction == "debit") & (PosAccountEntry.entry_type != "card_delivery"), PosAccountEntry.amount), else_=0)), 0).label("other_debits"),
-            func.coalesce(func.sum(case(((PosAccountEntry.direction == "credit") & (~PosAccountEntry.entry_type.in_(("commission", "payment", "return"))), PosAccountEntry.amount), else_=0)), 0).label("other_credits"),
+            func.coalesce(func.sum(case(
+                (PosAccountEntry.entry_type == "card_delivery",
+                 case((PosAccountEntry.direction == "debit", PosAccountEntry.amount), else_=-PosAccountEntry.amount)),
+                else_=0,
+            )), 0).label("delivered_value"),
+            func.coalesce(func.sum(case(
+                (PosAccountEntry.entry_type == "commission",
+                 case((PosAccountEntry.direction == "credit", PosAccountEntry.amount), else_=-PosAccountEntry.amount)),
+                else_=0,
+            )), 0).label("commissions"),
+            func.coalesce(func.sum(case(
+                (PosAccountEntry.entry_type == "payment",
+                 case((PosAccountEntry.direction == "credit", PosAccountEntry.amount), else_=-PosAccountEntry.amount)),
+                else_=0,
+            )), 0).label("payments"),
+            func.coalesce(func.sum(case(
+                (PosAccountEntry.entry_type == "return",
+                 case((PosAccountEntry.direction == "credit", PosAccountEntry.amount), else_=-PosAccountEntry.amount)),
+                else_=0,
+            )), 0).label("returns"),
+            func.coalesce(func.sum(case(
+                ((PosAccountEntry.direction == "debit") & (~PosAccountEntry.entry_type.in_(("card_delivery", "commission", "payment", "return"))),
+                 PosAccountEntry.amount),
+                else_=0,
+            )), 0).label("other_debits"),
+            func.coalesce(func.sum(case(
+                ((PosAccountEntry.direction == "credit") & (~PosAccountEntry.entry_type.in_(("card_delivery", "commission", "payment", "return"))),
+                 PosAccountEntry.amount),
+                else_=0,
+            )), 0).label("other_credits"),
         )
         .filter(PosAccountEntry.created_at >= start_at, PosAccountEntry.created_at < end_at)
         .filter(True if is_owner else PosAccountEntry.point_of_sale_id.in_(assigned_pos_ids))
