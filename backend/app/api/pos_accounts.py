@@ -59,6 +59,21 @@ def _reversed_by_id(db: Session, entry_id: int) -> int | None:
     ).scalar()
 
 
+def _entry_operation_data(entry: PosAccountEntry, reversed_by_id: int | None = None) -> dict:
+    return {
+        "id": entry.id,
+        "point_of_sale_id": entry.point_of_sale_id,
+        "entry_type": entry.entry_type,
+        "direction": entry.direction,
+        "amount": entry.amount,
+        "description": entry.description,
+        "reference": entry.reference,
+        "created_at": entry.created_at,
+        "reversal_of_id": entry.reversal_of_id,
+        "reversed_by_id": reversed_by_id,
+    }
+
+
 @router.get(
     "",
     response_model=PosAccountSummaryResponse,
@@ -238,7 +253,7 @@ def create_account_entry(
 
 @router.patch(
     "/entries/{entry_id}",
-    response_model=PosAccountEntryResponse,
+    response_model=PosAccountEntryOperationOption,
     dependencies=[Depends(require_permission("finance.update"))],
 )
 def update_account_entry(
@@ -278,12 +293,12 @@ def update_account_entry(
     )
     db.commit()
     db.refresh(entry)
-    return _entry_response_data(entry, _reversed_by_id(db, entry.id))
+    return _entry_operation_data(entry, _reversed_by_id(db, entry.id))
 
 
 @router.post(
     "/entries/{entry_id}/reverse",
-    response_model=PosAccountEntryResponse,
+    response_model=PosAccountEntryOperationOption,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_permission("finance.delete"))],
 )
@@ -307,13 +322,25 @@ def reverse_account_entry(
     if entry is None:
         raise HTTPException(status_code=404, detail="الحركة المالية غير موجودة")
 
+    reason = payload.reason.strip() if payload.reason else ""
+    description = f"عكس الحركة رقم {entry.id}"
+    if reason:
+        description = f"{description}: {reason}"
+
     existing_key = db.query(PosAccountEntry).filter(
         PosAccountEntry.idempotency_key == payload.idempotency_key
     ).first()
     if existing_key is not None:
-        if existing_key.reversal_of_id == entry.id:
-            return _entry_response_data(existing_key)
-        raise HTTPException(status_code=409, detail="مفتاح العكس مستخدم لحركة أخرى")
+        same_replay = (
+            existing_key.reversal_of_id == entry.id
+            and existing_key.description == description[:500]
+            and existing_key.entry_type == entry.entry_type
+            and existing_key.direction == ("credit" if entry.direction == "debit" else "debit")
+            and existing_key.amount == entry.amount
+        )
+        if same_replay:
+            return _entry_operation_data(existing_key)
+        raise HTTPException(status_code=409, detail="مفتاح العكس مستخدم لطلب مختلف")
 
     if entry.reversal_of_id is not None:
         raise HTTPException(status_code=409, detail="لا يمكن عكس قيد عكس سابق")
@@ -323,10 +350,6 @@ def reverse_account_entry(
     if existing_reversal is not None:
         raise HTTPException(status_code=409, detail="تم عكس هذه الحركة مسبقاً")
 
-    reason = payload.reason.strip() if payload.reason else ""
-    description = f"عكس الحركة رقم {entry.id}"
-    if reason:
-        description = f"{description}: {reason}"
     reversal = PosAccountEntry(
         point_of_sale_id=point_id,
         entry_type=entry.entry_type,
@@ -364,8 +387,12 @@ def reverse_account_entry(
         existing = db.query(PosAccountEntry).filter(
             PosAccountEntry.idempotency_key == payload.idempotency_key
         ).first()
-        if existing is not None and existing.reversal_of_id == entry_id:
-            return _entry_response_data(existing)
+        if (
+            existing is not None
+            and existing.reversal_of_id == entry_id
+            and existing.description == description[:500]
+        ):
+            return _entry_operation_data(existing)
         raise HTTPException(status_code=409, detail="تعارض: تم عكس الحركة أو استخدام مفتاح العكس مسبقاً")
     db.refresh(reversal)
-    return _entry_response_data(reversal)
+    return _entry_operation_data(reversal)
