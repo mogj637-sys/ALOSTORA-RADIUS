@@ -275,6 +275,11 @@ def update_account_entry(
     )
     if entry is None:
         raise HTTPException(status_code=404, detail="الحركة المالية غير موجودة")
+    if entry.reversal_of_id is not None or _reversed_by_id(db, entry.id) is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="لا يمكن تعديل بيانات حركة مرتبطة بعكس مالي؛ احتفظ بسجل العكس كما هو",
+        )
     changes = payload.model_dump(exclude_unset=True)
     if not changes:
         raise HTTPException(status_code=422, detail="حدد البيان أو الرقم المرجعي لتعديله")

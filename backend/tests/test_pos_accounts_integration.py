@@ -478,6 +478,58 @@ def test_finance_delete_creates_one_audited_compensating_entry(owner_client):
     audit_db.close()
 
 
+def test_finance_update_rejects_entries_in_reversal_pair(owner_client):
+    client, owner_headers, _ = owner_client
+    point = _point(client, owner_headers)
+    account_url = f"/api/v1/points-of-sale/{point['id']}/account"
+    created = client.post(
+        account_url + "/entries",
+        headers=owner_headers,
+        json={
+            "idempotency_key": "finance-freeze-" + secrets.token_hex(8),
+            "entry_type": "adjustment",
+            "direction": "debit",
+            "amount": "22.00",
+            "description": "قيد أصلي قبل العكس",
+            "reference": "FREEZE-01",
+        },
+    )
+    assert created.status_code == 201, created.text
+    original_id = created.json()["id"]
+
+    reversed_response = client.post(
+        account_url + f"/entries/{original_id}/reverse",
+        headers=owner_headers,
+        json={
+            "idempotency_key": "finance-freeze-reverse-" + secrets.token_hex(8),
+            "reason": "تثبيت سجل العكس",
+        },
+    )
+    assert reversed_response.status_code == 201, reversed_response.text
+    reversal_id = reversed_response.json()["id"]
+
+    role_code, username, headers = _create_finance_permission_user(
+        client, owner_headers, ["finance.update"], [point["id"]]
+    )
+    try:
+        for entry_id in (original_id, reversal_id):
+            response = client.patch(
+                account_url + f"/entries/{entry_id}",
+                headers=headers,
+                json={"description": "محاولة تغيير بعد العكس"},
+            )
+            assert response.status_code == 409, response.text
+    finally:
+        _cleanup_finance_permission_user(role_code, username)
+
+    entries = client.get(account_url + "/entries", headers=owner_headers)
+    assert entries.status_code == 200, entries.text
+    original = next(item for item in entries.json() if item["id"] == original_id)
+    reversal = next(item for item in entries.json() if item["id"] == reversal_id)
+    assert original["description"] == "قيد أصلي قبل العكس"
+    assert reversal["description"].startswith(f"عكس الحركة رقم {original_id}")
+
+
 def test_finance_delete_cannot_reverse_print_generated_commission(owner_client):
     client, owner_headers, _ = owner_client
     point = _point(client, owner_headers)

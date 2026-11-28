@@ -3769,7 +3769,7 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                             </form>
                           ) : (
                             <>
-                              {can("finance.update") && <button type="button" className="table-action" onClick={() => {
+                              {can("finance.update") && entry.reversal_of_id === null && entry.reversed_by_id === null && <button type="button" className="table-action" onClick={() => {
                                 setEditingFinanceEntryId(entry.id);
                                 setFinanceEntryEditDraft({ description: entry.description ?? "", reference: entry.reference ?? "" });
                               }}>تعديل البيان</button>}
