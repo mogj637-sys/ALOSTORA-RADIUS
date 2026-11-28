@@ -3773,9 +3773,10 @@ function Dashboard({ user, token, onLogout }: { user: CurrentUser; token: string
                                 setEditingFinanceEntryId(entry.id);
                                 setFinanceEntryEditDraft({ description: entry.description ?? "", reference: entry.reference ?? "" });
                               }}>تعديل البيان</button>}
-                              {can("finance.delete") && entry.reversal_of_id === null && entry.reversed_by_id === null && (
+                              {can("finance.delete") && entry.reversal_of_id === null && entry.reversed_by_id === null && entry.entry_type !== "card_delivery" && entry.entry_type !== "commission" && (
                                 <button type="button" className="table-action danger" disabled={busy} onClick={() => reverseFinanceEntry(entry.id)}>عكس الحركة</button>
                               )}
+                              {(entry.entry_type === "card_delivery" || entry.entry_type === "commission") && <small>حركة مرتبطة بالطباعة؛ تُراجع من مسار الطباعة ولا تُعكس من هنا</small>}
                               {entry.reversed_by_id !== null && <small>تم عكسها بالقيد رقم {entry.reversed_by_id}</small>}
                               {entry.reversal_of_id !== null && <small>قيد عكس للحركة رقم {entry.reversal_of_id}</small>}
                             </>
