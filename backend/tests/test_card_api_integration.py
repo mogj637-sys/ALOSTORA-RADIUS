@@ -12,6 +12,7 @@ from app.models.core import (
     Card,
     CardEvent,
     PointOfSale,
+    PosAccountEntry,
     PosInventoryMovement,
     PrintJob,
     PrintJobItem,
@@ -327,6 +328,129 @@ def test_print_job_allocates_commercial_cards_once_and_reprint_is_free_of_moveme
     assert all(event.actor == actor for event in events)
     db.close()
 
+
+
+def test_expired_card_reprint_is_limited_to_original_pos_without_new_movements(owner_client):
+    from datetime import datetime, timedelta, timezone
+
+    client, headers, _ = owner_client
+    plan = client.post(
+        "/api/v1/plans",
+        headers=headers,
+        json={
+            "code": "REPRINT-EXP-" + secrets.token_hex(4).upper(),
+            "name": "Expired reprint test plan",
+            "price": "25.00",
+        },
+    )
+    assert plan.status_code == 201, plan.text
+
+    created = client.post(
+        "/api/v1/cards/single",
+        headers=headers,
+        json={
+            "plan_id": plan.json()["id"],
+            "username": "REXP" + secrets.token_hex(5).upper(),
+            "card_type": "username_only",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    db = SessionLocal()
+    original_pos = PointOfSale(
+        code="POS-REXP-" + secrets.token_hex(4).upper(),
+        name="CI original reprint point",
+        is_active=True,
+        allow_printing=True,
+    )
+    other_pos = PointOfSale(
+        code="POS-OTHER-" + secrets.token_hex(4).upper(),
+        name="CI other reprint point",
+        is_active=True,
+        allow_printing=True,
+    )
+    db.add_all([original_pos, other_pos])
+    db.commit()
+    original_pos_id = original_pos.id
+    other_pos_id = other_pos.id
+    db.close()
+
+    card_id = created.json()["id"]
+    original_payload = {
+        "idempotency_key": "original-exp-" + secrets.token_hex(12),
+        "point_of_sale_id": original_pos_id,
+        "card_ids": [card_id],
+        "template_code": "green-voucher",
+    }
+    original = client.post("/api/v1/print-jobs", headers=headers, json=original_payload)
+    assert original.status_code == 201, original.text
+    assert original.json()["is_reprint"] is False
+
+    db = SessionLocal()
+    card = db.get(Card, UUID(card_id))
+    card.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    db.commit()
+    movements_before = db.query(PosInventoryMovement).filter_by(
+        point_of_sale_id=original_pos_id
+    ).count()
+    ledger_before = db.query(PosAccountEntry).filter_by(
+        point_of_sale_id=original_pos_id
+    ).count()
+    jobs_before = db.query(PrintJob).filter_by(point_of_sale_id=original_pos_id).count()
+    db.close()
+
+    rejected_original = client.post(
+        "/api/v1/print-jobs",
+        headers=headers,
+        json={
+            **original_payload,
+            "idempotency_key": "new-original-exp-" + secrets.token_hex(12),
+        },
+    )
+    assert rejected_original.status_code == 409, rejected_original.text
+
+    rejected_other_pos = client.post(
+        "/api/v1/print-jobs",
+        headers=headers,
+        json={
+            **original_payload,
+            "idempotency_key": "wrong-pos-reprint-" + secrets.token_hex(12),
+            "point_of_sale_id": other_pos_id,
+            "is_reprint": True,
+        },
+    )
+    assert rejected_other_pos.status_code == 409, rejected_other_pos.text
+
+    reprint_payload = {
+        **original_payload,
+        "idempotency_key": "authorized-reprint-" + secrets.token_hex(12),
+        "is_reprint": True,
+    }
+    reprinted = client.post("/api/v1/print-jobs", headers=headers, json=reprint_payload)
+    assert reprinted.status_code == 201, reprinted.text
+    assert reprinted.json()["is_reprint"] is True
+    assert reprinted.json()["total_amount"] == "0.00"
+
+    repeated = client.post("/api/v1/print-jobs", headers=headers, json=reprint_payload)
+    assert repeated.status_code == 201, repeated.text
+    assert repeated.json()["id"] == reprinted.json()["id"]
+
+    db = SessionLocal()
+    card = db.get(Card, UUID(card_id))
+    assert card.status == "allocated"
+    assert card.assigned_pos_id == original_pos_id
+    assert db.query(PosInventoryMovement).filter_by(
+        point_of_sale_id=original_pos_id
+    ).count() == movements_before
+    assert db.query(PosAccountEntry).filter_by(
+        point_of_sale_id=original_pos_id
+    ).count() == ledger_before
+    assert db.query(PrintJob).filter_by(point_of_sale_id=original_pos_id).count() == jobs_before + 1
+
+    events = db.query(CardEvent).filter(CardEvent.card_id == UUID(card_id)).all()
+    assert sum(event.event_type == "printed_to_pos" for event in events) == 1
+    assert sum(event.event_type == "reprinted" for event in events) == 1
+    db.close()
 
 def test_print_idempotency_key_cannot_be_reused_for_different_payload(owner_client):
     client, headers, _ = owner_client
