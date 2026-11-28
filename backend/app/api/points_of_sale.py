@@ -40,7 +40,7 @@ def list_points_of_sale(include_inactive: bool = False, db: Session = Depends(ge
 
 @router.get("/operation-options", response_model=list[PointOfSaleOperationOption])
 def list_operation_options(
-    operation: Literal["cards.create", "finance.create", "printing.create"] = Query(...),
+    operation: Literal["cards.create", "finance.create", "finance.update", "finance.delete", "printing.create"] = Query(...),
     db: Session = Depends(get_db),
     user: AdminUser = Depends(get_current_user),
 ):
